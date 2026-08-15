@@ -4,12 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/core/constants/app_radius.dart';
 import 'package:workaxis/core/constants/app_spacing.dart';
+import 'package:workaxis/core/models/country_code.dart';
 import 'package:workaxis/core/theme/app_colors.dart';
 import 'package:workaxis/core/utils/phone_number_formatter.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:workaxis/features/authentication/presentation/widgets/auth_scaffold.dart';
+import 'package:workaxis/features/authentication/presentation/widgets/country_code_picker_sheet.dart';
 
 class PhoneSignInPage extends StatefulWidget {
   const PhoneSignInPage({super.key});
@@ -21,13 +23,23 @@ class PhoneSignInPage extends StatefulWidget {
 class _PhoneSignInPageState extends State<PhoneSignInPage> {
   final _phoneController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  final String _selectedCountryCode = '+1';
+  CountryCode _selectedCountry = CountryCode.defaultCountry;
   String? _inlineError;
 
   @override
   void dispose() {
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickCountryCode() async {
+    final picked = await CountryCodePickerSheet.show(
+      context: context,
+      selectedCountry: _selectedCountry,
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedCountry = picked);
+    }
   }
 
   Future<void> _handleSendOtp() async {
@@ -45,7 +57,7 @@ class _PhoneSignInPageState extends State<PhoneSignInPage> {
 
     setState(() => _inlineError = null);
     final e164Phone = PhoneNumberFormatter.toE164(
-      countryCode: _selectedCountryCode,
+      countryCode: _selectedCountry.dialCode,
       nationalNumber: rawNumber,
     );
 
@@ -80,64 +92,58 @@ class _PhoneSignInPageState extends State<PhoneSignInPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Country Code Prefix Picker
-                Container(
-                  height: 56,
+            AppTextField(
+              controller: _phoneController,
+              labelText: 'Mobile Number',
+              hintText: '555 123 4567',
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.done,
+              errorText: _inlineError,
+              prefixIcon: InkWell(
+                onTap: _pickCountryCode,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(AppRadius.defaultRadius),
+                ),
+                child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                  decoration: const BoxDecoration(
-                    color: AppColors.surfaceContainerLowest,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(AppRadius.defaultRadius),
-                    ),
-                    border: Border(
-                      bottom:
-                          BorderSide(color: AppColors.outlineVariant, width: 1),
-                    ),
-                  ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.flag_rounded,
-                          size: 20, color: AppColors.primary),
+                      Text(
+                        _selectedCountry.flag,
+                        style: const TextStyle(fontSize: 20),
+                      ),
                       const SizedBox(width: AppSpacing.xs),
                       Text(
-                        _selectedCountryCode,
+                        _selectedCountry.dialCode,
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.onSurface,
                                 ),
                       ),
-                      const SizedBox(width: AppSpacing.xs),
                       const Icon(
                         Icons.arrow_drop_down_rounded,
                         color: AppColors.onSurfaceVariant,
-                        size: 20,
+                        size: 22,
                       ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Container(
+                        height: 24,
+                        width: 1,
+                        color: AppColors.outlineVariant,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
                     ],
                   ),
                 ),
-                const SizedBox(width: AppSpacing.xs),
-                // Phone Number Input
-                Expanded(
-                  child: AppTextField(
-                    controller: _phoneController,
-                    labelText: 'Mobile Number',
-                    hintText: '555 123 4567',
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.done,
-                    errorText: _inlineError,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(12),
-                    ],
-                    onSubmitted: (_) => _handleSendOtp(),
-                  ),
-                ),
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(12),
               ],
+              onSubmitted: (_) => _handleSendOtp(),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(

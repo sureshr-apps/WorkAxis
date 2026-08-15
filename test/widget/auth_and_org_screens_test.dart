@@ -90,6 +90,38 @@ void main() {
       expect(find.textContaining('(***) ***-4567'), findsOneWidget);
     });
 
+    testWidgets('opens country code picker and selects country',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // Go to Phone Entry
+      await tester.tap(find.text('Sign in with Phone'));
+      await tester.pumpAndSettle();
+
+      // Default country code is +1
+      expect(find.text('+1'), findsOneWidget);
+
+      // Tap on the country code picker
+      await tester.tap(find.text('+1'));
+      await tester.pumpAndSettle();
+
+      // Verify bottom sheet opened
+      expect(find.text('Select Country / Region'), findsOneWidget);
+      expect(find.text('United Kingdom'), findsOneWidget);
+
+      // Select United Kingdom
+      await tester.tap(find.text('United Kingdom'));
+      await tester.pumpAndSettle();
+
+      // Verify selected country dial code is now +44
+      expect(find.text('+44'), findsOneWidget);
+    });
+
     testWidgets(
         'completes OTP verification and lands on Organization Selection for multi-org user',
         (tester) async {
