@@ -14,13 +14,18 @@ class Msg91Config extends Equatable {
       defaultValue: String.fromEnvironment('MSG91_AUTH_TOKEN',
           defaultValue: '560926TkwDcG3B6a8062a5P1'),
     ),
-    this.widgetId = const String.fromEnvironment('MSG91_WIDGET_ID',
-        defaultValue: '36686f6c5452333835343638'),
-    this.smsWidgetId =
-        const String.fromEnvironment('MSG91_SMS_WIDGET_ID', defaultValue: ''),
+    this.widgetId = const String.fromEnvironment(
+      'MSG91_WIDGET_ID',
+      defaultValue: '36686f6e376d353532323233',
+    ),
+    this.smsWidgetId = const String.fromEnvironment(
+      'MSG91_SMS_WIDGET_ID',
+      defaultValue: '',
+    ),
     this.whatsappWidgetId = const String.fromEnvironment(
-        'MSG91_WHATSAPP_WIDGET_ID',
-        defaultValue: ''),
+      'MSG91_WHATSAPP_WIDGET_ID',
+      defaultValue: '36686f6c5452333835343638',
+    ),
     this.smsTemplateId =
         const String.fromEnvironment('MSG91_SMS_TEMPLATE_ID', defaultValue: ''),
     this.whatsappTemplateId = const String.fromEnvironment(
