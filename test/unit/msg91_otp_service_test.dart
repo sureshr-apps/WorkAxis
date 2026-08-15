@@ -190,13 +190,13 @@ void main() {
         otpExpiryMinutes: 5,
       );
 
-      test('sendOtp sends template_id=widgetId to /api/v5/otp without DLT requirement', () async {
+      test(
+          'sendOtp sends template_id=widgetId to /api/v5/otp without DLT requirement',
+          () async {
         late Uri capturedUri;
-        late Map<String, String> capturedHeaders;
 
         final mockClient = MockClient((request) async {
           capturedUri = request.url;
-          capturedHeaders = request.headers;
 
           return http.Response(
             jsonEncode({
@@ -208,7 +208,8 @@ void main() {
           );
         });
 
-        final service = Msg91OtpService(config: widgetConfig, httpClient: mockClient);
+        final service =
+            Msg91OtpService(config: widgetConfig, httpClient: mockClient);
 
         final result = await service.sendOtp(
           phoneNumber: '+919876543210',
@@ -218,7 +219,8 @@ void main() {
         expect(result.verificationId, 'req_widget_999');
         expect(result.channel, OtpChannel.sms);
         expect(capturedUri.path, contains('/otp'));
-        expect(capturedUri.queryParameters['template_id'], '346473616263333132333435');
+        expect(capturedUri.queryParameters['template_id'],
+            '346473616263333132333435');
         expect(capturedUri.queryParameters['authkey'], 'widget_token_abc123');
         expect(capturedUri.queryParameters['mobile'], '919876543210');
       });
@@ -237,7 +239,8 @@ void main() {
           );
         });
 
-        final service = Msg91OtpService(config: widgetConfig, httpClient: mockClient);
+        final service =
+            Msg91OtpService(config: widgetConfig, httpClient: mockClient);
 
         final isValid = await service.verifyOtp(
           phoneNumber: '+919876543210',

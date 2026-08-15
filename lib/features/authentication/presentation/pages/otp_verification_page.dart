@@ -2,11 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/core/config/app_config.dart';
+import 'package:workaxis/core/constants/app_radius.dart';
 import 'package:workaxis/core/constants/app_spacing.dart';
 import 'package:workaxis/core/theme/app_colors.dart';
 import 'package:workaxis/core/utils/phone_number_formatter.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
+import 'package:workaxis/features/authentication/domain/entities/otp_session.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:workaxis/features/authentication/presentation/widgets/auth_scaffold.dart';
 import 'package:workaxis/features/authentication/presentation/widgets/otp_input_row.dart';
@@ -96,22 +99,48 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
   }
 
   Future<void> _handleResend({OtpChannel? alternateChannel}) async {
-    if (_countdown > 0 && alternateChannel == null) return;
-
     final authController = context.read<AuthController>();
     final state = authController.state;
+    OtpSession? session;
+
     if (state is AuthOtpSent) {
-      final channel = alternateChannel ?? state.session.channel;
-      await authController.resendOtp(
-        currentSession: state.session,
-        channel: channel,
+      session = state.session;
+    } else if (state is AuthError && state.previousSession != null) {
+      session = state.previousSession;
+    }
+
+    if (session == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session expired. Please re-enter your phone number.'),
+          backgroundColor: AppColors.error,
+        ),
       );
+      return;
+    }
+
+    final targetChannel = alternateChannel ?? session.channel;
+    await authController.resendOtp(
+      currentSession: session,
+      channel: targetChannel,
+    );
+
+    if (!mounted) return;
+    final newState = authController.state;
+    if (newState is AuthOtpSent) {
       _startCountdown();
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('A new code has been sent via ${channel.displayName}.'),
+          content: Text(
+              'A new code has been sent via ${targetChannel.displayName}.'),
           backgroundColor: AppColors.statusActive,
+        ),
+      );
+    } else if (newState is AuthError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(newState.exception.message),
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -122,6 +151,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     final authController = context.watch<AuthController>();
     final state = authController.state;
     final isLoading = state is AuthAuthenticating;
+    final isResending = state is AuthOtpSent && state.isResending;
 
     String phoneNumber = '';
     OtpChannel currentChannel = OtpChannel.sms;
@@ -138,6 +168,10 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     final alternateChannel =
         currentChannel == OtpChannel.sms ? OtpChannel.whatsapp : OtpChannel.sms;
 
+    // Check if live MSG91 credentials are configured
+    const msg91Config = Msg91Config();
+    final isMockMode = !msg91Config.isConfigured;
+
     return AuthScaffold(
       title: 'Enter 6-digit code',
       subtitle:
@@ -146,6 +180,36 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (isMockMode) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.primaryContainer.withAlpha(50),
+                borderRadius: AppRadius.borderDefault,
+                border: Border.all(color: AppColors.primary.withAlpha(80)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      size: 18, color: AppColors.primary),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      'Dev Mock Mode: Use test OTP 123456 (Live SMS disabled without MSG91 credentials)',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           OtpInputRow(
             onCompleted: (otp) {
               _enteredOtp = otp;
@@ -168,7 +232,13 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              if (_countdown > 0)
+              if (isResending)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (_countdown > 0)
                 Text(
                   'Resend in 00:${_countdown.toString().padLeft(2, '0')}',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -195,8 +265,9 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
               icon: Text(alternateChannel.iconEmoji,
                   style: const TextStyle(fontSize: 14)),
               label: Text('Send via ${alternateChannel.displayName} instead'),
-              onPressed: () =>
-                  _handleResend(alternateChannel: alternateChannel),
+              onPressed: isResending
+                  ? null
+                  : () => _handleResend(alternateChannel: alternateChannel),
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(120, 32),
