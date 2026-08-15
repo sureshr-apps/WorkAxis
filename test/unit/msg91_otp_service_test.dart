@@ -190,26 +190,25 @@ void main() {
         otpExpiryMinutes: 5,
       );
 
-      test('sendOtp sends JSON payload to widget/sendOtp', () async {
-        late String capturedBody;
+      test('sendOtp sends template_id=widgetId to /api/v5/otp without DLT requirement', () async {
         late Uri capturedUri;
+        late Map<String, String> capturedHeaders;
 
         final mockClient = MockClient((request) async {
           capturedUri = request.url;
-          capturedBody = request.body;
+          capturedHeaders = request.headers;
 
           return http.Response(
             jsonEncode({
-              'message': 'OTP sent via widget',
+              'message': 'OTP sent via widget template',
               'type': 'success',
-              'reqId': 'req_widget_999',
+              'request_id': 'req_widget_999',
             }),
             200,
           );
         });
 
-        final service =
-            Msg91OtpService(config: widgetConfig, httpClient: mockClient);
+        final service = Msg91OtpService(config: widgetConfig, httpClient: mockClient);
 
         final result = await service.sendOtp(
           phoneNumber: '+919876543210',
@@ -218,21 +217,17 @@ void main() {
 
         expect(result.verificationId, 'req_widget_999');
         expect(result.channel, OtpChannel.sms);
-        expect(result.providerName, 'MSG91 Widget');
-        expect(capturedUri.path, contains('/widget/sendOtp'));
-
-        final decoded = jsonDecode(capturedBody) as Map<String, dynamic>;
-        expect(decoded['widgetId'], '346473616263333132333435');
-        expect(decoded['tokenAuth'], 'widget_token_abc123');
-        expect(decoded['mobile'], '919876543210');
-        expect(decoded['channel'], 'SMS');
+        expect(capturedUri.path, contains('/otp'));
+        expect(capturedUri.queryParameters['template_id'], '346473616263333132333435');
+        expect(capturedUri.queryParameters['authkey'], 'widget_token_abc123');
+        expect(capturedUri.queryParameters['mobile'], '919876543210');
       });
 
-      test('verifyOtp sends JSON payload to widget/verifyOtp', () async {
-        late String capturedBody;
+      test('verifyOtp sends otp code to /verify endpoint', () async {
+        late Uri capturedUri;
 
         final mockClient = MockClient((request) async {
-          capturedBody = request.body;
+          capturedUri = request.url;
           return http.Response(
             jsonEncode({
               'message': 'OTP verified successfully',
@@ -242,8 +237,7 @@ void main() {
           );
         });
 
-        final service =
-            Msg91OtpService(config: widgetConfig, httpClient: mockClient);
+        final service = Msg91OtpService(config: widgetConfig, httpClient: mockClient);
 
         final isValid = await service.verifyOtp(
           phoneNumber: '+919876543210',
@@ -252,10 +246,9 @@ void main() {
         );
 
         expect(isValid, isTrue);
-        final decoded = jsonDecode(capturedBody) as Map<String, dynamic>;
-        expect(decoded['widgetId'], '346473616263333132333435');
-        expect(decoded['reqId'], 'req_widget_999');
-        expect(decoded['otp'], '654321');
+        expect(capturedUri.path, contains('/verify'));
+        expect(capturedUri.queryParameters['otp'], '654321');
+        expect(capturedUri.queryParameters['mobile'], '919876543210');
       });
     });
   });

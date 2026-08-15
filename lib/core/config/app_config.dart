@@ -11,11 +11,11 @@ class Msg91Config extends Equatable {
   const Msg91Config({
     this.authKey = const String.fromEnvironment(
       'MSG91_AUTH_KEY',
-      defaultValue:
-          String.fromEnvironment('MSG91_AUTH_TOKEN', defaultValue: ''),
+      defaultValue: String.fromEnvironment('MSG91_AUTH_TOKEN',
+          defaultValue: '560926TkwDcG3B6a8062a5P1'),
     ),
-    this.widgetId =
-        const String.fromEnvironment('MSG91_WIDGET_ID', defaultValue: ''),
+    this.widgetId = const String.fromEnvironment('MSG91_WIDGET_ID',
+        defaultValue: '36686f6c5452333835343638'),
     this.smsTemplateId =
         const String.fromEnvironment('MSG91_SMS_TEMPLATE_ID', defaultValue: ''),
     this.whatsappTemplateId = const String.fromEnvironment(
