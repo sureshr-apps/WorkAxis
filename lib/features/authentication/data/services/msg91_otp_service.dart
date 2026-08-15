@@ -1,31 +1,35 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:sendotp_flutter_sdk/sendotp_flutter_sdk.dart';
 import 'package:workaxis/core/config/app_config.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_delivery_result.dart';
 import 'package:workaxis/features/authentication/domain/services/otp_service.dart';
 
-/// Concrete implementation of [OtpService] integrating with MSG91 SendOTP v5 & OTP Widget APIs.
-/// Supports both the default DLT-less Widget ID flow and custom DLT template flows.
+/// Concrete implementation of [OtpService] integrating with MSG91's official [sendotp_flutter_sdk].
+/// Supports Widget ID flow (DLT-less) and fallback REST APIs.
 class Msg91OtpService implements OtpService {
   Msg91OtpService({
     required this.config,
     http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client();
+  })  : _isCustomClient = httpClient != null,
+        _httpClient = httpClient ?? http.Client() {
+    if (config.widgetId.isNotEmpty &&
+        config.authKey.isNotEmpty &&
+        !_isCustomClient) {
+      OTPWidget.initializeWidget(config.widgetId, config.authKey);
+    }
+  }
 
   final Msg91Config config;
   final http.Client _httpClient;
+  final bool _isCustomClient;
 
-  /// Normalizes E.164 phone numbers for MSG91 (e.g. +15551234567 -> 15551234567).
+  /// Normalizes phone numbers for MSG91 (e.g. +919876543210 -> 919876543210).
   String _normalizeMobile(String phoneNumber) {
     return phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
   }
-
-  Map<String, String> get _authHeaders => {
-        'Content-Type': 'application/json',
-        if (config.authKey.isNotEmpty) 'authkey': config.authKey,
-      };
 
   @override
   Future<OtpDeliveryResult> sendOtp({
@@ -42,35 +46,61 @@ class Msg91OtpService implements OtpService {
       );
     }
 
-    // Try standard v5 SendOTP API first (which accepts template_id = widgetId for DLT-less routing)
-    // as it avoids browser/client domain origin restrictions.
-    try {
-      return await _sendOtpViaStandardApi(
-        phoneNumber: phoneNumber,
-        mobile: mobile,
-        channel: channel,
-        templateId: templateId,
-      );
-    } catch (e) {
-      // If widgetId is configured and standard API fails, attempt widget/sendOtp endpoint as fallback
-      if (config.isWidgetFlow) {
-        try {
-          return await _sendOtpViaWidget(
-            phoneNumber: phoneNumber,
-            mobile: mobile,
-            channel: channel,
-          );
-        } catch (widgetError) {
-          // If both fail, rethrow with friendly advice
-          throw _formatFriendlyException(widgetError);
+    // 1. Primary for runtime: Official MSG91 Flutter SDK (OTPWidget)
+    if (config.isWidgetFlow && !_isCustomClient) {
+      try {
+        OTPWidget.initializeWidget(config.widgetId, config.authKey);
+        final response = await OTPWidget.sendOTP({'identifier': mobile});
+
+        if (response != null) {
+          final isSuccess = response['type'] == 'success' ||
+              (response['status'] == 'success' && response['hasError'] != true);
+
+          if (isSuccess) {
+            final verificationId = response['message'] as String? ??
+                response['reqId'] as String? ??
+                response['requestId'] as String? ??
+                mobile;
+
+            return OtpDeliveryResult(
+              verificationId: verificationId,
+              phoneNumber: phoneNumber,
+              channel: channel,
+              expiresInSeconds: config.otpExpiryMinutes * 60,
+              message: 'OTP sent successfully via ${channel.displayName}.',
+              providerName: 'MSG91 SDK',
+            );
+          } else {
+            final msg = response['message'] as String? ??
+                'Failed to send OTP via MSG91.';
+            if (msg.toLowerCase().contains('mobile requests are not allowed')) {
+              throw AuthException(
+                message:
+                    "MSG91 Setup Required: Please toggle ON 'Mobile Integration' in your MSG91 Dashboard (OTP -> Widgets -> ${config.widgetId} -> Configurations).",
+                code: 'msg91-mobile-integration-disabled',
+              );
+            }
+            throw AuthException(message: msg, code: 'msg91-sdk-error');
+          }
         }
+      } on AuthException {
+        rethrow;
+      } catch (e) {
+        if (e is AuthException) rethrow;
+        // Fallback to HTTP REST endpoint
       }
-      rethrow;
     }
+
+    // 2. Fallback / Test Mock: Direct REST endpoint
+    return _sendOtpViaRest(
+      phoneNumber: phoneNumber,
+      mobile: mobile,
+      channel: channel,
+      templateId: templateId,
+    );
   }
 
-  /// Sends OTP using standard MSG91 v5 API (passing widgetId as template_id if DLT-less).
-  Future<OtpDeliveryResult> _sendOtpViaStandardApi({
+  Future<OtpDeliveryResult> _sendOtpViaRest({
     required String phoneNumber,
     required String mobile,
     required OtpChannel channel,
@@ -104,33 +134,33 @@ class Msg91OtpService implements OtpService {
     try {
       final response = await _httpClient.post(
         uri,
-        headers: _authHeaders,
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          if (config.authKey.isNotEmpty) 'authkey': config.authKey,
+        },
       );
 
       final body = _parseJson(response.body);
-
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        final type = body['type'] as String?;
-        final message = (body['message'] as String? ?? '').toLowerCase();
+        final isSuccess = body['type'] == 'success' ||
+            (body['status'] == 'success' && body['hasError'] != true);
 
-        if (type == 'error' ||
-            message.contains('error') ||
-            message.contains('not allowed')) {
+        if (!isSuccess) {
           final msg = body['message'] as String? ?? 'Failed to send OTP.';
           throw AuthException(message: msg, code: 'msg91-send-error');
         }
 
         final verificationId = body['request_id'] as String? ??
             body['reqId'] as String? ??
-            'msg91_${DateTime.now().millisecondsSinceEpoch}';
+            body['message'] as String? ??
+            mobile;
 
         return OtpDeliveryResult(
           verificationId: verificationId,
           phoneNumber: phoneNumber,
           channel: channel,
           expiresInSeconds: config.otpExpiryMinutes * 60,
-          message: body['message'] as String? ??
-              'OTP sent successfully via ${channel.displayName}.',
+          message: 'OTP sent successfully via ${channel.displayName}.',
           providerName: 'MSG91',
         );
       } else {
@@ -150,84 +180,13 @@ class Msg91OtpService implements OtpService {
     }
   }
 
-  /// Sends OTP using the MSG91 OTP Widget endpoint.
-  Future<OtpDeliveryResult> _sendOtpViaWidget({
-    required String phoneNumber,
-    required String mobile,
-    required OtpChannel channel,
-  }) async {
-    final uri = Uri.parse('${config.baseUrl}/widget/sendOtp');
-    final channelStr = channel == OtpChannel.whatsapp ? 'WHATSAPP' : 'SMS';
-
-    final bodyPayload = jsonEncode({
-      'widgetId': config.widgetId,
-      'tokenAuth': config.authKey,
-      'identifier': mobile,
-      'mobile': mobile,
-      'otp_length': config.otpLength,
-      'otp_expiry': config.otpExpiryMinutes,
-      'channel': channelStr,
-    });
-
-    try {
-      final response = await _httpClient.post(
-        uri,
-        headers: _authHeaders,
-        body: bodyPayload,
-      );
-
-      final body = _parseJson(response.body);
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final type = body['type'] as String?;
-        final msg = body['message'] as String? ?? '';
-
-        if (type == 'error' || msg.toLowerCase().contains('not allowed')) {
-          throw AuthException(
-            message: msg.isNotEmpty ? msg : 'Failed to send OTP via widget.',
-            code: 'msg91-widget-error',
-          );
-        }
-
-        final verificationId = body['reqId'] as String? ??
-            body['request_id'] as String? ??
-            body['message'] as String? ??
-            'msg91_widget_${DateTime.now().millisecondsSinceEpoch}';
-
-        return OtpDeliveryResult(
-          verificationId: verificationId,
-          phoneNumber: phoneNumber,
-          channel: channel,
-          expiresInSeconds: config.otpExpiryMinutes * 60,
-          message: msg.isNotEmpty
-              ? msg
-              : 'OTP sent successfully via ${channel.displayName}.',
-          providerName: 'MSG91 Widget',
-        );
-      } else {
-        final msg = body['message'] as String? ??
-            'Widget endpoint returned status ${response.statusCode}';
-        throw AuthException(
-            message: msg, code: 'msg91-widget-http-${response.statusCode}');
-      }
-    } on AuthException {
-      rethrow;
-    } catch (e) {
-      throw NetworkException(
-        message: 'Unable to connect to MSG91 Widget service: $e',
-      );
-    }
-  }
-
   @override
   Future<bool> verifyOtp({
     required String phoneNumber,
     required String otp,
     String? verificationId,
   }) async {
-    final mobile = _normalizeMobile(phoneNumber);
     final cleanOtp = otp.trim();
-
     if (cleanOtp.length != config.otpLength) {
       throw AuthException(
         message:
@@ -236,7 +195,40 @@ class Msg91OtpService implements OtpService {
       );
     }
 
-    // Standard verification endpoint
+    final reqId = verificationId ?? _normalizeMobile(phoneNumber);
+
+    // 1. Primary for runtime: Official MSG91 SDK
+    if (config.isWidgetFlow && !_isCustomClient) {
+      try {
+        OTPWidget.initializeWidget(config.widgetId, config.authKey);
+        final response = await OTPWidget.verifyOTP({
+          'reqId': reqId,
+          'otp': cleanOtp,
+        });
+
+        if (response != null) {
+          final isSuccess = response['type'] == 'success' ||
+              (response['status'] == 'success' && response['hasError'] != true);
+          if (isSuccess) return true;
+
+          final errorMsg =
+              response['message'] as String? ?? 'Invalid verification code.';
+          throw AuthException(
+            message: errorMsg.contains('match') || errorMsg.contains('invalid')
+                ? 'Invalid verification code. Please check and try again.'
+                : errorMsg,
+            code: 'invalid-otp',
+          );
+        }
+      } on AuthException {
+        rethrow;
+      } catch (e) {
+        if (e is AuthException) rethrow;
+      }
+    }
+
+    // 2. Fallback / Test Mock: Direct REST endpoint
+    final mobile = _normalizeMobile(phoneNumber);
     final verifyUrl = config.baseUrl.endsWith('/otp')
         ? '${config.baseUrl}/verify'
         : '${config.baseUrl}/otp/verify';
@@ -253,69 +245,37 @@ class Msg91OtpService implements OtpService {
     try {
       final response = await _httpClient.get(
         uri,
-        headers: _authHeaders,
+        headers: {
+          'Content-Type': 'application/json',
+          if (config.authKey.isNotEmpty) 'authkey': config.authKey,
+        },
       );
 
       final body = _parseJson(response.body);
+      final isSuccess = body['type'] == 'success' ||
+          (body['status'] == 'success' && body['hasError'] != true) ||
+          (body['message'] as String? ?? '')
+              .toLowerCase()
+              .contains('success') ||
+          (body['message'] as String? ?? '').toLowerCase().contains('verified');
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final type = body['type'] as String?;
-        final message = (body['message'] as String? ?? '').toLowerCase();
+      if (isSuccess) return true;
 
-        if (type == 'success' ||
-            message.contains('verified') ||
-            message.contains('success')) {
-          return true;
-        }
-
-        final errorMsg =
-            body['message'] as String? ?? 'Invalid verification code.';
-        throw AuthException(
-          message: errorMsg.contains('match') || errorMsg.contains('invalid')
-              ? 'Invalid verification code. Please check and try again.'
-              : errorMsg,
-          code: 'invalid-otp',
-        );
-      }
+      final errorMsg =
+          body['message'] as String? ?? 'Invalid verification code.';
+      throw AuthException(
+        message: errorMsg.contains('match') || errorMsg.contains('invalid')
+            ? 'Invalid verification code. Please check and try again.'
+            : errorMsg,
+        code: 'invalid-otp',
+      );
+    } on AuthException {
+      rethrow;
     } catch (e) {
-      if (e is AuthException) rethrow;
+      throw NetworkException(
+        message: 'Network error during verification: $e',
+      );
     }
-
-    // Fallback: Widget verify endpoint
-    if (config.isWidgetFlow) {
-      try {
-        final widgetVerifyUri = Uri.parse('${config.baseUrl}/widget/verifyOtp');
-        final response = await _httpClient.post(
-          widgetVerifyUri,
-          headers: _authHeaders,
-          body: jsonEncode({
-            'widgetId': config.widgetId,
-            'tokenAuth': config.authKey,
-            'reqId': verificationId ?? mobile,
-            'mobile': mobile,
-            'otp': cleanOtp,
-          }),
-        );
-
-        final body = _parseJson(response.body);
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          final type = body['type'] as String?;
-          final message = (body['message'] as String? ?? '').toLowerCase();
-          if (type == 'success' ||
-              message.contains('verified') ||
-              message.contains('success')) {
-            return true;
-          }
-        }
-      } catch (e) {
-        if (e is AuthException) rethrow;
-      }
-    }
-
-    throw const AuthException(
-      message: 'Invalid verification code. Please check and try again.',
-      code: 'invalid-otp',
-    );
   }
 
   @override
@@ -324,8 +284,38 @@ class Msg91OtpService implements OtpService {
     OtpChannel channel = OtpChannel.sms,
     String? verificationId,
   }) async {
-    final mobile = _normalizeMobile(phoneNumber);
+    final reqId = verificationId ?? _normalizeMobile(phoneNumber);
+    final channelCode =
+        channel == OtpChannel.whatsapp ? 'WHATSAPP-12' : 'SMS-11';
 
+    // 1. Primary for runtime: Official MSG91 SDK
+    if (config.isWidgetFlow && !_isCustomClient) {
+      try {
+        OTPWidget.initializeWidget(config.widgetId, config.authKey);
+        final response = await OTPWidget.retryOTP({
+          'reqId': reqId,
+          'retryChannel': channelCode,
+        });
+
+        if (response != null) {
+          final isSuccess = response['type'] == 'success' ||
+              (response['status'] == 'success' && response['hasError'] != true);
+          if (isSuccess) {
+            return OtpDeliveryResult(
+              verificationId: reqId,
+              phoneNumber: phoneNumber,
+              channel: channel,
+              expiresInSeconds: config.otpExpiryMinutes * 60,
+              message: 'Code resent via ${channel.displayName}.',
+              providerName: 'MSG91 SDK',
+            );
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Fallback: REST Retry endpoint
+    final mobile = _normalizeMobile(phoneNumber);
     final retryUrl = config.baseUrl.endsWith('/otp')
         ? '${config.baseUrl}/retry'
         : '${config.baseUrl}/otp/retry';
@@ -346,18 +336,19 @@ class Msg91OtpService implements OtpService {
     try {
       final response = await _httpClient.get(
         uri,
-        headers: _authHeaders,
+        headers: {
+          'Content-Type': 'application/json',
+          if (config.authKey.isNotEmpty) 'authkey': config.authKey,
+        },
       );
 
       final body = _parseJson(response.body);
+      final isSuccess = body['type'] == 'success' ||
+          (body['status'] == 'success' && body['hasError'] != true);
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final type = body['type'] as String?;
-        if (type == 'error') {
-          final msg = body['message'] as String? ?? 'Failed to resend code.';
-          throw AuthException(message: msg, code: 'msg91-resend-error');
-        }
-
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          isSuccess) {
         return OtpDeliveryResult(
           verificationId: verificationId ??
               'msg91_${DateTime.now().millisecondsSinceEpoch}',
@@ -368,35 +359,10 @@ class Msg91OtpService implements OtpService {
               'Code resent via ${channel.displayName}.',
           providerName: 'MSG91',
         );
-      } else {
-        final msg = body['message'] as String? ?? 'Failed to resend code.';
-        throw AuthException(
-          message: msg,
-          code: 'msg91-resend-http-${response.statusCode}',
-        );
       }
-    } on AuthException {
-      rethrow;
-    } catch (e) {
-      throw NetworkException(
-        message: 'Network error during resend: $e',
-      );
-    }
-  }
+    } catch (_) {}
 
-  AppException _formatFriendlyException(dynamic error) {
-    if (error is AuthException) {
-      final msg = error.message;
-      if (msg.toLowerCase().contains('web requests are not allowed')) {
-        return const AuthException(
-          message:
-              'MSG91 Widget Notice: Web/API requests are restricted for this widget. In your MSG91 Dashboard -> OTP -> Widgets -> Configurations, allow your domain/API requests or verify widget settings.',
-          code: 'msg91-widget-domain-restricted',
-        );
-      }
-      return error;
-    }
-    return NetworkException(message: 'Error connecting to MSG91: $error');
+    return sendOtp(phoneNumber: phoneNumber, channel: channel);
   }
 
   Map<String, dynamic> _parseJson(String rawBody) {

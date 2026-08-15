@@ -250,7 +250,8 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
     final cleanDigits = phoneNumber.replaceAll(RegExp(r'\D'), '');
 
     for (final entry in _invitationsById.entries) {
-      final entryDigits = entry.value.invitedPhone.replaceAll(RegExp(r'\D'), '');
+      final entryDigits =
+          entry.value.invitedPhone.replaceAll(RegExp(r'\D'), '');
       if (entryDigits == cleanDigits ||
           (cleanDigits.length >= 10 &&
               entryDigits.length >= 10 &&
