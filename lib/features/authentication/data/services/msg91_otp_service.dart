@@ -28,6 +28,7 @@ class Msg91OtpService implements OtpService {
   final Msg91Config config;
   final http.Client _httpClient;
   final bool _isCustomClient;
+  String? _lastUsedWidgetId;
 
   /// Normalizes phone numbers for MSG91 (e.g. +919876543210 -> 919876543210).
   String _normalizeMobile(String phoneNumber) {
@@ -50,6 +51,7 @@ class Msg91OtpService implements OtpService {
     }
 
     final targetWidgetId = config.getWidgetIdForChannel(channel);
+    _lastUsedWidgetId = targetWidgetId;
 
     // 1. Primary for runtime: Official MSG91 Flutter SDK (OTPWidget)
     if (config.isWidgetFlow && !_isCustomClient) {
@@ -120,6 +122,8 @@ class Msg91OtpService implements OtpService {
     String? templateId,
   }) async {
     final targetWidgetId = config.getWidgetIdForChannel(channel);
+    _lastUsedWidgetId = targetWidgetId;
+
     final effectiveTemplateId = templateId ??
         (channel == OtpChannel.whatsapp
             ? config.whatsappTemplateId
@@ -210,37 +214,42 @@ class Msg91OtpService implements OtpService {
     }
 
     final reqId = verificationId ?? _normalizeMobile(phoneNumber);
-    final activeWidget = config.smsWidgetId.isNotEmpty
-        ? config.smsWidgetId
-        : config.whatsappWidgetId;
+
+    // Build list of widget IDs to try: prioritize the one used during send/resend
+    final candidateWidgets = <String>[
+      if (_lastUsedWidgetId != null && _lastUsedWidgetId!.isNotEmpty)
+        _lastUsedWidgetId!,
+      if (config.whatsappWidgetId.isNotEmpty &&
+          config.whatsappWidgetId != _lastUsedWidgetId)
+        config.whatsappWidgetId,
+      if (config.smsWidgetId.isNotEmpty &&
+          config.smsWidgetId != _lastUsedWidgetId)
+        config.smsWidgetId,
+    ];
+
+    if (candidateWidgets.isEmpty && config.isConfigured) {
+      candidateWidgets.add('');
+    }
 
     // 1. Primary for runtime: Official MSG91 SDK
     if (config.isWidgetFlow && !_isCustomClient) {
-      try {
-        OTPWidget.initializeWidget(activeWidget, config.authKey);
-        final response = await OTPWidget.verifyOTP({
-          'reqId': reqId,
-          'otp': cleanOtp,
-        });
+      for (final widgetId in candidateWidgets) {
+        try {
+          OTPWidget.initializeWidget(widgetId, config.authKey);
+          final response = await OTPWidget.verifyOTP({
+            'reqId': reqId,
+            'otp': cleanOtp,
+          });
 
-        if (response != null) {
-          final isSuccess = response['type'] == 'success' ||
-              (response['status'] == 'success' && response['hasError'] != true);
-          if (isSuccess) return true;
-
-          final errorMsg =
-              response['message'] as String? ?? 'Invalid verification code.';
-          throw AuthException(
-            message: errorMsg.contains('match') || errorMsg.contains('invalid')
-                ? 'Invalid verification code. Please check and try again.'
-                : errorMsg,
-            code: 'invalid-otp',
-          );
+          if (response != null) {
+            final isSuccess = response['type'] == 'success' ||
+                (response['status'] == 'success' &&
+                    response['hasError'] != true);
+            if (isSuccess) return true;
+          }
+        } catch (_) {
+          // Continue to next candidate widget if this one failed
         }
-      } on AuthException {
-        rethrow;
-      } catch (e) {
-        if (e is AuthException) rethrow;
       }
     }
 
@@ -250,49 +259,45 @@ class Msg91OtpService implements OtpService {
         ? '${config.baseUrl}/verify'
         : '${config.baseUrl}/otp/verify';
 
-    final uri = Uri.parse(verifyUrl).replace(
-      queryParameters: {
-        if (config.authKey.isNotEmpty) 'authkey': config.authKey,
-        if (activeWidget.isNotEmpty) 'widgetId': activeWidget,
-        'mobile': mobile,
-        'otp': cleanOtp,
-      },
-    );
-
-    try {
-      final response = await _httpClient.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
+    for (final widgetId in candidateWidgets) {
+      final uri = Uri.parse(verifyUrl).replace(
+        queryParameters: {
           if (config.authKey.isNotEmpty) 'authkey': config.authKey,
+          if (widgetId.isNotEmpty) 'widgetId': widgetId,
+          'mobile': mobile,
+          'otp': cleanOtp,
         },
       );
 
-      final body = _parseJson(response.body);
-      final isSuccess = body['type'] == 'success' ||
-          (body['status'] == 'success' && body['hasError'] != true) ||
-          (body['message'] as String? ?? '')
-              .toLowerCase()
-              .contains('success') ||
-          (body['message'] as String? ?? '').toLowerCase().contains('verified');
+      try {
+        final response = await _httpClient.get(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            if (config.authKey.isNotEmpty) 'authkey': config.authKey,
+          },
+        );
 
-      if (isSuccess) return true;
+        final body = _parseJson(response.body);
+        final isSuccess = body['type'] == 'success' ||
+            (body['status'] == 'success' && body['hasError'] != true) ||
+            (body['message'] as String? ?? '')
+                .toLowerCase()
+                .contains('success') ||
+            (body['message'] as String? ?? '')
+                .toLowerCase()
+                .contains('verified');
 
-      final errorMsg =
-          body['message'] as String? ?? 'Invalid verification code.';
-      throw AuthException(
-        message: errorMsg.contains('match') || errorMsg.contains('invalid')
-            ? 'Invalid verification code. Please check and try again.'
-            : errorMsg,
-        code: 'invalid-otp',
-      );
-    } on AuthException {
-      rethrow;
-    } catch (e) {
-      throw NetworkException(
-        message: 'Network error during verification: $e',
-      );
+        if (isSuccess) return true;
+      } catch (e) {
+        if (e is AuthException) rethrow;
+      }
     }
+
+    throw const AuthException(
+      message: 'Invalid verification code. Please check and try again.',
+      code: 'invalid-otp',
+    );
   }
 
   @override
@@ -305,6 +310,7 @@ class Msg91OtpService implements OtpService {
     final channelCode =
         channel == OtpChannel.whatsapp ? 'WHATSAPP-12' : 'SMS-11';
     final targetWidgetId = config.getWidgetIdForChannel(channel);
+    _lastUsedWidgetId = targetWidgetId;
 
     // 1. Primary for runtime: Official MSG91 SDK
     if (config.isWidgetFlow && !_isCustomClient) {
