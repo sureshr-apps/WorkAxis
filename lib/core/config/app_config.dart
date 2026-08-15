@@ -14,13 +14,9 @@ class Msg91Config extends Equatable {
       defaultValue: String.fromEnvironment('MSG91_AUTH_TOKEN',
           defaultValue: '560926TkwDcG3B6a8062a5P1'),
     ),
-    this.widgetId = const String.fromEnvironment(
-      'MSG91_WIDGET_ID',
-      defaultValue: '36686f6e376d353532323233',
-    ),
     this.smsWidgetId = const String.fromEnvironment(
       'MSG91_SMS_WIDGET_ID',
-      defaultValue: '',
+      defaultValue: '36686f6e376d353532323233',
     ),
     this.whatsappWidgetId = const String.fromEnvironment(
       'MSG91_WHATSAPP_WIDGET_ID',
@@ -37,7 +33,6 @@ class Msg91Config extends Equatable {
   });
 
   final String authKey;
-  final String widgetId;
   final String smsWidgetId;
   final String whatsappWidgetId;
   final String smsTemplateId;
@@ -46,34 +41,27 @@ class Msg91Config extends Equatable {
   final int otpExpiryMinutes;
   final String baseUrl;
 
-  /// Returns true if either an authKey/token or a widgetId is configured.
+  /// Returns true if either an authKey/token or a widget is configured.
   bool get isConfigured =>
       authKey.isNotEmpty ||
-      widgetId.isNotEmpty ||
       smsWidgetId.isNotEmpty ||
       whatsappWidgetId.isNotEmpty;
 
   /// Returns true if using the MSG91 OTP Widget (no DLT required).
   bool get isWidgetFlow =>
-      widgetId.isNotEmpty ||
-      smsWidgetId.isNotEmpty ||
-      whatsappWidgetId.isNotEmpty;
+      smsWidgetId.isNotEmpty || whatsappWidgetId.isNotEmpty;
 
   /// Resolves the specific widget ID for a given channel.
   String getWidgetIdForChannel(OtpChannel channel) {
-    if (channel == OtpChannel.whatsapp && whatsappWidgetId.isNotEmpty) {
-      return whatsappWidgetId;
+    if (channel == OtpChannel.whatsapp) {
+      return whatsappWidgetId.isNotEmpty ? whatsappWidgetId : smsWidgetId;
     }
-    if (channel == OtpChannel.sms && smsWidgetId.isNotEmpty) {
-      return smsWidgetId;
-    }
-    return widgetId;
+    return smsWidgetId.isNotEmpty ? smsWidgetId : whatsappWidgetId;
   }
 
   @override
   List<Object?> get props => [
         authKey,
-        widgetId,
         smsWidgetId,
         whatsappWidgetId,
         smsTemplateId,

@@ -185,7 +185,7 @@ void main() {
     group('MSG91 Widget ID Flow (No DLT Required)', () {
       const widgetConfig = Msg91Config(
         authKey: 'widget_token_abc123',
-        widgetId: '346473616263333132333435',
+        smsWidgetId: '346473616263333132333435',
         otpLength: 6,
         otpExpiryMinutes: 5,
       );

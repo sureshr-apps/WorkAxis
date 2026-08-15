@@ -15,10 +15,13 @@ class Msg91OtpService implements OtpService {
     http.Client? httpClient,
   })  : _isCustomClient = httpClient != null,
         _httpClient = httpClient ?? http.Client() {
-    if (config.widgetId.isNotEmpty &&
+    final defaultWidget = config.smsWidgetId.isNotEmpty
+        ? config.smsWidgetId
+        : config.whatsappWidgetId;
+    if (defaultWidget.isNotEmpty &&
         config.authKey.isNotEmpty &&
         !_isCustomClient) {
-      OTPWidget.initializeWidget(config.widgetId, config.authKey);
+      OTPWidget.initializeWidget(defaultWidget, config.authKey);
     }
   }
 
@@ -207,11 +210,14 @@ class Msg91OtpService implements OtpService {
     }
 
     final reqId = verificationId ?? _normalizeMobile(phoneNumber);
+    final activeWidget = config.smsWidgetId.isNotEmpty
+        ? config.smsWidgetId
+        : config.whatsappWidgetId;
 
     // 1. Primary for runtime: Official MSG91 SDK
     if (config.isWidgetFlow && !_isCustomClient) {
       try {
-        OTPWidget.initializeWidget(config.widgetId, config.authKey);
+        OTPWidget.initializeWidget(activeWidget, config.authKey);
         final response = await OTPWidget.verifyOTP({
           'reqId': reqId,
           'otp': cleanOtp,
@@ -247,7 +253,7 @@ class Msg91OtpService implements OtpService {
     final uri = Uri.parse(verifyUrl).replace(
       queryParameters: {
         if (config.authKey.isNotEmpty) 'authkey': config.authKey,
-        if (config.widgetId.isNotEmpty) 'widgetId': config.widgetId,
+        if (activeWidget.isNotEmpty) 'widgetId': activeWidget,
         'mobile': mobile,
         'otp': cleanOtp,
       },
