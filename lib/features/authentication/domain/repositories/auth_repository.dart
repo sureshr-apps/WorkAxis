@@ -1,4 +1,5 @@
 import 'package:workaxis/features/authentication/domain/entities/auth_user.dart';
+import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_session.dart';
 
 /// Abstract contract for authentication operations.
@@ -12,6 +13,7 @@ abstract interface class AuthRepository {
   /// Initiates Phone Number verification and returns an OTP session.
   Future<OtpSession> sendOtp({
     required String phoneNumber,
+    OtpChannel channel = OtpChannel.sms,
     int? resendToken,
   });
 

@@ -1,29 +1,42 @@
 import 'dart:async';
 import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/features/authentication/data/services/in_memory_otp_service.dart';
 import 'package:workaxis/features/authentication/domain/entities/auth_user.dart';
+import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_session.dart';
+import 'package:workaxis/features/authentication/domain/services/otp_service.dart';
 
 abstract interface class AuthRemoteDataSource {
   Stream<AuthUser?> get authStateChanges;
   AuthUser? get currentUser;
-  Future<OtpSession> sendOtp({required String phoneNumber, int? resendToken});
-  Future<AuthUser> verifyOtp(
-      {required String verificationId, required String smsCode});
+  Future<OtpSession> sendOtp({
+    required String phoneNumber,
+    OtpChannel channel = OtpChannel.sms,
+    int? resendToken,
+  });
+  Future<AuthUser> verifyOtp({
+    required String verificationId,
+    required String smsCode,
+    String? phoneNumber,
+  });
   Future<AuthUser> signInWithGoogle();
   Future<void> signOut();
 }
 
-/// InMemoryAuthDataSource provides an isolated, reliable authentication simulation
-/// with strict validation conforming to production Firebase Authentication behavior.
-class InMemoryAuthDataSource implements AuthRemoteDataSource {
-  InMemoryAuthDataSource({AuthUser? initialUser}) {
-    _currentUser = initialUser;
+/// [OtpServiceAuthDataSource] implements [AuthRemoteDataSource] powered by any pluggable [OtpService] (MSG91, In-Memory, etc.).
+class OtpServiceAuthDataSource implements AuthRemoteDataSource {
+  OtpServiceAuthDataSource({
+    required OtpService otpService,
+    AuthUser? initialUser,
+  })  : _otpService = otpService,
+        _currentUser = initialUser {
     _controller.add(initialUser);
   }
 
+  final OtpService _otpService;
   final _controller = StreamController<AuthUser?>.broadcast();
   AuthUser? _currentUser;
-  final Map<String, _PendingVerification> _pendingVerifications = {};
+  final Map<String, _SessionMetadata> _sessions = {};
 
   @override
   Stream<AuthUser?> get authStateChanges => _controller.stream;
@@ -32,60 +45,64 @@ class InMemoryAuthDataSource implements AuthRemoteDataSource {
   AuthUser? get currentUser => _currentUser;
 
   @override
-  Future<OtpSession> sendOtp(
-      {required String phoneNumber, int? resendToken}) async {
-    // Basic network simulation delay
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-
-    if (phoneNumber.replaceAll(RegExp(r'\D'), '').length < 10) {
-      throw AuthException.invalidPhoneNumber();
-    }
-
-    final verificationId = 'ver_${DateTime.now().millisecondsSinceEpoch}';
-    final token = resendToken ?? DateTime.now().millisecondsSinceEpoch;
-
-    // For testing and predictable demo verification, we generate a known code
-    _pendingVerifications[verificationId] = _PendingVerification(
+  Future<OtpSession> sendOtp({
+    required String phoneNumber,
+    OtpChannel channel = OtpChannel.sms,
+    int? resendToken,
+  }) async {
+    final result = await _otpService.sendOtp(
       phoneNumber: phoneNumber,
-      code: '123456',
-      createdAt: DateTime.now(),
+      channel: channel,
     );
 
-    return OtpSession(
-      verificationId: verificationId,
+    final session = OtpSession(
+      verificationId: result.verificationId,
       phoneNumber: phoneNumber,
-      resendToken: token,
+      channel: channel,
+      resendToken: resendToken ?? DateTime.now().millisecondsSinceEpoch,
       createdAt: DateTime.now(),
-      timeoutSeconds: 60,
+      timeoutSeconds: result.expiresInSeconds,
     );
+
+    _sessions[result.verificationId] = _SessionMetadata(
+      phoneNumber: phoneNumber,
+      channel: channel,
+    );
+
+    return session;
   }
 
   @override
   Future<AuthUser> verifyOtp({
     required String verificationId,
     required String smsCode,
+    String? phoneNumber,
   }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    final sessionMeta = _sessions[verificationId];
+    final targetPhone = phoneNumber ?? sessionMeta?.phoneNumber;
 
-    final pending = _pendingVerifications[verificationId];
-    if (pending == null) {
-      throw AuthException.otpExpired();
+    if (targetPhone == null) {
+      throw const AuthException(
+        message: 'Invalid session or phone number. Please request a new code.',
+        code: 'invalid-session',
+      );
     }
 
-    if (DateTime.now().difference(pending.createdAt).inSeconds > 60) {
-      _pendingVerifications.remove(verificationId);
-      throw AuthException.otpExpired();
-    }
+    final isValid = await _otpService.verifyOtp(
+      phoneNumber: targetPhone,
+      otp: smsCode,
+      verificationId: verificationId,
+    );
 
-    if (smsCode != pending.code) {
+    if (!isValid) {
       throw AuthException.invalidOtp();
     }
 
-    _pendingVerifications.remove(verificationId);
+    _sessions.remove(verificationId);
 
     final user = AuthUser(
-      uid: 'user_${pending.phoneNumber.replaceAll(RegExp(r'\D'), '')}',
-      phoneNumber: pending.phoneNumber,
+      uid: 'user_${targetPhone.replaceAll(RegExp(r'\D'), '')}',
+      phoneNumber: targetPhone,
       displayName: 'WorkAxis User',
     );
 
@@ -117,14 +134,20 @@ class InMemoryAuthDataSource implements AuthRemoteDataSource {
   }
 }
 
-class _PendingVerification {
-  _PendingVerification({
+/// Backwards-compatible convenience alias default for development and testing.
+class InMemoryAuthDataSource extends OtpServiceAuthDataSource {
+  InMemoryAuthDataSource({
+    OtpService? otpService,
+    super.initialUser,
+  }) : super(otpService: otpService ?? InMemoryOtpService());
+}
+
+class _SessionMetadata {
+  const _SessionMetadata({
     required this.phoneNumber,
-    required this.code,
-    required this.createdAt,
+    required this.channel,
   });
 
   final String phoneNumber;
-  final String code;
-  final DateTime createdAt;
+  final OtpChannel channel;
 }

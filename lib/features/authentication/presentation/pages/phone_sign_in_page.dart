@@ -9,6 +9,7 @@ import 'package:workaxis/core/theme/app_colors.dart';
 import 'package:workaxis/core/utils/phone_number_formatter.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
+import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:workaxis/features/authentication/presentation/widgets/auth_scaffold.dart';
 import 'package:workaxis/features/authentication/presentation/widgets/country_code_picker_sheet.dart';
@@ -24,6 +25,7 @@ class _PhoneSignInPageState extends State<PhoneSignInPage> {
   final _phoneController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   CountryCode _selectedCountry = CountryCode.defaultCountry;
+  OtpChannel _selectedChannel = OtpChannel.sms;
   String? _inlineError;
 
   @override
@@ -62,7 +64,10 @@ class _PhoneSignInPageState extends State<PhoneSignInPage> {
     );
 
     final authController = context.read<AuthController>();
-    await authController.sendOtp(phoneNumber: e164Phone);
+    await authController.sendOtp(
+      phoneNumber: e164Phone,
+      channel: _selectedChannel,
+    );
 
     if (!mounted) return;
     final state = authController.state;
@@ -92,6 +97,7 @@ class _PhoneSignInPageState extends State<PhoneSignInPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Phone Number with Country Code
             AppTextField(
               controller: _phoneController,
               labelText: 'Mobile Number',
@@ -145,9 +151,45 @@ class _PhoneSignInPageState extends State<PhoneSignInPage> {
               ],
               onSubmitted: (_) => _handleSendOtp(),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
+            // Delivery Channel Selector (SMS / WhatsApp)
             Text(
-              'By continuing, you may receive an SMS for verification. Message and data rates may apply.',
+              'Receive code via',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            SegmentedButton<OtpChannel>(
+              segments: const [
+                ButtonSegment<OtpChannel>(
+                  value: OtpChannel.sms,
+                  label: Text('SMS'),
+                  icon: Icon(Icons.sms_outlined, size: 18),
+                ),
+                ButtonSegment<OtpChannel>(
+                  value: OtpChannel.whatsapp,
+                  label: Text('WhatsApp'),
+                  icon: Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                ),
+              ],
+              selected: {_selectedChannel},
+              onSelectionChanged: (set) {
+                setState(() => _selectedChannel = set.first);
+              },
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                shape: WidgetStatePropertyAll(
+                  RoundedRectangleBorder(borderRadius: AppRadius.borderDefault),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              _selectedChannel == OtpChannel.whatsapp
+                  ? 'We will send a 6-digit verification code directly to your WhatsApp.'
+                  : 'By continuing, you may receive an SMS for verification. Message and data rates may apply.',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: AppColors.outline,
                   ),
@@ -156,7 +198,7 @@ class _PhoneSignInPageState extends State<PhoneSignInPage> {
         ),
       ),
       bottomAction: AppButton(
-        text: 'Send OTP',
+        text: 'Send OTP via ${_selectedChannel.displayName}',
         isLoading: isLoading,
         onPressed: _handleSendOtp,
       ),

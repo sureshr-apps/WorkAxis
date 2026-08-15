@@ -6,6 +6,7 @@ import 'package:workaxis/core/constants/app_spacing.dart';
 import 'package:workaxis/core/theme/app_colors.dart';
 import 'package:workaxis/core/utils/phone_number_formatter.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:workaxis/features/authentication/presentation/widgets/auth_scaffold.dart';
 import 'package:workaxis/features/authentication/presentation/widgets/otp_input_row.dart';
@@ -94,18 +95,22 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     }
   }
 
-  Future<void> _handleResend() async {
-    if (_countdown > 0) return;
+  Future<void> _handleResend({OtpChannel? alternateChannel}) async {
+    if (_countdown > 0 && alternateChannel == null) return;
 
     final authController = context.read<AuthController>();
     final state = authController.state;
     if (state is AuthOtpSent) {
-      await authController.resendOtp(currentSession: state.session);
+      final channel = alternateChannel ?? state.session.channel;
+      await authController.resendOtp(
+        currentSession: state.session,
+        channel: channel,
+      );
       _startCountdown();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('A new verification code has been sent.'),
+        SnackBar(
+          content: Text('A new code has been sent via ${channel.displayName}.'),
           backgroundColor: AppColors.statusActive,
         ),
       );
@@ -119,17 +124,24 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     final isLoading = state is AuthAuthenticating;
 
     String phoneNumber = '';
+    OtpChannel currentChannel = OtpChannel.sms;
+
     if (state is AuthOtpSent) {
       phoneNumber = state.session.phoneNumber;
+      currentChannel = state.session.channel;
     } else if (state is AuthError && state.previousSession != null) {
       phoneNumber = state.previousSession!.phoneNumber;
+      currentChannel = state.previousSession!.channel;
     }
 
     final maskedPhone = PhoneNumberFormatter.maskPhoneNumber(phoneNumber);
+    final alternateChannel =
+        currentChannel == OtpChannel.sms ? OtpChannel.whatsapp : OtpChannel.sms;
 
     return AuthScaffold(
       title: 'Enter 6-digit code',
-      subtitle: "We've sent a verification code to $maskedPhone",
+      subtitle:
+          "We've sent a verification code via ${currentChannel.displayName} to $maskedPhone",
       onBack: () => context.go('/signin/phone'),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,14 +178,30 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                 )
               else
                 TextButton(
-                  onPressed: _handleResend,
+                  onPressed: () => _handleResend(),
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(60, 32),
                   ),
-                  child: const Text('Resend Code'),
+                  child: Text('Resend ${currentChannel.displayName}'),
                 ),
             ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          // Alternate channel quick action
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: Text(alternateChannel.iconEmoji,
+                  style: const TextStyle(fontSize: 14)),
+              label: Text('Send via ${alternateChannel.displayName} instead'),
+              onPressed: () =>
+                  _handleResend(alternateChannel: alternateChannel),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(120, 32),
+              ),
+            ),
           ),
         ],
       ),

@@ -60,7 +60,8 @@ void main() {
       expect(find.text('Sign in with Phone Number'), findsOneWidget);
     });
 
-    testWidgets('navigates from Welcome to Phone Entry and requests OTP',
+    testWidgets(
+        'navigates from Welcome to Phone Entry and requests OTP via SMS',
         (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
@@ -74,6 +75,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Sign in with phone number'), findsOneWidget);
+      expect(find.text('SMS'), findsOneWidget);
+      expect(find.text('WhatsApp'), findsOneWidget);
 
       // Enter phone number
       final textField = find.byType(TextField);
@@ -81,13 +84,43 @@ void main() {
       await tester.enterText(textField, '5551234567');
       await tester.pumpAndSettle();
 
-      // Tap Send OTP
-      await tester.tap(find.widgetWithText(AppButton, 'Send OTP'));
+      // Tap Send OTP via SMS
+      await tester.tap(find.widgetWithText(AppButton, 'Send OTP via SMS'));
       await tester.pumpAndSettle();
 
       // Should transition to OTP verification
       expect(find.text('Enter 6-digit code'), findsOneWidget);
-      expect(find.textContaining('(***) ***-4567'), findsOneWidget);
+      expect(find.textContaining('+1 (***) ***-4567'), findsOneWidget);
+      expect(find.textContaining('via SMS'), findsOneWidget);
+    });
+
+    testWidgets('selects WhatsApp channel and sends OTP via WhatsApp',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // Go to Phone Entry
+      await tester.tap(find.text('Sign in with Phone'));
+      await tester.pumpAndSettle();
+
+      // Tap WhatsApp segment
+      await tester.tap(find.text('WhatsApp'));
+      await tester.pumpAndSettle();
+
+      expect(
+          find.widgetWithText(AppButton, 'Send OTP via WhatsApp'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '5551234567');
+      await tester.tap(find.widgetWithText(AppButton, 'Send OTP via WhatsApp'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('+1 (***) ***-4567'), findsOneWidget);
+      expect(find.textContaining('via WhatsApp'), findsOneWidget);
+      expect(find.text('Send via SMS instead'), findsOneWidget);
     });
 
     testWidgets('opens country code picker and selects country',
@@ -138,7 +171,7 @@ void main() {
 
       // Enter Alex Morgan phone number (+15551234567)
       await tester.enterText(find.byType(TextField), '5551234567');
-      await tester.tap(find.widgetWithText(AppButton, 'Send OTP'));
+      await tester.tap(find.widgetWithText(AppButton, 'Send OTP via SMS'));
       await tester.pumpAndSettle();
 
       // Enter 6 digit OTP: 123456

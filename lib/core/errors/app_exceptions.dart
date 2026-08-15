@@ -63,6 +63,17 @@ final class AuthException extends AppException {
       );
 }
 
+/// Network and external communication failures.
+final class NetworkException extends AppException {
+  const NetworkException({required super.message, super.code});
+
+  factory NetworkException.unavailable([String? message]) => NetworkException(
+        message: message ??
+            'Unable to connect to the server. Please check your internet connection.',
+        code: 'network-unavailable',
+      );
+}
+
 /// Access resolution, authorization, and organization failures.
 final class AccessResolutionException extends AppException {
   const AccessResolutionException({required super.message, super.code});

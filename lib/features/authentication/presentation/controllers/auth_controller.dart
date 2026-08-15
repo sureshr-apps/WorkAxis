@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/authentication/domain/entities/auth_user.dart';
+import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_session.dart';
 import 'package:workaxis/features/authentication/domain/repositories/auth_repository.dart';
 
@@ -89,6 +90,7 @@ class AuthController extends ChangeNotifier {
 
   Future<void> sendOtp({
     required String phoneNumber,
+    OtpChannel channel = OtpChannel.sms,
     int? resendToken,
   }) async {
     _state = const AuthAuthenticating(message: 'Sending code...');
@@ -97,6 +99,7 @@ class AuthController extends ChangeNotifier {
     try {
       final session = await _authRepository.sendOtp(
         phoneNumber: phoneNumber,
+        channel: channel,
         resendToken: resendToken,
       );
       _state = AuthOtpSent(session: session);
@@ -110,13 +113,18 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<void> resendOtp({required OtpSession currentSession}) async {
+  Future<void> resendOtp({
+    required OtpSession currentSession,
+    OtpChannel? channel,
+  }) async {
     _state = AuthOtpSent(session: currentSession, isResending: true);
     notifyListeners();
 
     try {
+      final targetChannel = channel ?? currentSession.channel;
       final newSession = await _authRepository.sendOtp(
         phoneNumber: currentSession.phoneNumber,
+        channel: targetChannel,
         resendToken: currentSession.resendToken,
       );
       _state = AuthOtpSent(session: newSession, isResending: false);

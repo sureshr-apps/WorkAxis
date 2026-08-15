@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/features/authentication/data/datasources/auth_remote_data_source.dart';
 import 'package:workaxis/features/authentication/data/repositories/auth_repository_impl.dart';
+import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 
 void main() {
@@ -25,9 +26,12 @@ void main() {
     });
 
     test(
-        'sendOtp transitions from AuthAuthenticating to AuthOtpSent on valid phone',
+        'sendOtp transitions from AuthAuthenticating to AuthOtpSent on valid phone (SMS)',
         () async {
-      final future = controller.sendOtp(phoneNumber: '+15551234567');
+      final future = controller.sendOtp(
+        phoneNumber: '+15551234567',
+        channel: OtpChannel.sms,
+      );
       expect(controller.state,
           const AuthAuthenticating(message: 'Sending code...'));
 
@@ -35,6 +39,36 @@ void main() {
       expect(controller.state, isA<AuthOtpSent>());
       final sentState = controller.state as AuthOtpSent;
       expect(sentState.session.phoneNumber, '+15551234567');
+      expect(sentState.session.channel, OtpChannel.sms);
+    });
+
+    test('sendOtp supports WhatsApp channel', () async {
+      await controller.sendOtp(
+        phoneNumber: '+919876543210',
+        channel: OtpChannel.whatsapp,
+      );
+
+      expect(controller.state, isA<AuthOtpSent>());
+      final sentState = controller.state as AuthOtpSent;
+      expect(sentState.session.phoneNumber, '+919876543210');
+      expect(sentState.session.channel, OtpChannel.whatsapp);
+    });
+
+    test('resendOtp allows switching from SMS to WhatsApp', () async {
+      await controller.sendOtp(
+        phoneNumber: '+15551234567',
+        channel: OtpChannel.sms,
+      );
+      final initialSession = (controller.state as AuthOtpSent).session;
+      expect(initialSession.channel, OtpChannel.sms);
+
+      await controller.resendOtp(
+        currentSession: initialSession,
+        channel: OtpChannel.whatsapp,
+      );
+
+      final newSession = (controller.state as AuthOtpSent).session;
+      expect(newSession.channel, OtpChannel.whatsapp);
     });
 
     test('sendOtp transitions to AuthError on invalid phone number', () async {

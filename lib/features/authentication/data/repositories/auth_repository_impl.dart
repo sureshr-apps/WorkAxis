@@ -1,5 +1,6 @@
 import 'package:workaxis/features/authentication/data/datasources/auth_remote_data_source.dart';
 import 'package:workaxis/features/authentication/domain/entities/auth_user.dart';
+import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_session.dart';
 import 'package:workaxis/features/authentication/domain/repositories/auth_repository.dart';
 
@@ -18,10 +19,12 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<OtpSession> sendOtp({
     required String phoneNumber,
+    OtpChannel channel = OtpChannel.sms,
     int? resendToken,
   }) {
     return _remoteDataSource.sendOtp(
       phoneNumber: phoneNumber,
+      channel: channel,
       resendToken: resendToken,
     );
   }
