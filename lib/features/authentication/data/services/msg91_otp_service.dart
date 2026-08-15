@@ -8,7 +8,7 @@ import 'package:workaxis/features/authentication/domain/entities/otp_delivery_re
 import 'package:workaxis/features/authentication/domain/services/otp_service.dart';
 
 /// Concrete implementation of [OtpService] integrating with MSG91's official [sendotp_flutter_sdk].
-/// Supports Widget ID flow (DLT-less) and fallback REST APIs.
+/// Supports Widget ID flow (DLT-less), dual-channel widget routing, and fallback REST APIs.
 class Msg91OtpService implements OtpService {
   Msg91OtpService({
     required this.config,
@@ -46,10 +46,12 @@ class Msg91OtpService implements OtpService {
       );
     }
 
+    final targetWidgetId = config.getWidgetIdForChannel(channel);
+
     // 1. Primary for runtime: Official MSG91 Flutter SDK (OTPWidget)
     if (config.isWidgetFlow && !_isCustomClient) {
       try {
-        OTPWidget.initializeWidget(config.widgetId, config.authKey);
+        OTPWidget.initializeWidget(targetWidgetId, config.authKey);
         final channelCode =
             channel == OtpChannel.whatsapp ? 'WHATSAPP-12' : 'SMS-11';
 
@@ -70,17 +72,6 @@ class Msg91OtpService implements OtpService {
                 response['requestId'] as String? ??
                 mobile;
 
-            // If user explicitly chose WhatsApp, trigger WhatsApp retry channel immediately
-            // to ensure delivery via WhatsApp even if the widget's default channel is SMS.
-            if (channel == OtpChannel.whatsapp) {
-              try {
-                await OTPWidget.retryOTP({
-                  'reqId': verificationId,
-                  'retryChannel': 'WHATSAPP-12',
-                });
-              } catch (_) {}
-            }
-
             return OtpDeliveryResult(
               verificationId: verificationId,
               phoneNumber: phoneNumber,
@@ -95,7 +86,7 @@ class Msg91OtpService implements OtpService {
             if (msg.toLowerCase().contains('mobile requests are not allowed')) {
               throw AuthException(
                 message:
-                    "MSG91 Setup Required: Please toggle ON 'Mobile Integration' in your MSG91 Dashboard (OTP -> Widgets -> ${config.widgetId} -> Configurations).",
+                    "MSG91 Setup Required: Please toggle ON 'Mobile Integration' in your MSG91 Dashboard (OTP -> Widgets -> $targetWidgetId -> Configurations).",
                 code: 'msg91-mobile-integration-disabled',
               );
             }
@@ -125,17 +116,18 @@ class Msg91OtpService implements OtpService {
     required OtpChannel channel,
     String? templateId,
   }) async {
+    final targetWidgetId = config.getWidgetIdForChannel(channel);
     final effectiveTemplateId = templateId ??
         (channel == OtpChannel.whatsapp
             ? config.whatsappTemplateId
             : (config.smsTemplateId.isNotEmpty
                 ? config.smsTemplateId
-                : config.widgetId));
+                : targetWidgetId));
 
     final queryParams = <String, String>{
       if (config.authKey.isNotEmpty) 'authkey': config.authKey,
       if (effectiveTemplateId.isNotEmpty) 'template_id': effectiveTemplateId,
-      if (config.widgetId.isNotEmpty) 'widgetId': config.widgetId,
+      if (targetWidgetId.isNotEmpty) 'widgetId': targetWidgetId,
       'mobile': mobile,
       'otp_length': config.otpLength.toString(),
       'otp_expiry': config.otpExpiryMinutes.toString(),
@@ -306,11 +298,12 @@ class Msg91OtpService implements OtpService {
     final reqId = verificationId ?? _normalizeMobile(phoneNumber);
     final channelCode =
         channel == OtpChannel.whatsapp ? 'WHATSAPP-12' : 'SMS-11';
+    final targetWidgetId = config.getWidgetIdForChannel(channel);
 
     // 1. Primary for runtime: Official MSG91 SDK
     if (config.isWidgetFlow && !_isCustomClient) {
       try {
-        OTPWidget.initializeWidget(config.widgetId, config.authKey);
+        OTPWidget.initializeWidget(targetWidgetId, config.authKey);
         final response = await OTPWidget.retryOTP({
           'reqId': reqId,
           'retryChannel': channelCode,
@@ -354,7 +347,7 @@ class Msg91OtpService implements OtpService {
     final uri = Uri.parse(retryUrl).replace(
       queryParameters: {
         if (config.authKey.isNotEmpty) 'authkey': config.authKey,
-        if (config.widgetId.isNotEmpty) 'widgetId': config.widgetId,
+        if (targetWidgetId.isNotEmpty) 'widgetId': targetWidgetId,
         'mobile': mobile,
         'retrytype': retryType,
       },

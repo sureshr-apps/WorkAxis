@@ -16,6 +16,11 @@ class Msg91Config extends Equatable {
     ),
     this.widgetId = const String.fromEnvironment('MSG91_WIDGET_ID',
         defaultValue: '36686f6c5452333835343638'),
+    this.smsWidgetId =
+        const String.fromEnvironment('MSG91_SMS_WIDGET_ID', defaultValue: ''),
+    this.whatsappWidgetId = const String.fromEnvironment(
+        'MSG91_WHATSAPP_WIDGET_ID',
+        defaultValue: ''),
     this.smsTemplateId =
         const String.fromEnvironment('MSG91_SMS_TEMPLATE_ID', defaultValue: ''),
     this.whatsappTemplateId = const String.fromEnvironment(
@@ -28,6 +33,8 @@ class Msg91Config extends Equatable {
 
   final String authKey;
   final String widgetId;
+  final String smsWidgetId;
+  final String whatsappWidgetId;
   final String smsTemplateId;
   final String whatsappTemplateId;
   final int otpLength;
@@ -35,15 +42,35 @@ class Msg91Config extends Equatable {
   final String baseUrl;
 
   /// Returns true if either an authKey/token or a widgetId is configured.
-  bool get isConfigured => authKey.isNotEmpty || widgetId.isNotEmpty;
+  bool get isConfigured =>
+      authKey.isNotEmpty ||
+      widgetId.isNotEmpty ||
+      smsWidgetId.isNotEmpty ||
+      whatsappWidgetId.isNotEmpty;
 
   /// Returns true if using the MSG91 OTP Widget (no DLT required).
-  bool get isWidgetFlow => widgetId.isNotEmpty;
+  bool get isWidgetFlow =>
+      widgetId.isNotEmpty ||
+      smsWidgetId.isNotEmpty ||
+      whatsappWidgetId.isNotEmpty;
+
+  /// Resolves the specific widget ID for a given channel.
+  String getWidgetIdForChannel(OtpChannel channel) {
+    if (channel == OtpChannel.whatsapp && whatsappWidgetId.isNotEmpty) {
+      return whatsappWidgetId;
+    }
+    if (channel == OtpChannel.sms && smsWidgetId.isNotEmpty) {
+      return smsWidgetId;
+    }
+    return widgetId;
+  }
 
   @override
   List<Object?> get props => [
         authKey,
         widgetId,
+        smsWidgetId,
+        whatsappWidgetId,
         smsTemplateId,
         whatsappTemplateId,
         otpLength,
