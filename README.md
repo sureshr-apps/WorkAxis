@@ -17,5 +17,28 @@ WorkAxis uses the **Market Flow M3** design system, an operational Material 3 im
 - **Medium (`600–839dp`)**: Tablet layouts, navigation rail, Master-Detail pattern.
 - **Expanded (`≥840dp`)**: Multi-column tablet/desktop landscape layouts, permanent navigation drawer.
 
+---
+
+## Authentication & OTP Configuration
+
+WorkAxis features a pluggable OTP provider architecture:
+
+### 1. Default Development / Testing Mode
+Without MSG91 credentials configured, the app **automatically and seamlessly uses the In-Memory Mock provider**:
+- Test OTP code: **`123456`**
+- Default delivery channel: **SMS** (with interactive toggle for **WhatsApp**)
+
+### 2. Connecting MSG91 in Production
+When you obtain your MSG91 account details, pass them during build or runtime using `--dart-define`:
+```bash
+flutter run \
+  --dart-define=MSG91_AUTH_KEY=your_msg91_auth_key \
+  --dart-define=MSG91_SMS_TEMPLATE_ID=your_sms_template_id \
+  --dart-define=MSG91_WHATSAPP_TEMPLATE_ID=your_whatsapp_template_id
+```
+The application will automatically detect the presence of `MSG91_AUTH_KEY` and activate the live MSG91 SendOTP v5 REST API client for both SMS and WhatsApp channels.
+
+---
+
 ## Architecture
 See [docs/architecture.md](docs/architecture.md) for detailed architectural documentation.
