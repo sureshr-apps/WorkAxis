@@ -7,6 +7,29 @@ enum OtpProviderType {
   twilio,
 }
 
+class GoogleAuthConfig extends Equatable {
+  const GoogleAuthConfig({
+    this.serverClientId = const String.fromEnvironment(
+      'GOOGLE_SERVER_CLIENT_ID',
+      defaultValue: '',
+    ),
+    this.clientId = const String.fromEnvironment(
+      'GOOGLE_CLIENT_ID',
+      defaultValue: '',
+    ),
+    this.scopes = const ['email', 'profile'],
+  });
+
+  final String serverClientId;
+  final String clientId;
+  final List<String> scopes;
+
+  bool get isConfigured => serverClientId.isNotEmpty || clientId.isNotEmpty;
+
+  @override
+  List<Object?> get props => [serverClientId, clientId, scopes];
+}
+
 class Msg91Config extends Equatable {
   const Msg91Config({
     this.authKey = const String.fromEnvironment(
@@ -77,24 +100,29 @@ class AppConfig extends Equatable {
     this.otpProviderType = OtpProviderType.msg91,
     this.defaultOtpChannel = OtpChannel.sms,
     this.msg91 = const Msg91Config(),
+    this.googleAuth = const GoogleAuthConfig(),
   });
 
   final OtpProviderType otpProviderType;
   final OtpChannel defaultOtpChannel;
   final Msg91Config msg91;
+  final GoogleAuthConfig googleAuth;
 
   AppConfig copyWith({
     OtpProviderType? otpProviderType,
     OtpChannel? defaultOtpChannel,
     Msg91Config? msg91,
+    GoogleAuthConfig? googleAuth,
   }) {
     return AppConfig(
       otpProviderType: otpProviderType ?? this.otpProviderType,
       defaultOtpChannel: defaultOtpChannel ?? this.defaultOtpChannel,
       msg91: msg91 ?? this.msg91,
+      googleAuth: googleAuth ?? this.googleAuth,
     );
   }
 
   @override
-  List<Object?> get props => [otpProviderType, defaultOtpChannel, msg91];
+  List<Object?> get props =>
+      [otpProviderType, defaultOtpChannel, msg91, googleAuth];
 }

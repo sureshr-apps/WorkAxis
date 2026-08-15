@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/features/authentication/data/datasources/auth_remote_data_source.dart';
 import 'package:workaxis/features/authentication/data/repositories/auth_repository_impl.dart';
+import 'package:workaxis/features/authentication/data/services/in_memory_google_auth_service.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 
@@ -108,6 +109,34 @@ void main() {
       await controller.signInWithGoogle();
       expect(controller.state, isA<AuthAuthenticated>());
       expect(controller.currentUser?.email, 'alex.morgan@workaxis.io');
+    });
+
+    test('signInWithGoogle on cancellation reverts to AuthInitial', () async {
+      final cancellingDataSource = InMemoryAuthDataSource(
+        googleAuthService: InMemoryGoogleAuthService(shouldCancel: true),
+      );
+      final repo = AuthRepositoryImpl(remoteDataSource: cancellingDataSource);
+      final ctrl = AuthController(authRepository: repo);
+
+      await ctrl.signInWithGoogle();
+      expect(ctrl.state, const AuthInitial());
+      expect(ctrl.isAuthenticated, false);
+      ctrl.dispose();
+    });
+
+    test('signInWithGoogle on error transitions to AuthError', () async {
+      final failingDataSource = InMemoryAuthDataSource(
+        googleAuthService: InMemoryGoogleAuthService(
+          exceptionToThrow: Exception('Network failure'),
+        ),
+      );
+      final repo = AuthRepositoryImpl(remoteDataSource: failingDataSource);
+      final ctrl = AuthController(authRepository: repo);
+
+      await ctrl.signInWithGoogle();
+      expect(ctrl.state, isA<AuthError>());
+      expect(ctrl.isAuthenticated, false);
+      ctrl.dispose();
     });
 
     test('signOut clears user and returns to AuthInitial', () async {

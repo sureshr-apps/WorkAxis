@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/features/authentication/data/services/in_memory_google_auth_service.dart';
 import 'package:workaxis/features/authentication/data/services/in_memory_otp_service.dart';
 import 'package:workaxis/features/authentication/domain/entities/auth_user.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
 import 'package:workaxis/features/authentication/domain/entities/otp_session.dart';
+import 'package:workaxis/features/authentication/domain/services/google_auth_service.dart';
 import 'package:workaxis/features/authentication/domain/services/otp_service.dart';
 
 abstract interface class AuthRemoteDataSource {
@@ -23,17 +25,20 @@ abstract interface class AuthRemoteDataSource {
   Future<void> signOut();
 }
 
-/// [OtpServiceAuthDataSource] implements [AuthRemoteDataSource] powered by any pluggable [OtpService] (MSG91, In-Memory, etc.).
+/// [OtpServiceAuthDataSource] implements [AuthRemoteDataSource] powered by pluggable [OtpService] and [GoogleAuthService].
 class OtpServiceAuthDataSource implements AuthRemoteDataSource {
   OtpServiceAuthDataSource({
     required OtpService otpService,
+    GoogleAuthService? googleAuthService,
     AuthUser? initialUser,
   })  : _otpService = otpService,
+        _googleAuthService = googleAuthService ?? InMemoryGoogleAuthService(),
         _currentUser = initialUser {
     _controller.add(initialUser);
   }
 
   final OtpService _otpService;
+  final GoogleAuthService _googleAuthService;
   final _controller = StreamController<AuthUser?>.broadcast();
   AuthUser? _currentUser;
   final Map<String, _SessionMetadata> _sessions = {};
@@ -113,15 +118,13 @@ class OtpServiceAuthDataSource implements AuthRemoteDataSource {
 
   @override
   Future<AuthUser> signInWithGoogle() async {
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    const user = AuthUser(
-      uid: 'google_user_001',
-      email: 'alex.morgan@workaxis.io',
-      phoneNumber: '+15551234567',
-      displayName: 'Alex Morgan',
-      photoUrl:
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=128',
-    );
+    final user = await _googleAuthService.signIn();
+    if (user == null) {
+      throw const AuthException(
+        message: 'Google Sign-In was cancelled.',
+        code: 'google-sign-in-cancelled',
+      );
+    }
     _currentUser = user;
     _controller.add(user);
     return user;
@@ -129,6 +132,7 @@ class OtpServiceAuthDataSource implements AuthRemoteDataSource {
 
   @override
   Future<void> signOut() async {
+    await _googleAuthService.signOut();
     _currentUser = null;
     _controller.add(null);
   }
@@ -138,8 +142,12 @@ class OtpServiceAuthDataSource implements AuthRemoteDataSource {
 class InMemoryAuthDataSource extends OtpServiceAuthDataSource {
   InMemoryAuthDataSource({
     OtpService? otpService,
+    GoogleAuthService? googleAuthService,
     super.initialUser,
-  }) : super(otpService: otpService ?? InMemoryOtpService());
+  }) : super(
+          otpService: otpService ?? InMemoryOtpService(),
+          googleAuthService: googleAuthService ?? InMemoryGoogleAuthService(),
+        );
 }
 
 class _SessionMetadata {

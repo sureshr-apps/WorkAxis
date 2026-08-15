@@ -17,6 +17,7 @@ dependencies:
   provider: ^6.1.2
   http: ^1.2.2
   sendotp_flutter_sdk: ^0.0.2
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   flutter_test:

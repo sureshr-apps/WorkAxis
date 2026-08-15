@@ -178,6 +178,11 @@ class AuthController extends ChangeNotifier {
       _state = AuthAuthenticated(user);
       notifyListeners();
     } on AppException catch (e) {
+      if (e.code == 'google-sign-in-cancelled') {
+        _state = const AuthInitial();
+        notifyListeners();
+        return;
+      }
       _state = AuthError(e);
       notifyListeners();
     } catch (e) {
