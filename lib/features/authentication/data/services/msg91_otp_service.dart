@@ -328,9 +328,17 @@ class Msg91OtpService implements OtpService {
               message: 'Code resent via ${channel.displayName}.',
               providerName: 'MSG91 SDK',
             );
+          } else {
+            final msg = response['message'] as String? ??
+                'Failed to resend code via ${channel.displayName}.';
+            throw AuthException(message: msg, code: 'msg91-retry-error');
           }
         }
-      } catch (_) {}
+      } on AuthException {
+        rethrow;
+      } catch (e) {
+        if (e is AuthException) rethrow;
+      }
     }
 
     // Fallback: REST Retry endpoint
