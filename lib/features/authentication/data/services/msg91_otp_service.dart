@@ -50,7 +50,15 @@ class Msg91OtpService implements OtpService {
     if (config.isWidgetFlow && !_isCustomClient) {
       try {
         OTPWidget.initializeWidget(config.widgetId, config.authKey);
-        final response = await OTPWidget.sendOTP({'identifier': mobile});
+        final channelCode =
+            channel == OtpChannel.whatsapp ? 'WHATSAPP-12' : 'SMS-11';
+
+        final response = await OTPWidget.sendOTP({
+          'identifier': mobile,
+          'channel': channelCode,
+          'reqChannel': channelCode,
+          'retryChannel': channelCode,
+        });
 
         if (response != null) {
           final isSuccess = response['type'] == 'success' ||
@@ -61,6 +69,17 @@ class Msg91OtpService implements OtpService {
                 response['reqId'] as String? ??
                 response['requestId'] as String? ??
                 mobile;
+
+            // If user explicitly chose WhatsApp, trigger WhatsApp retry channel immediately
+            // to ensure delivery via WhatsApp even if the widget's default channel is SMS.
+            if (channel == OtpChannel.whatsapp) {
+              try {
+                await OTPWidget.retryOTP({
+                  'reqId': verificationId,
+                  'retryChannel': 'WHATSAPP-12',
+                });
+              } catch (_) {}
+            }
 
             return OtpDeliveryResult(
               verificationId: verificationId,
