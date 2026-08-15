@@ -17,21 +17,21 @@ class CountryCode extends Equatable {
   List<Object?> get props => [name, code, dialCode, flag];
 
   static const List<CountryCode> supportedCountries = [
+    CountryCode(name: 'India', code: 'IN', dialCode: '+91', flag: '🇮🇳'),
     CountryCode(
         name: 'United States', code: 'US', dialCode: '+1', flag: '🇺🇸'),
-    CountryCode(name: 'Canada', code: 'CA', dialCode: '+1', flag: '🇨🇦'),
     CountryCode(
         name: 'United Kingdom', code: 'GB', dialCode: '+44', flag: '🇬🇧'),
-    CountryCode(name: 'India', code: 'IN', dialCode: '+91', flag: '🇮🇳'),
+    CountryCode(name: 'Canada', code: 'CA', dialCode: '+1', flag: '🇨🇦'),
     CountryCode(name: 'Australia', code: 'AU', dialCode: '+61', flag: '🇦🇺'),
-    CountryCode(name: 'Germany', code: 'DE', dialCode: '+49', flag: '🇩🇪'),
-    CountryCode(name: 'France', code: 'FR', dialCode: '+33', flag: '🇫🇷'),
-    CountryCode(name: 'Singapore', code: 'SG', dialCode: '+65', flag: '🇸🇬'),
     CountryCode(
         name: 'United Arab Emirates',
         code: 'AE',
         dialCode: '+971',
         flag: '🇦🇪'),
+    CountryCode(name: 'Singapore', code: 'SG', dialCode: '+65', flag: '🇸🇬'),
+    CountryCode(name: 'Germany', code: 'DE', dialCode: '+49', flag: '🇩🇪'),
+    CountryCode(name: 'France', code: 'FR', dialCode: '+33', flag: '🇫🇷'),
     CountryCode(name: 'Mexico', code: 'MX', dialCode: '+52', flag: '🇲🇽'),
     CountryCode(name: 'Brazil', code: 'BR', dialCode: '+55', flag: '🇧🇷'),
     CountryCode(name: 'Japan', code: 'JP', dialCode: '+81', flag: '🇯🇵'),
@@ -53,9 +53,9 @@ class CountryCode extends Equatable {
   ];
 
   static const CountryCode defaultCountry = CountryCode(
-    name: 'United States',
-    code: 'US',
-    dialCode: '+1',
-    flag: '🇺🇸',
+    name: 'India',
+    code: 'IN',
+    dialCode: '+91',
+    flag: '🇮🇳',
   );
 }

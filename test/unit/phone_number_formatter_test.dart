@@ -43,6 +43,13 @@ void main() {
       );
     });
 
+    test('maskPhoneNumber masks E.164 India numbers correctly', () {
+      expect(
+        PhoneNumberFormatter.maskPhoneNumber('+919876543210'),
+        '+91 (***) ***-3210',
+      );
+    });
+
     test('isValidNationalNumber validates minimum length', () {
       expect(PhoneNumberFormatter.isValidNationalNumber('123456'), false);
       expect(PhoneNumberFormatter.isValidNationalNumber('5551234567'), true);

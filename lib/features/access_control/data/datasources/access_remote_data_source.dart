@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/access_control/domain/entities/app_user.dart';
 import 'package:workaxis/features/access_control/domain/entities/invitation.dart';
@@ -19,10 +20,11 @@ abstract interface class AccessRemoteDataSource {
     required String userId,
     required String organizationId,
   });
+  Future<Organization?> getOrganization(String organizationId);
 }
 
-/// InMemoryAccessDataSource provides a seed data environment covering all
-/// operational and edge-case testing scenarios.
+/// InMemoryAccessDataSource simulates enterprise organization access resolution
+/// with realistic roles, permissions, branches, and invitations.
 class InMemoryAccessDataSource implements AccessRemoteDataSource {
   InMemoryAccessDataSource() {
     _seedData();
@@ -149,6 +151,7 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
         role: UserRole.employee,
         branchId: null,
         branchName: null,
+        lastAccessedAt: DateTime.now(),
       ),
     ];
 
@@ -179,6 +182,7 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
         role: UserRole.employee,
         branchId: 'br_suspended_main',
         branchName: 'Bakersfield Dock #01',
+        lastAccessedAt: DateTime.now(),
       ),
     ];
 
@@ -219,9 +223,15 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
   @override
   Future<AppUser?> resolveUserByPhone(String phoneNumber) async {
     await Future<void>.delayed(const Duration(milliseconds: 200));
-    final normalized = phoneNumber.replaceAll(RegExp(r'\D'), '');
+    final cleanDigits = phoneNumber.replaceAll(RegExp(r'\D'), '');
+
     for (final entry in _usersByPhone.entries) {
-      if (entry.key.replaceAll(RegExp(r'\D'), '') == normalized) {
+      final entryDigits = entry.key.replaceAll(RegExp(r'\D'), '');
+      if (entryDigits == cleanDigits ||
+          (cleanDigits.length >= 10 &&
+              entryDigits.length >= 10 &&
+              cleanDigits.substring(cleanDigits.length - 10) ==
+                  entryDigits.substring(entryDigits.length - 10))) {
         return entry.value;
       }
     }
@@ -237,10 +247,15 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
   @override
   Future<Invitation?> getPendingInvitationByPhone(String phoneNumber) async {
     await Future<void>.delayed(const Duration(milliseconds: 150));
-    final normalized = phoneNumber.replaceAll(RegExp(r'\D'), '');
+    final cleanDigits = phoneNumber.replaceAll(RegExp(r'\D'), '');
+
     for (final entry in _invitationsById.entries) {
-      if (entry.value.invitedPhone.replaceAll(RegExp(r'\D'), '') ==
-          normalized) {
+      final entryDigits = entry.value.invitedPhone.replaceAll(RegExp(r'\D'), '');
+      if (entryDigits == cleanDigits ||
+          (cleanDigits.length >= 10 &&
+              entryDigits.length >= 10 &&
+              cleanDigits.substring(cleanDigits.length - 10) ==
+                  entryDigits.substring(entryDigits.length - 10))) {
         return entry.value;
       }
     }
@@ -310,5 +325,11 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
         return m;
       }).toList();
     }
+  }
+
+  @override
+  Future<Organization?> getOrganization(String organizationId) async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    return _organizationsById[organizationId];
   }
 }

@@ -90,7 +90,7 @@ void main() {
 
       // Should transition to OTP verification
       expect(find.text('Enter 6-digit code'), findsOneWidget);
-      expect(find.textContaining('+1 (***) ***-4567'), findsOneWidget);
+      expect(find.textContaining('+91 (***) ***-4567'), findsOneWidget);
       expect(find.textContaining('via SMS'), findsOneWidget);
     });
 
@@ -118,7 +118,7 @@ void main() {
       await tester.tap(find.widgetWithText(AppButton, 'Send OTP via WhatsApp'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('+1 (***) ***-4567'), findsOneWidget);
+      expect(find.textContaining('+91 (***) ***-4567'), findsOneWidget);
       expect(find.textContaining('via WhatsApp'), findsOneWidget);
       expect(find.text('Send via SMS instead'), findsOneWidget);
     });
@@ -136,11 +136,11 @@ void main() {
       await tester.tap(find.text('Sign in with Phone'));
       await tester.pumpAndSettle();
 
-      // Default country code is +1
-      expect(find.text('+1'), findsOneWidget);
+      // Default country code is +91
+      expect(find.text('+91'), findsOneWidget);
 
       // Tap on the country code picker
-      await tester.tap(find.text('+1'));
+      await tester.tap(find.text('+91'));
       await tester.pumpAndSettle();
 
       // Verify bottom sheet opened
