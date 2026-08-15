@@ -111,8 +111,8 @@ void main() {
       await tester.tap(find.text('WhatsApp'));
       await tester.pumpAndSettle();
 
-      expect(
-          find.widgetWithText(AppButton, 'Send OTP via WhatsApp'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Send OTP via WhatsApp'),
+          findsOneWidget);
 
       await tester.enterText(find.byType(TextField), '5551234567');
       await tester.tap(find.widgetWithText(AppButton, 'Send OTP via WhatsApp'));

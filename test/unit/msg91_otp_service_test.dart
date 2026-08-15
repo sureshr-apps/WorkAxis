@@ -181,5 +181,82 @@ void main() {
         throwsA(isA<AuthException>()),
       );
     });
+
+    group('MSG91 Widget ID Flow (No DLT Required)', () {
+      const widgetConfig = Msg91Config(
+        authKey: 'widget_token_abc123',
+        widgetId: '346473616263333132333435',
+        otpLength: 6,
+        otpExpiryMinutes: 5,
+      );
+
+      test('sendOtp sends JSON payload to widget/sendOtp', () async {
+        late String capturedBody;
+        late Uri capturedUri;
+
+        final mockClient = MockClient((request) async {
+          capturedUri = request.url;
+          capturedBody = request.body;
+
+          return http.Response(
+            jsonEncode({
+              'message': 'OTP sent via widget',
+              'type': 'success',
+              'reqId': 'req_widget_999',
+            }),
+            200,
+          );
+        });
+
+        final service =
+            Msg91OtpService(config: widgetConfig, httpClient: mockClient);
+
+        final result = await service.sendOtp(
+          phoneNumber: '+919876543210',
+          channel: OtpChannel.sms,
+        );
+
+        expect(result.verificationId, 'req_widget_999');
+        expect(result.channel, OtpChannel.sms);
+        expect(result.providerName, 'MSG91 Widget');
+        expect(capturedUri.path, contains('/widget/sendOtp'));
+
+        final decoded = jsonDecode(capturedBody) as Map<String, dynamic>;
+        expect(decoded['widgetId'], '346473616263333132333435');
+        expect(decoded['tokenAuth'], 'widget_token_abc123');
+        expect(decoded['mobile'], '919876543210');
+        expect(decoded['channel'], 'SMS');
+      });
+
+      test('verifyOtp sends JSON payload to widget/verifyOtp', () async {
+        late String capturedBody;
+
+        final mockClient = MockClient((request) async {
+          capturedBody = request.body;
+          return http.Response(
+            jsonEncode({
+              'message': 'OTP verified successfully',
+              'type': 'success',
+            }),
+            200,
+          );
+        });
+
+        final service =
+            Msg91OtpService(config: widgetConfig, httpClient: mockClient);
+
+        final isValid = await service.verifyOtp(
+          phoneNumber: '+919876543210',
+          otp: '654321',
+          verificationId: 'req_widget_999',
+        );
+
+        expect(isValid, isTrue);
+        final decoded = jsonDecode(capturedBody) as Map<String, dynamic>;
+        expect(decoded['widgetId'], '346473616263333132333435');
+        expect(decoded['reqId'], 'req_widget_999');
+        expect(decoded['otp'], '654321');
+      });
+    });
   });
 }

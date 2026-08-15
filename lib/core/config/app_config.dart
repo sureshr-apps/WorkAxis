@@ -9,8 +9,13 @@ enum OtpProviderType {
 
 class Msg91Config extends Equatable {
   const Msg91Config({
-    this.authKey =
-        const String.fromEnvironment('MSG91_AUTH_KEY', defaultValue: ''),
+    this.authKey = const String.fromEnvironment(
+      'MSG91_AUTH_KEY',
+      defaultValue:
+          String.fromEnvironment('MSG91_AUTH_TOKEN', defaultValue: ''),
+    ),
+    this.widgetId =
+        const String.fromEnvironment('MSG91_WIDGET_ID', defaultValue: ''),
     this.smsTemplateId =
         const String.fromEnvironment('MSG91_SMS_TEMPLATE_ID', defaultValue: ''),
     this.whatsappTemplateId = const String.fromEnvironment(
@@ -18,21 +23,27 @@ class Msg91Config extends Equatable {
         defaultValue: ''),
     this.otpLength = 6,
     this.otpExpiryMinutes = 5,
-    this.baseUrl = 'https://control.msg91.com/api/v5/otp',
+    this.baseUrl = 'https://control.msg91.com/api/v5',
   });
 
   final String authKey;
+  final String widgetId;
   final String smsTemplateId;
   final String whatsappTemplateId;
   final int otpLength;
   final int otpExpiryMinutes;
   final String baseUrl;
 
-  bool get isConfigured => authKey.isNotEmpty;
+  /// Returns true if either an authKey/token or a widgetId is configured.
+  bool get isConfigured => authKey.isNotEmpty || widgetId.isNotEmpty;
+
+  /// Returns true if using the MSG91 OTP Widget (no DLT required).
+  bool get isWidgetFlow => widgetId.isNotEmpty;
 
   @override
   List<Object?> get props => [
         authKey,
+        widgetId,
         smsTemplateId,
         whatsappTemplateId,
         otpLength,
