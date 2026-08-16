@@ -44,7 +44,7 @@ void main() {
     );
   }
 
-  group('Access Control State Widgets', () {
+  group('Access Control State Widgets (Stitch Designs)', () {
     testWidgets('renders AccessDeniedPage correctly', (tester) async {
       await tester.pumpWidget(wrapWithProviders(const AccessDeniedPage()));
       await tester.pumpAndSettle();
@@ -59,7 +59,8 @@ void main() {
       await tester.pumpWidget(wrapWithProviders(const AccountDisabledPage()));
       await tester.pumpAndSettle();
 
-      expect(find.text('Account Disabled'), findsOneWidget);
+      expect(find.text('Your account is disabled'), findsOneWidget);
+      expect(find.text('Contact Support'), findsOneWidget);
       expect(find.text('Sign Out'), findsOneWidget);
     });
 
@@ -69,8 +70,10 @@ void main() {
           .pumpWidget(wrapWithProviders(const BranchAssignmentRequiredPage()));
       await tester.pumpAndSettle();
 
-      expect(find.text('Branch Assignment Required'), findsOneWidget);
-      expect(find.text('Refresh Status'), findsOneWidget);
+      expect(find.text('Branch assignment required'), findsOneWidget);
+      expect(find.text('Refresh'), findsOneWidget);
+      expect(find.text('Contact Administrator'), findsOneWidget);
+      expect(find.text('Sign Out'), findsOneWidget);
     });
 
     testWidgets('renders OrganizationUnavailablePage correctly',
@@ -79,7 +82,8 @@ void main() {
           .pumpWidget(wrapWithProviders(const OrganizationUnavailablePage()));
       await tester.pumpAndSettle();
 
-      expect(find.text('Organization Unavailable'), findsOneWidget);
+      expect(find.text('Organization suspended'), findsOneWidget);
+      expect(find.text('Contact Support'), findsOneWidget);
       expect(find.text('Sign Out'), findsOneWidget);
     });
   });
