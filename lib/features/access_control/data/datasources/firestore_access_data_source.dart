@@ -26,21 +26,20 @@ class FirestoreAccessDataSource implements AccessRemoteDataSource {
     try {
       DocumentSnapshot<Map<String, dynamic>>? userDoc;
 
-      // 1. Try finding by phone number
+      // 1. Find exclusively by mobileNumber field
       if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
         final cleanPhone = phoneNumber.replaceAll(RegExp(r'\D'), '');
 
-        // Query by standard phoneNumber field
         var snapshot = await _firestore
             .collection('users')
-            .where('phoneNumber', isEqualTo: phoneNumber)
+            .where('mobileNumber', isEqualTo: phoneNumber)
             .limit(1)
             .get();
 
         if (snapshot.docs.isEmpty && cleanPhone.isNotEmpty) {
           snapshot = await _firestore
               .collection('users')
-              .where('phoneNumber', isEqualTo: cleanPhone)
+              .where('mobileNumber', isEqualTo: cleanPhone)
               .limit(1)
               .get();
         }
@@ -48,99 +47,28 @@ class FirestoreAccessDataSource implements AccessRemoteDataSource {
         if (snapshot.docs.isEmpty && cleanPhone.isNotEmpty) {
           snapshot = await _firestore
               .collection('users')
-              .where('phoneNumber', isEqualTo: '+$cleanPhone')
+              .where('mobileNumber', isEqualTo: '+$cleanPhone')
               .limit(1)
               .get();
         }
 
-        if (snapshot.docs.isEmpty && cleanPhone.isNotEmpty) {
-          snapshot = await _firestore
-              .collection('users')
-              .where('normalizedPhone', isEqualTo: cleanPhone)
-              .limit(1)
-              .get();
-        }
-
-        if (snapshot.docs.isEmpty) {
-          snapshot = await _firestore
-              .collection('users')
-              .where('normalizedPhone', isEqualTo: phoneNumber)
-              .limit(1)
-              .get();
-        }
-
-        if (snapshot.docs.isEmpty && cleanPhone.isNotEmpty) {
-          snapshot = await _firestore
-              .collection('users')
-              .where('mobile', isEqualTo: cleanPhone)
-              .limit(1)
-              .get();
-        }
-
-        // Direct document ID lookup by phone
-        if (snapshot.docs.isEmpty) {
-          final doc =
-              await _firestore.collection('users').doc(cleanPhone).get();
-          if (doc.exists) userDoc = doc;
-        } else {
+        if (snapshot.docs.isNotEmpty) {
           userDoc = snapshot.docs.first;
         }
       }
 
-      // 2. Try finding by email (if not found by phone)
+      // 2. Find exclusively by normalizedEmail field (all lowercase)
       if (userDoc == null && email != null && email.trim().isNotEmpty) {
-        final cleanEmail = email.trim().toLowerCase();
-        final rawEmail = email.trim();
+        final normalizedEmail = email.trim().toLowerCase();
 
-        // Check normalizedEmail field
-        var snapshot = await _firestore
+        final snapshot = await _firestore
             .collection('users')
-            .where('normalizedEmail', isEqualTo: cleanEmail)
+            .where('normalizedEmail', isEqualTo: normalizedEmail)
             .limit(1)
             .get();
 
-        // Check email field (lowercase)
-        if (snapshot.docs.isEmpty) {
-          snapshot = await _firestore
-              .collection('users')
-              .where('email', isEqualTo: cleanEmail)
-              .limit(1)
-              .get();
-        }
-
-        // Check email field (raw case)
-        if (snapshot.docs.isEmpty && rawEmail != cleanEmail) {
-          snapshot = await _firestore
-              .collection('users')
-              .where('email', isEqualTo: rawEmail)
-              .limit(1)
-              .get();
-        }
-
-        // Check emailAddress field
-        if (snapshot.docs.isEmpty) {
-          snapshot = await _firestore
-              .collection('users')
-              .where('emailAddress', isEqualTo: cleanEmail)
-              .limit(1)
-              .get();
-        }
-
-        // Direct document ID lookup by email
-        if (snapshot.docs.isEmpty) {
-          final doc =
-              await _firestore.collection('users').doc(cleanEmail).get();
-          if (doc.exists) userDoc = doc;
-        } else {
+        if (snapshot.docs.isNotEmpty) {
           userDoc = snapshot.docs.first;
-        }
-      }
-
-      // 3. Try finding by document UID
-      if (userDoc == null && uid != null && uid.trim().isNotEmpty) {
-        final doc = await _firestore.collection('users').doc(uid).get();
-        if (doc.exists) {
-          userDoc = doc;
         }
       }
 
@@ -161,18 +89,11 @@ class FirestoreAccessDataSource implements AccessRemoteDataSource {
 
       return AppUser(
         id: userDoc.id,
-        phoneNumber: data['phoneNumber'] as String? ??
-            data['normalizedPhone'] as String? ??
-            data['mobile'] as String? ??
-            data['phone'] as String? ??
-            (phoneNumber ?? ''),
+        phoneNumber: data['mobileNumber'] as String? ?? (phoneNumber ?? ''),
         name: data['name'] as String? ??
             data['displayName'] as String? ??
             data['fullName'] as String?,
-        email: data['normalizedEmail'] as String? ??
-            data['email'] as String? ??
-            data['emailAddress'] as String? ??
-            email,
+        email: data['normalizedEmail'] as String? ?? email,
         status: status,
         createdAt: (data['createdAt'] is Timestamp)
             ? (data['createdAt'] as Timestamp).toDate()
