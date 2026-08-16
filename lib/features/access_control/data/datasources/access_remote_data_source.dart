@@ -7,6 +7,11 @@ import 'package:workaxis/features/access_control/domain/entities/organization_me
 import 'package:workaxis/features/access_control/domain/entities/user_role.dart';
 
 abstract interface class AccessRemoteDataSource {
+  Future<AppUser?> resolveUser({
+    String? phoneNumber,
+    String? email,
+    String? uid,
+  });
   Future<AppUser?> resolveUserByPhone(String phoneNumber);
   Future<List<OrganizationMembership>> getMemberships(String userId);
   Future<Invitation?> getPendingInvitationByPhone(String phoneNumber);
@@ -31,6 +36,7 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
   }
 
   final Map<String, AppUser> _usersByPhone = {};
+  final Map<String, AppUser> _usersByEmail = {};
   final Map<String, List<OrganizationMembership>> _membershipsByUserId = {};
   final Map<String, Invitation> _invitationsById = {};
   final Map<String, String> _invitationsByPhone = {};
@@ -81,6 +87,7 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
       status: AccountStatus.active,
     );
     _usersByPhone[user1.phoneNumber] = user1;
+    if (user1.email != null) _usersByEmail[user1.email!.toLowerCase()] = user1;
     _membershipsByUserId[user1.id] = [
       OrganizationMembership(
         id: 'mem_001',
@@ -121,6 +128,7 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
       status: AccountStatus.active,
     );
     _usersByPhone[user2.phoneNumber] = user2;
+    if (user2.email != null) _usersByEmail[user2.email!.toLowerCase()] = user2;
     _membershipsByUserId[user2.id] = [
       OrganizationMembership(
         id: 'mem_004',
@@ -218,6 +226,29 @@ class InMemoryAccessDataSource implements AccessRemoteDataSource {
     );
     _invitationsById[inviteExpired.id] = inviteExpired;
     _invitationsByPhone[inviteExpired.invitedPhone] = inviteExpired.id;
+  }
+
+  @override
+  Future<AppUser?> resolveUser({
+    String? phoneNumber,
+    String? email,
+    String? uid,
+  }) async {
+    if (phoneNumber != null && phoneNumber.isNotEmpty) {
+      final user = await resolveUserByPhone(phoneNumber);
+      if (user != null) return user;
+    }
+    if (email != null && email.isNotEmpty) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final user = _usersByEmail[email.toLowerCase()];
+      if (user != null) return user;
+    }
+    if (uid != null && uid.isNotEmpty) {
+      for (final user in _usersByPhone.values) {
+        if (user.id == uid) return user;
+      }
+    }
+    return null;
   }
 
   @override

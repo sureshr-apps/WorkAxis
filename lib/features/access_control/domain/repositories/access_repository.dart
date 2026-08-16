@@ -4,6 +4,13 @@ import 'package:workaxis/features/access_control/domain/entities/organization_me
 
 /// Abstract contract for access control, organization memberships, and invitations.
 abstract interface class AccessRepository {
+  /// Resolves the application user profile by phone number, email, or auth UID.
+  Future<AppUser?> resolveUser({
+    String? phoneNumber,
+    String? email,
+    String? uid,
+  });
+
   /// Resolves the application user profile for an authenticated phone number.
   Future<AppUser?> resolveUserByPhone(String phoneNumber);
 

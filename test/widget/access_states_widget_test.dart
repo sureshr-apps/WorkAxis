@@ -49,8 +49,9 @@ void main() {
       await tester.pumpWidget(wrapWithProviders(const AccessDeniedPage()));
       await tester.pumpAndSettle();
 
-      expect(find.text('Access Denied'), findsOneWidget);
+      expect(find.text('You do not have access'), findsOneWidget);
       expect(find.text('Try Another Account'), findsOneWidget);
+      expect(find.text('Contact Support'), findsOneWidget);
       expect(find.text('Sign Out'), findsOneWidget);
     });
 

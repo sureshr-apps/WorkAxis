@@ -150,25 +150,35 @@ class OrganizationContextController extends ChangeNotifier {
 
     try {
       final phone = authUser.phoneNumber ?? '';
-      if (phone.isEmpty) {
+      final email = authUser.email ?? '';
+      final uid = authUser.uid;
+
+      if (phone.isEmpty && email.isEmpty && uid.isEmpty) {
         _state = const AccessDeniedState(
-            reason: 'No mobile number attached to account.');
+            reason: 'No identifier attached to account.');
         notifyListeners();
         return;
       }
 
-      final appUser = await _accessRepository.resolveUserByPhone(phone);
+      final appUser = await _accessRepository.resolveUser(
+        phoneNumber: phone.isNotEmpty ? phone : null,
+        email: email.isNotEmpty ? email : null,
+        uid: uid.isNotEmpty ? uid : null,
+      );
+
       if (appUser == null) {
         // Check if there is an invitation for this phone
-        final invite =
-            await _accessRepository.getPendingInvitationByPhone(phone);
-        if (invite != null) {
-          _handleInvitation(invite, phone);
-          return;
+        if (phone.isNotEmpty) {
+          final invite =
+              await _accessRepository.getPendingInvitationByPhone(phone);
+          if (invite != null) {
+            _handleInvitation(invite, phone);
+            return;
+          }
         }
         _state = const AccessDeniedState(
           reason:
-              'Your account is not registered. Please contact your organization administrator.',
+              'Your sign-in was successful, but this account has not been granted access to the application.',
         );
         notifyListeners();
         return;
@@ -182,11 +192,13 @@ class OrganizationContextController extends ChangeNotifier {
 
       final memberships = await _accessRepository.getMemberships(appUser.id);
       if (memberships.isEmpty) {
-        final invite =
-            await _accessRepository.getPendingInvitationByPhone(phone);
-        if (invite != null) {
-          _handleInvitation(invite, phone);
-          return;
+        if (phone.isNotEmpty) {
+          final invite =
+              await _accessRepository.getPendingInvitationByPhone(phone);
+          if (invite != null) {
+            _handleInvitation(invite, phone);
+            return;
+          }
         }
         _state = const AccessDeniedState(
           reason: 'You do not have any active organization memberships.',

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1098003882127",
+    "project_id": "workaxis-c3405",
+    "storage_bucket": "workaxis-c3405.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1098003882127:android:c7c196895a5d6c095090fa",
+        "android_client_info": {
+          "package_name": "com.apps.workaxis"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1098003882127-t8t9pur940s3t0tuogb5d299kq1f6f83.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apps.workaxis",
+            "certificate_hash": "8fe6ec0b56572412503db2dda30d5aff42fd9f95"
+          }
+        },
+        {
+          "client_id": "1098003882127-6fnnl49umjif6igo87urqijcnn38geb9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8ysBY6b2Pb-FNY-qm11hDRr3M-pdr5e8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1098003882127-6fnnl49umjif6igo87urqijcnn38geb9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -11,6 +11,19 @@ class AccessRepositoryImpl implements AccessRepository {
   final AccessRemoteDataSource _remoteDataSource;
 
   @override
+  Future<AppUser?> resolveUser({
+    String? phoneNumber,
+    String? email,
+    String? uid,
+  }) {
+    return _remoteDataSource.resolveUser(
+      phoneNumber: phoneNumber,
+      email: email,
+      uid: uid,
+    );
+  }
+
+  @override
   Future<AppUser?> resolveUserByPhone(String phoneNumber) {
     return _remoteDataSource.resolveUserByPhone(phoneNumber);
   }

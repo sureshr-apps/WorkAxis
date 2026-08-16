@@ -31,6 +31,28 @@ void main() {
       expect(controller.state, isA<AccessDeniedState>());
     });
 
+    test('unknown google user resolves to AccessDeniedState', () async {
+      const authUser = AuthUser(
+        uid: 'google_unknown_001',
+        email: 'stranger@gmail.com',
+      );
+
+      await controller.resolveAccess(authUser);
+      expect(controller.state, isA<AccessDeniedState>());
+    });
+
+    test('registered google user resolves to AccessGrantedState', () async {
+      const authUser = AuthUser(
+        uid: 'google_jordan_001',
+        email: 'jordan.lee@workaxis.io',
+      );
+
+      await controller.resolveAccess(authUser);
+      expect(controller.state, isA<AccessGrantedState>());
+      final granted = controller.state as AccessGrantedState;
+      expect(granted.user.name, 'Jordan Lee');
+    });
+
     test('disabled user resolves to AccountDisabledState', () async {
       const authUser = AuthUser(
         uid: 'disabled_001',
