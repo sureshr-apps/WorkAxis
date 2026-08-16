@@ -114,81 +114,135 @@ class FirestoreAccessDataSource implements AccessRemoteDataSource {
   Future<List<OrganizationMembership>> getMemberships(String userId) async {
     try {
       final memberships = <OrganizationMembership>[];
+      final seenOrgIds = <String>{};
 
-      // 1. Check memberships collection
-      final memSnapshot = await _firestore
-          .collection('memberships')
-          .where('userId', isEqualTo: userId)
-          .get();
+      // 1. Fetch user doc for userId
+      DocumentSnapshot<Map<String, dynamic>>? targetDoc;
+      try {
+        final doc = await _firestore.collection('users').doc(userId).get();
+        if (doc.exists) targetDoc = doc;
+      } catch (_) {}
 
-      for (final doc in memSnapshot.docs) {
-        final data = doc.data();
-        final orgId = data['organizationId'] as String? ?? '';
-        if (orgId.isEmpty) continue;
+      final userDocs = <DocumentSnapshot<Map<String, dynamic>>>[];
+      if (targetDoc != null) {
+        userDocs.add(targetDoc);
+        final targetData = targetDoc.data() ?? {};
+        final normalizedEmail = targetData['normalizedEmail'] as String? ?? '';
+        final mobileNumber = targetData['mobileNumber'] as String? ?? '';
+
+        // Query other user docs for same user (multi-org memberships stored as separate user docs)
+        if (normalizedEmail.isNotEmpty) {
+          try {
+            final query = await _firestore
+                .collection('users')
+                .where('normalizedEmail', isEqualTo: normalizedEmail)
+                .get();
+            for (final d in query.docs) {
+              if (!userDocs.any((existing) => existing.id == d.id)) {
+                userDocs.add(d);
+              }
+            }
+          } catch (_) {}
+        } else if (mobileNumber.isNotEmpty) {
+          try {
+            final query = await _firestore
+                .collection('users')
+                .where('mobileNumber', isEqualTo: mobileNumber)
+                .get();
+            for (final d in query.docs) {
+              if (!userDocs.any((existing) => existing.id == d.id)) {
+                userDocs.add(d);
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 2. Build memberships from user documents
+      for (final doc in userDocs) {
+        final data = doc.data() ?? {};
+        final orgId = data['organizationId'] as String? ??
+            data['orgId'] as String? ??
+            '';
+        if (orgId.isEmpty || seenOrgIds.contains(orgId)) continue;
+        seenOrgIds.add(orgId);
+
+        final orgName = data['organizationName'] as String? ??
+            data['orgName'] as String? ??
+            'WorkAxis Organization';
+        final orgCode = data['organizationCode'] as String? ??
+            data['code'] as String? ??
+            'ORG';
 
         final org = await getOrganization(orgId) ??
             Organization(
               id: orgId,
-              name: data['organizationName'] as String? ?? 'Organization',
-              code: data['organizationCode'] as String? ?? 'ORG',
+              name: orgName,
+              code: orgCode,
               status: OrgStatus.active,
             );
 
+        final roleStr = data['role'] as String? ??
+            data['userRole'] as String? ??
+            'employee';
+        final statusStr = (data['status'] as String? ?? 'active').toLowerCase();
+
         memberships.add(
           OrganizationMembership(
-            id: doc.id,
+            id: 'mem_${doc.id}',
             userId: userId,
             organizationId: orgId,
             organization: org,
-            role: UserRole.fromString(data['role'] as String? ?? 'employee'),
-            branchId: data['branchId'] as String?,
+            role: UserRole.fromString(roleStr),
+            branchId: data['branchId'] as String? ??
+                data['assignedBranchId'] as String?,
             branchName: data['branchName'] as String?,
-            status: data['status'] == 'suspended'
+            status: statusStr == 'suspended' || statusStr == 'disabled'
                 ? MembershipStatus.suspended
                 : MembershipStatus.active,
           ),
         );
       }
 
-      if (memberships.isNotEmpty) return memberships;
+      // 3. Fallback: Check memberships collection if present
+      if (memberships.isEmpty) {
+        try {
+          final memSnapshot = await _firestore
+              .collection('memberships')
+              .where('userId', isEqualTo: userId)
+              .get();
 
-      // 2. Fallback: Check if user doc itself contains organization & role info
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        final data = userDoc.data() ?? {};
-        final roleStr = data['role'] as String? ??
-            data['userRole'] as String? ??
-            'orgAdmin';
-        final orgId = data['organizationId'] as String? ??
-            data['orgId'] as String? ??
-            'default_org';
-        final orgName = data['organizationName'] as String? ??
-            data['orgName'] as String? ??
-            'WorkAxis Organization';
+          for (final doc in memSnapshot.docs) {
+            final data = doc.data();
+            final orgId = data['organizationId'] as String? ?? '';
+            if (orgId.isEmpty || seenOrgIds.contains(orgId)) continue;
+            seenOrgIds.add(orgId);
 
-        final org =
-            (orgId != 'default_org') ? (await getOrganization(orgId)) : null;
-        final resolvedOrg = org ??
-            Organization(
-              id: orgId,
-              name: orgName,
-              code: 'WAX',
-              status: OrgStatus.active,
+            final org = await getOrganization(orgId) ??
+                Organization(
+                  id: orgId,
+                  name: data['organizationName'] as String? ?? 'Organization',
+                  code: data['organizationCode'] as String? ?? 'ORG',
+                  status: OrgStatus.active,
+                );
+
+            memberships.add(
+              OrganizationMembership(
+                id: doc.id,
+                userId: userId,
+                organizationId: orgId,
+                organization: org,
+                role: UserRole.fromString(
+                    data['role'] as String? ?? 'employee'),
+                branchId: data['branchId'] as String?,
+                branchName: data['branchName'] as String?,
+                status: data['status'] == 'suspended'
+                    ? MembershipStatus.suspended
+                    : MembershipStatus.active,
+              ),
             );
-
-        memberships.add(
-          OrganizationMembership(
-            id: 'mem_$userId',
-            userId: userId,
-            organizationId: orgId,
-            organization: resolvedOrg,
-            role: UserRole.fromString(roleStr),
-            branchId: data['branchId'] as String? ??
-                data['assignedBranchId'] as String?,
-            branchName: data['branchName'] as String?,
-            status: MembershipStatus.active,
-          ),
-        );
+          }
+        } catch (_) {}
       }
 
       return memberships;
@@ -360,10 +414,12 @@ class FirestoreAccessDataSource implements AccessRemoteDataSource {
       return Organization(
         id: doc.id,
         name: data['name'] as String? ?? 'Organization',
-        code: data['code'] as String? ?? 'ORG',
+        code: data['organizationCode'] as String? ??
+            data['code'] as String? ??
+            'ORG',
         status:
             statusStr == 'suspended' ? OrgStatus.suspended : OrgStatus.active,
-        address: data['address'] as String?,
+        address: data['address'] as String? ?? data['postalCode'] as String?,
       );
     } catch (_) {
       return null;
