@@ -1,233 +1,438 @@
+# AGENTS.md
+
 ## Purpose
 
-This file defines the permanent engineering, architecture, and code-quality rules for this repository.
+This file defines the permanent engineering, architecture, implementation, and code-quality rules for this repository.
+
 These instructions apply to **every implementation task in this project**.
-Treat these rules as **non-negotiable engineering constraints**, not optional recommendations.
+Treat them as **non-negotiable engineering constraints**, not optional recommendations.
 
 Before implementing or modifying any feature:
 
-1. Read this file.
+1. Read this file completely.
 2. Inspect the existing repository structure.
-3. Review existing architecture and reusable components.
-4. Read `docs/architecture.md` if it exists.
-5. Understand the requested change before writing code.
-6. Preserve established project conventions unless there is a strong reason to improve them.
-
-Do not optimize for the fastest possible implementation.
+3. Review existing architecture, shared components, and tests.
+4. Read `README.md` and `docs/architecture.md` if they exist.
+5. Read `STITCH_FIDELITY_RULES.md` completely before implementing or modifying any UI screen or component.
+6. Review the relevant Stitch design/reference for the feature when one exists.
+7. Understand the requested change before writing code.
+8. Preserve established project conventions unless there is a strong reason to improve them.
 
 Optimize for:
 
-* Correctness
-* Simplicity
-* Maintainability
-* Testability
-* Readability
-* Extensibility
-* Consistency
+- Correctness
+- Simplicity
+- Maintainability
+- Testability
+- Readability
+- Extensibility
+- Consistency
+
+Do not optimize merely for the fastest way to make a screen work.
 
 ---
 
-# 1. Technology
+# 1. Product and Platform Context
 
-This project is a **Flutter application**.
+This repository contains **one Flutter application**.
 
-The application must treat the following as first-class targets:
+The same Flutter application serves all supported roles and must adapt its UI and capabilities based on the authenticated user's role, organization, branch context, permissions, and device form factor.
 
-* Android smartphones
-* Android tablets
-* Smartphone portrait
-* Smartphone landscape
-* Tablet portrait
-* Tablet landscape
+Supported targets:
 
-Do not build a phone-only application and stretch it onto tablets.
+- Android smartphones
+- Android tablets
+- Web browsers
+- Smartphone portrait and landscape
+- Tablet portrait and landscape
+- Responsive browser widths
 
-The UI must use adaptive and responsive layouts appropriate for the available screen size.
+There is **no separate customer app and platform-console app** in this architecture.
+Platform administration and customer operations are part of the same Flutter application with role-based navigation and access.
 
 Use **Material Design 3** unless explicitly instructed otherwise.
 
 ---
 
-# 2. Core Engineering Principles
+# 2. Current User Roles
 
-All implementation must follow the principles below.
+The initial roles are:
 
-## SOLID
+- Platform Owner
+- Platform Administrator
+- Organization Admin
+- Branch Manager
+- Employee
 
-Apply SOLID principles pragmatically:
+Role behavior must be implemented through explicit permissions and scoped data access, not by UI visibility alone.
 
-### Single Responsibility Principle
+## Platform Owner
 
-A class, widget, service, repository, controller, or file should have one clear responsibility.
+Platform-level role responsible for overall platform administration and Platform Administrator management.
+
+## Platform Administrator
+
+Platform-level role responsible for permitted platform operations such as customer-organization administration.
+
+Platform Owner and Platform Administrator are **platform-level users**. They may manage multiple customer organizations as platform objects. This is not customer-organization membership switching.
+
+## Organization Admin
+
+Belongs to exactly one customer organization.
+May perform permitted organization-wide operations for that organization.
+May create Organization Admin, Branch Manager, and Employee accounts within that organization.
+
+## Branch Manager
+
+Belongs to exactly one customer organization.
+May be assigned to **one or more branches** within that organization.
+
+A Branch Manager must never receive access to branches outside their assigned set.
+
+When assigned to multiple branches:
+
+- The manager must select a branch before entering branch-scoped operational screens.
+- The selected branch becomes the active branch context until changed.
+- Do not aggregate all assigned branches by default unless a future requirement explicitly asks for it.
+- Employee, attendance, return, reporting, and other branch-scoped operations must use the active branch context.
+
+A Branch Manager may create Employee accounts only for a branch they are authorized to manage.
+
+## Employee
+
+Belongs to exactly one customer organization and accesses only their permitted self-service/operational functions.
+
+Customer-side users, including Organization Admins, Branch Managers, and Employees, do **not** belong to multiple customer organizations and do not use an organization-switching flow.
+
+---
+
+# 3. Authentication and Account Rules
+
+The application uses **identifier + password** authentication.
+
+Do not implement OTP login unless the requirements explicitly change in the future.
+
+A user may sign in using any login identifier associated with the same account:
+
+- Chosen username
+- Email address, when provided
+- Phone number, when provided
+
+These are login aliases for **one account**, not separate accounts.
+
+Login identifiers must resolve uniquely across the application.
+
+The login UI should conceptually support:
+
+```text
+Username, email, or phone number
+Password
+```
+
+Account rules:
+
+- There is no public self-registration.
+- Accounts are created only by authorized administrators/managers.
+- Platform Owner may create/manage Platform Administrators.
+- Organization Admin may create permitted organization users.
+- Branch Manager may create Employees only within authorized branch scope.
+- The account creator sets the initial password.
+- Authorized administrators may reset forgotten passwords according to their scope.
+- There is no email-based password recovery flow.
+- Users may voluntarily change their own password after login.
+- Do not force a password change merely because an administrator set or reset the password.
+
+Never store plaintext passwords in PostgreSQL, Firestore, local storage, logs, analytics, or application state.
+
+Keep authentication identity and application authorization as separate concerns.
+Successful authentication does not automatically imply access to application data.
+
+---
+
+# 4. Firebase and Backend Direction
+
+The project uses the **Firebase ecosystem**, with a hybrid persistence model.
+
+Current direction:
+
+- Firebase Authentication for authentication identity/password flows
+- Firebase SQL Connect / PostgreSQL for relational data
+- Cloud Firestore for high-growth/event-oriented data
+- Firebase Storage / Cloud Storage for files and images
+- Trusted Firebase/server-side functions where privileged or cross-store operations require them
+
+Do **not** replace this direction with Firestore-only or PostgreSQL-only unless explicitly instructed.
+
+## PostgreSQL / SQL Connect
+
+Prefer PostgreSQL for data that benefits from:
+
+- Relational integrity
+- Strong relationships
+- Uniqueness constraints
+- Structured reporting
+- Membership/role relationships
+- Organization/branch/employee relationships
+- Transactional relational updates
+
+## Firestore
+
+Prefer Firestore for data that grows continuously or benefits from document/event access patterns, for example high-volume event histories or notifications when appropriate.
+
+Do not choose a database merely because a collection is large. Consider query shape, reporting, transactional requirements, authorization, and lifecycle.
+
+## Single source of truth
+
+Each business entity must have one authoritative home.
+
+Do not independently maintain the same authoritative employee, organization, membership, branch, or other record in both PostgreSQL and Firestore.
+
+If a projection/derived copy is required:
+
+- Define its authoritative source.
+- Define who updates it.
+- Keep it minimal.
+- Document the synchronization strategy.
+
+## Cross-store operations
+
+Do not assume a transaction can atomically update PostgreSQL and Firestore together.
+
+For operations spanning multiple stores:
+
+- Use trusted server-side orchestration where necessary.
+- Define failure/retry behavior.
+- Prefer idempotent operations.
+- Document consistency expectations.
+
+---
+
+# 5. Mock-First Implementation Approach
+
+The current implementation phase is **UI-first with mock data** unless the user explicitly asks to connect a real backend feature.
+
+Build production-quality UI architecture now, while using mock repositories/services behind stable contracts.
+
+Preferred progression:
+
+```text
+Stitch design/reference
+    ↓
+Flutter UI
+    ↓
+Typed models
+    ↓
+Repository/service contracts
+    ↓
+Mock implementations
+    ↓
+Real Firebase/PostgreSQL/Firestore implementations later
+```
+
+Rules for mock data:
+
+- Do not hardcode large mock datasets directly inside widgets.
+- Keep mock data in dedicated mock repositories/data sources/fixtures.
+- Use realistic typed models.
+- Simulate loading, empty, success, and error states where relevant.
+- Support representative role and branch scenarios.
+- Keep presentation code unaware of whether data comes from mock or real implementations.
+- Make replacing a mock repository with a real repository possible without rewriting the screen.
+
+Do not connect Firebase merely to make a mock-only UI task appear more complete.
+
+Do not introduce fake production behavior such as accepting any password or bypassing authorization inside production code. Development fakes must be clearly isolated.
+
+---
+
+# 6. Stitch Design Source of Truth
+
+When a Stitch design exists for a screen or flow, treat it as the **visual and interaction source of truth** for that task.
+
+**MANDATORY: Read `STITCH_FIDELITY_RULES.md` completely before implementing or modifying any UI component or screen.**
+
+Stitch controls visual intent such as:
+
+- Information hierarchy
+- Layout composition and element geometry
+- Typography hierarchy and font pairings
+- Spacing, padding, and gutters
+- Cards and panel surface treatments
+- Buttons, chips, and badges
+- Inputs and form controls
+- Navigation patterns (sidebar, top console header, bottom nav)
+- Responsive composition
+- Phone/tablet/web screen behavior
+
+`AGENTS.md` controls engineering quality and architecture.
+
+### Non-Negotiable Fidelity Rules:
+
+- **Never substitute generic Material Design component templates for the approved Stitch layout.** For example, do not invert KPI cards by putting icons top-left and titles below numbers when Stitch puts titles top-left and icons top-right.
+- **Decompose every component geometrically** into Top Row, Middle Row (with inline badges and semantic data colors), and Bottom Row (with status indicator dots/icons and metadata) as detailed in `STITCH_FIDELITY_RULES.md`.
+- **Inline badges belong beside metrics**, not in arbitrary card corners, whenever the Stitch design displays them inline.
+- **Semantic colors must apply to data metrics** (e.g. urgent or suspended counts in bold crimson red `#ba1a1a`).
+- Recreate the approved design using clean Flutter architecture and reusable Flutter components that adapt to the design, not by forcing the design into preconceived generic widgets.
+- Do not blindly copy generated web/HTML/CSS implementation patterns into Flutter.
+- If the Stitch reference conflicts with a confirmed business requirement, the confirmed requirement wins and the conflict should be reported.
+- If a design is missing a required state, implement the state consistently with the established design system rather than inventing a completely different visual language.
+
+---
+
+# 7. Core Engineering Principles
+
+All implementation must follow:
+
+- SOLID principles
+- Clean Code
+- Separation of Concerns
+- DRY
+- KISS
+- YAGNI
+- Dependency inversion where it provides real value
+- Composition over unnecessary inheritance
+- Clear responsibility boundaries
+
+Apply these principles pragmatically.
+Do not create abstractions purely for theoretical purity.
+
+---
+
+# 8. SOLID
+
+## Single Responsibility Principle
+
+A class, widget, service, repository, controller, state object, or file should have one clear responsibility.
 
 Do not combine unrelated responsibilities simply because placing everything in one file is convenient.
 
-### Open/Closed Principle
+## Open/Closed Principle
 
 Prefer designs that can be extended without repeatedly rewriting stable code.
-
 Do not introduce unnecessary abstraction solely for hypothetical future requirements.
 
-### Liskov Substitution Principle
+## Liskov Substitution Principle
 
 Implement abstractions consistently.
+Do not create inheritance hierarchies where implementations violate parent expectations.
 
-Do not create inheritance hierarchies where implementations violate the expectations of their parent abstractions.
+## Interface Segregation Principle
 
-### Interface Segregation Principle
-
-Prefer small and focused contracts.
-
+Prefer small, focused contracts.
 Do not create enormous interfaces containing unrelated methods.
 
-### Dependency Inversion Principle
+## Dependency Inversion Principle
 
 High-level business logic should not depend directly on low-level infrastructure details.
-
-Where appropriate, depend on abstractions rather than Firebase, storage, networking, or platform-specific implementations directly.
+Where appropriate, depend on repository/service contracts rather than Firebase, SQL Connect, Firestore, storage, or platform-specific implementations directly.
 
 ---
 
-# 3. Clean Code
-
-Code must be easy for another developer to understand.
+# 9. Clean Code
 
 Prefer:
 
-* Clear names
-* Small cohesive functions
-* Focused classes
-* Explicit behavior
-* Predictable control flow
-* Minimal side effects
-* Consistent conventions
+- Clear names
+- Small cohesive functions
+- Focused classes
+- Explicit behavior
+- Predictable control flow
+- Minimal side effects
+- Consistent conventions
 
 Avoid:
 
-* Code that is difficult to understand
-* Deep nesting
-* Massive functions
-* Hidden side effects
-* Ambiguous naming
-* Duplicate logic
-* Dead code
-* Commented-out code
-* Temporary hacks left permanently in production code
+- Deep nesting
+- Massive functions
+- Hidden side effects
+- Ambiguous naming
+- Duplicate logic
+- Dead code
+- Commented-out production code
+- Temporary hacks left permanently in the codebase
 
-Code should explain **what it does** through naming and structure.
-
-Comments should primarily explain **why** something exists when that reason is not obvious.
+Comments should explain **why** something exists when the reason is not obvious.
+Good naming and structure should explain **what** the code does.
 
 ---
 
-# 4. DRY, KISS, and YAGNI
+# 10. Never Create Monolithic Files
 
-Follow:
-
-* DRY — Don't Repeat Yourself
-* KISS — Keep It Simple
-* YAGNI — You Aren't Gonna Need It
-
-However, apply these principles pragmatically.
-
-Do not create a reusable abstraction after seeing one trivial example.
-
-Do refactor when:
-
-* Logic is duplicated
-* A clear reusable concept exists
-* Responsibilities have become mixed
-* A component is becoming difficult to understand
-
-Avoid speculative architecture for requirements that do not exist.
-
----
-
-# 5. Never Create Monolithic Files
-
-This rule is extremely important.
+This rule is critical.
 
 Do **not** implement entire features inside one enormous Dart file.
 
-Do not put all of the following together:
+Do not combine all of the following into one screen file:
 
-* UI
-* business logic
-* database access
-* validation
-* networking
-* state management
-* models
-* mapping
-* navigation
+- UI
+- Business logic
+- Data access
+- Validation
+- State management
+- Models
+- Mapping
+- Navigation
+- Permissions
 
-A screen becoming large is a signal to review its responsibilities.
+Split code when responsibilities differ or readability suffers.
 
-Split code whenever doing so improves cohesion and readability.
+Appropriate extraction may include:
 
-Examples of appropriate extraction:
+- Page/screen
+- Screen section
+- Reusable widget
+- Form section
+- Controller/notifier/view model
+- State object
+- Repository
+- Service
+- Data source
+- Model/entity/DTO
+- Mapper
+- Validator
+- Extension
+- Focused utility
 
-* Page
-* Screen section
-* Reusable widget
-* Form section
-* Controller
-* State object
-* Repository
-* Service
-* Data source
-* Model
-* DTO
-* Mapper
-* Validator
-* Extension
-* Utility
+Do not keep appending code to a file merely because it already exists.
 
-Do not keep adding code to an existing file simply because that file already exists.
-
-If a file becomes difficult to navigate or understand:
-
-**stop and refactor it before continuing.**
+If a file becomes difficult to understand or navigate, **stop and refactor it before continuing**.
 
 There is no goal to minimize the number of files.
-
-The goal is to create files with clear responsibilities.
+The goal is clear responsibilities and discoverability.
 
 ---
 
-# 6. Avoid the Opposite Extreme
+# 11. Avoid Over-Engineering
 
-Splitting code does not mean creating unnecessary complexity.
+Splitting responsibilities does not mean creating unnecessary layers.
 
-Do not create excessive layers such as:
+Avoid patterns such as:
 
 ```text
 Interface
   ↓
-Abstract Base Class
+Abstract base
   ↓
-Base Implementation
+Base implementation
   ↓
 Adapter
   ↓
 Wrapper
   ↓
-Concrete Implementation
+Concrete implementation
 ```
 
-for a simple requirement.
+for a trivial operation.
 
-Use abstractions when they provide real value.
-
-Architecture must make development easier, not harder.
+Use abstractions when they provide real value for testing, infrastructure replacement, business boundaries, or maintainability.
 
 ---
 
-# 7. Preferred Project Organization
+# 12. Preferred Project Organization
 
-Prefer a **feature-first structure**.
+Prefer a **feature-first** structure.
 
-A typical project may look like:
+A typical structure may look like:
 
 ```text
 lib/
@@ -248,10 +453,7 @@ lib/
 │
 ├── features/
 │   ├── authentication/
-│   │   ├── data/
-│   │   ├── domain/
-│   │   └── presentation/
-│   │
+│   ├── platform/
 │   ├── dashboard/
 │   ├── branches/
 │   ├── employees/
@@ -266,127 +468,64 @@ lib/
     └── widgets/
 ```
 
-This structure is a guideline, not a requirement to create empty folders.
+This is a guideline, not a requirement to create empty folders.
 
-Create directories only when they contain meaningful responsibilities.
+If the existing project already has a sensible structure, preserve and extend it rather than reorganizing everything unnecessarily.
 
-If the project already has a good structure, preserve and extend it rather than reorganizing everything unnecessarily.
-
----
-
-# 8. Feature Ownership
-
-Feature-specific code should normally stay inside its feature.
-
-Example:
-
-```text
-features/
-└── attendance/
-    ├── data/
-    ├── domain/
-    └── presentation/
-```
-
-Do not move code into `core` or `shared` merely because it might possibly be reused someday.
-
-Move something to shared infrastructure when it is genuinely used across features.
+Feature-specific code should remain inside its feature until genuine reuse justifies moving it to shared/core infrastructure.
 
 ---
 
-# 9. Presentation Layer
+# 13. Layer Responsibilities
 
-Flutter widgets belong to the presentation layer.
+## Presentation
 
-Presentation should primarily handle:
+Responsible for:
 
-* Rendering state
-* User interactions
-* Navigation
-* Responsive composition
-* UI-specific state
+- Flutter widgets
+- Screen composition
+- UI state
+- User interactions
+- Responsive/adaptive layout
+- Navigation events
 
-Do not place significant business logic inside:
+Do not place significant business rules, Firebase queries, SQL queries, JSON parsing, or persistence decisions directly in `build()` methods.
 
-```dart
-build()
-```
+## Domain / Business Logic
 
-Do not make screens directly responsible for:
+Responsible for business rules such as:
 
-* database implementation
-* Firebase queries
-* JSON parsing
-* complicated business rules
-* persistence decisions
+- Role permissions
+- Organization restrictions
+- Branch authorization
+- Attendance eligibility
+- Geofence validation
+- Employee lifecycle rules
+- Return approval rules
+- Date/time rules
 
-Prefer:
+Where practical, business rules should be testable without rendering Flutter widgets.
 
-```text
-Widget
-    ↓
-Controller / State
-    ↓
-Repository
-    ↓
-Data Source / Service
-```
+## Data / Infrastructure
 
-Use this structure pragmatically.
+Responsible for:
 
----
+- Repository implementations
+- Mock repositories/data sources
+- Firebase Authentication integration
+- SQL Connect/PostgreSQL integration
+- Firestore integration
+- Storage uploads
+- Serialization/mapping
+- Local persistence/caching
 
-# 10. Business Logic
-
-Business rules should be separated from visual widgets.
-
-Examples include:
-
-* Attendance eligibility
-* Geofence validation
-* Employee lifecycle rules
-* Return approval rules
-* Role permissions
-* Organization restrictions
-* Date/time validation
-
-Where possible, these rules should be testable without rendering Flutter widgets.
+Presentation should communicate through clear application contracts rather than directly querying infrastructure everywhere.
 
 ---
 
-# 11. Data Layer
+# 14. Typed Models
 
-Keep infrastructure-specific implementation behind appropriate data abstractions.
-
-For Firebase-backed functionality, prefer:
-
-```text
-Presentation
-    ↓
-State / Controller
-    ↓
-Repository
-    ↓
-Firebase implementation
-```
-
-Do not query Firebase directly from unrelated UI widgets throughout the application.
-
-Keep:
-
-* Serialization
-* Persistence
-* Remote queries
-* Upload logic
-* Cache behavior
-
-out of presentation code where practical.
-
----
-
-# 12. Typed Models
-
-Prefer typed Dart models instead of passing large untyped maps throughout the project.
+Prefer typed Dart models over large untyped maps.
 
 Avoid excessive use of:
 
@@ -394,201 +533,202 @@ Avoid excessive use of:
 Map<String, dynamic>
 ```
 
-outside infrastructure boundaries.
+outside serialization/infrastructure boundaries.
 
-Use clearly named:
-
-* Models
-* Entities
-* DTOs
-
-when appropriate.
-
-Do not create separate DTO/domain/UI models unless the separation provides actual value.
+Use models/entities/DTOs when the separation provides value.
+Do not create separate DTO/domain/UI models automatically for every object.
 
 ---
 
-# 13. State Management
+# 15. State Management
 
-Use **one primary state-management approach consistently** throughout the application.
+Use one primary state-management approach consistently.
 
-Do not mix multiple state-management libraries without a strong architectural reason.
+Do not mix multiple state-management libraries without a strong reason.
 
-State-management code should remain separate from UI rendering where appropriate.
+Separate:
 
-Differentiate between:
+- UI state
+- Application context
+- Business logic
+- Persistence
+- Remote/mock data access
 
-* UI state
-* application state
-* business logic
-* persistence
-* remote data access
-
-Do not introduce a state-management dependency without documenting why it was chosen.
-
-Record important architectural choices in:
-
-```text
-docs/architecture.md
-```
+Document the selected state-management approach in `docs/architecture.md` once chosen.
 
 ---
 
-# 14. Routing
+# 16. Routing and Application Context
 
-Use centralized and structured application routing.
+Use centralized, structured routing.
 
 Avoid scattering route strings throughout widgets.
 
-Routing must be capable of supporting:
+Routing must support:
 
-* Authentication
-* Protected screens
-* Role-based access
-* Organization context
-* Deep links where required
-* Smartphone navigation
-* Tablet navigation
+- Authentication
+- Protected routes
+- Role-based navigation
+- Platform vs customer areas
+- Branch Manager branch selection
+- Active branch context
+- Deep links when required
+- Smartphone navigation
+- Tablet navigation
+- Web navigation
 
-Navigation architecture should adapt to device width without duplicating business screens.
+Do not allow protected screens to become accessible merely by navigating directly to a route.
+
+Application context should explicitly represent relevant state such as:
+
+- Authenticated user
+- Role
+- Customer organization, when applicable
+- Assigned branches, when applicable
+- Active branch for Branch Manager workflows
+- Permissions
 
 ---
 
-# 15. Responsive and Adaptive Design
+# 17. Responsive and Adaptive Design
 
-Responsive behavior is mandatory.
+Responsive behavior is mandatory across **phone, tablet, and web**.
 
-Use available width rather than relying only on device type.
+Do not build a desktop layout and compress it onto a phone.
+Do not build a phone layout and merely stretch it onto a tablet or browser.
 
-Use these default breakpoints unless the project establishes better ones:
+Use available width rather than only checking device type.
+
+Default breakpoints unless the project establishes better centralized values:
 
 ```text
-Compact
-< 600dp
-
-Medium
-600dp – 839dp
-
-Expanded
->= 840dp
+Compact:  < 600dp
+Medium:   600dp – 839dp
+Expanded: >= 840dp
 ```
 
-These values should be centralized.
+For very wide browser layouts, also use sensible maximum content widths and multi-column composition where the Stitch design calls for it.
 
-Do not duplicate breakpoint values throughout individual widgets.
+Breakpoints must be centralized.
+Do not duplicate raw breakpoint numbers throughout widgets.
 
 ---
 
-# 16. Compact Layouts
+# 18. Smartphone Layout Rules
 
 For compact widths, generally prefer:
 
-* Bottom navigation
-* Single-column content
-* Full-screen forms
-* Bottom sheets
-* Vertical lists
-* Touch-friendly controls
-* Appropriate use of sticky actions
+- Compact app bars
+- Bottom navigation where appropriate
+- Single-column content
+- Full-screen forms
+- Bottom sheets
+- Touch-friendly controls
+- Compact cards
+- Horizontal carousels only where the approved design uses them
+- Minimal vertical scrolling for daily-use screens
 
-Do not overcrowd phone interfaces.
+Avoid:
 
----
+- Desktop toolbars squeezed into narrow widths
+- Six or more primary bottom-navigation items
+- Large full-width KPI cards stacked endlessly
+- Excessively verbose cards
+- Tiny labels
+- Dense tables
 
-# 17. Medium Layouts
-
-For medium widths, consider:
-
-* Navigation rail
-* Wider content areas
-* Two-column forms where useful
-* Expanded list rows
-* Side sheets
-* Better use of horizontal space
-
-Do not simply scale phone widgets larger.
+Smartphone layout must feel intentionally designed for one-handed/touch use.
 
 ---
 
-# 18. Expanded Layouts
+# 19. Tablet Layout Rules
 
-For expanded widths, consider:
+Tablet is a first-class experience.
 
-* Navigation rail
-* Permanent navigation
-* Master-detail layouts
-* Two-pane workflows
-* Multi-column forms
-* Persistent detail panels
-* Wider structured lists
+For medium/expanded tablet widths, consider:
 
-A tablet should feel intentionally designed for a tablet.
+- Navigation rail
+- Wider content areas
+- Two-column compositions
+- Multi-column forms
+- Master-detail layouts
+- Wider list rows
+- Side sheets
+- Multiple visible KPI tiles where appropriate
 
-Do not display a narrow phone screen in the center of a large tablet unless the content genuinely requires a narrow maximum width.
+Do not simply enlarge smartphone widgets.
+
+Tablet portrait and tablet landscape should each make meaningful use of the available width.
 
 ---
 
-# 19. Reusable Adaptive Components
+# 20. Web Layout Rules
 
-Create reusable adaptive components where repetition justifies them.
+Web is part of the same Flutter application.
 
-Examples may include:
+For browser layouts, prefer when appropriate:
+
+- Persistent left-side navigation
+- Comfortable maximum content widths
+- Multi-column dashboard composition
+- Wider forms and structured lists
+- Keyboard/focus accessibility
+- Desktop-appropriate hover/focus states where useful
+
+Do not duplicate an entirely separate application for web.
+Use shared feature logic with adaptive composition.
+
+Browser functionality does **not** need to match Android functionality completely.
+When a capability is intentionally mobile-only or disproportionately complex on web:
+
+- Follow the explicit product requirement for that feature.
+- Do not invent unsupported browser behavior.
+- Provide a clear, graceful browser state when necessary.
+- Keep viewing/management functionality available when appropriate.
+
+Do not silently omit a required web capability without reporting it.
+
+---
+
+# 21. Reusable Adaptive Components
+
+Create reusable adaptive components when repetition justifies them, for example:
 
 ```text
 AdaptiveScaffold
 AdaptiveNavigation
-AdaptivePage
-AdaptiveDialog
-AdaptiveForm
-MasterDetailLayout
+ResponsivePage
 ResponsiveContent
+AdaptiveDialog
+AdaptiveFormLayout
+MasterDetailLayout
 ```
 
-Do not create separate copies such as:
+Do not create completely separate phone/tablet/web feature implementations when shared composition can solve the problem cleanly.
 
-```text
-EmployeePhonePage
-EmployeeTabletPage
-```
-
-when a shared adaptive screen can compose different layouts cleanly.
-
-Prefer shared feature logic with adaptive presentation.
+Avoid abstractions that exist only to reduce line count.
 
 ---
 
-# 20. Material Design 3
+# 22. Material Design 3 and Theme
 
 Use Material Design 3 consistently.
 
-Centralize application styling.
+Centralize:
 
-The theme should own decisions such as:
+- Colors
+- Typography
+- Spacing
+- Radii
+- Input decoration
+- Button styles
+- Card treatment
+- Navigation styles
+- Status styling
 
-* Colors
-* Typography
-* Input decoration
-* Buttons
-* Cards
-* Navigation
-* Dialogs
-* Status presentation
+Prefer `Theme.of(context)` and theme extensions rather than repeated hardcoded visual values.
 
-Prefer:
-
-```dart
-Theme.of(context)
-```
-
-and theme extensions rather than repeated hardcoded styling.
-
----
-
-# 21. Design Tokens
-
-Centralize reusable design values when useful.
-
-Examples:
+Create focused design tokens where useful, such as:
 
 ```text
 AppBreakpoints
@@ -598,401 +738,361 @@ AppSizes
 AppDurations
 ```
 
-Avoid arbitrary values scattered throughout the codebase.
-
-Prefer a consistent spacing system.
+Do not scatter arbitrary spacing/color/radius values throughout the codebase.
 
 ---
 
-# 22. Reusable Widgets
+# 23. Reusable Widgets
 
-Extract genuinely reusable UI patterns.
+Extract genuinely reusable patterns when duplication or a stable design concept exists.
 
-Examples:
+Examples may include:
 
-* PrimaryButton
-* SecondaryButton
-* AppTextField
-* SearchField
-* StatusChip
-* EmptyState
-* ErrorState
-* LoadingState
-* OfflineBanner
-* UserAvatar
-* SummaryCard
-* SectionHeader
-* ConfirmationDialog
+- PrimaryButton
+- SecondaryButton
+- AppTextField
+- SearchField
+- StatusChip
+- EmptyState
+- ErrorState
+- LoadingState
+- OfflineBanner
+- UserAvatar
+- SummaryCard
+- SectionHeader
+- ConfirmationDialog
 
-Do not turn every small widget into a global reusable abstraction.
-
-Feature-specific widgets should stay inside their feature.
+Do not make every tiny widget globally reusable.
+Feature-specific widgets should remain inside their feature.
 
 ---
 
-# 23. Forms
+# 23A. Canonical Component & Screen Templates (Smartphone, Tablet, Desktop)
+
+**MANDATORY RULE:** Every screen and component in this repository must use the canonical reusable templates established in `lib/core/widgets/`. Do not create ad-hoc duplicates of common UI elements.
+
+All implementations must follow these template contracts across **Smartphone (<600dp)**, **Tablet (600dp–839dp)**, and **Desktop Web (>=840dp)**:
+
+### 1. KPI Cards: `AppKpiCard`
+- **Location**: `lib/core/widgets/kpi/app_kpi_card.dart`
+- **Layout Specification**: 
+  - **Top Row**: Metric title on the left (`title`).
+  - **Bottom / Value Row**: Large bold metric on the left (`value`, `valueColor` for semantic alerts), and rounded 32dp icon container on the bottom right (`icon` or `customIconBox`).
+  - **Clean Presentation**: Cards default to clean presentation without cluttering sub-text or extra trailing labels under numbers. Height is standardized at 96dp.
+- **Rule**: Never construct custom KPI card widgets from scratch. Always instantiate `AppKpiCard`.
+
+### 2. Responsive KPI Section: `ResponsiveKpiSection`
+- **Location**: `lib/core/widgets/kpi/responsive_kpi_section.dart`
+- **Default Height**: 96dp (`cardHeight = 96`).
+- **Multi-Form-Factor Layout**:
+  - **Smartphone (`< 600dp`)**: Full-width swipeable carousel (`PageView` with `viewportFraction: 1.0` and animated dot indicators). Cards span 100% of the content width with zero awkward margins, matching recent lists.
+  - **Tablet (`600dp – 839dp`)**: Balanced 2-column grid (`Row`s of 2 `Expanded` cards) utilizing 100% width.
+  - **Desktop (`>= 840dp`)**: Balanced single-row flex layout (`Row` of `Expanded` cards) spanning 100% width.
+- **Rule**: Never hand-roll custom carousels or manual row splits for KPI collections. Use `ResponsiveKpiSection(cards: [...])`.
+
+### 3. Action Buttons: `AppButton`
+- **Location**: `lib/core/widgets/app_button.dart`
+- **Variants**:
+  - `AppButton.primary(...)`: Main call to action with filled primary background.
+  - `AppButton.secondary(...)`: Secondary tonal button (`AppColors.primaryContainer`).
+  - `AppButton.outlined(...)`: Outlined subtle button with border.
+  - `AppButton.responsive(...)`: Automatically adapts width: full-width on smartphone (`isCompact`), intrinsic width on tablet and desktop.
+- **Rules**:
+  - Minimum 48dp touch target across all form factors.
+  - Built-in loading state with progress indicator via `isLoading: true`.
+  - Container-safe: Automatically detects unbounded horizontal constraints (such as inside a `Row`) via `LayoutBuilder` to prevent layout overflow exceptions.
+
+### 4. Text & Password Inputs: `AppTextField` & `AppPasswordField`
+- **Location**: `lib/core/widgets/app_text_field.dart`
+- **Templates**:
+  - `AppTextField`: Standard M3 outlined field with structured label, hint, helper text, and error states.
+  - `AppTextField.search(...)`: Standard search field with leading magnifying glass and optional clear button.
+  - `AppPasswordField(...)`: Standard password field with integrated obscure text toggle and lock icon prefix.
+- **Rule**: Never manage manual visibility state or raw `TextField` decorations in screen files.
+
+### 5. Page Headers: `AppPageHeader`
+- **Location**: `lib/core/widgets/app_page_header.dart`
+- **Layout Specification**:
+  - **Eyebrow Tag**: Uppercase category tracking (11px bold, letter-spacing 1.2px, `AppColors.secondary`).
+  - **Title**: Scaled typography (24px bold on smartphone, 32px bold on tablet and desktop).
+  - **Subtitle**: Supporting description in `AppColors.onSurfaceVariant`.
+  - **Action Placement**: Inline on the right for tablet/desktop; stacked full-width below the header on smartphone for touch ergonomics.
+- **Rule**: Use `AppPageHeader` for all screen headers across all dashboards and management views.
+
+---
+
+# 24. Forms and Validation
 
 Large forms must be split into logical sections.
 
-Do not create one huge form widget containing dozens of fields.
-
-For example:
-
-```text
-EmployeeForm
-├── PersonalInformationSection
-├── EmploymentInformationSection
-├── AddressSection
-├── EmergencyContactSection
-└── DocumentsSection
-```
-
 Separate where appropriate:
 
-* Form state
-* Validation
-* UI
-* Submission
-* Mapping
+- Form UI
+- Form state
+- Validation
+- Submission
+- Mapping
 
-Form data must not be lost because of simple validation failures.
+Do not create one huge form widget containing dozens of unrelated fields.
 
----
+Create reusable validation only where there is genuine repetition.
+Business-specific validation belongs near the feature that owns it.
 
-# 24. Validation
-
-Create reusable validation logic where there is genuine repetition.
-
-Examples:
-
-* Required values
-* Phone numbers
-* Numeric ranges
-* Dates
-* IDs
-* Email addresses
-
-Business-specific validation should remain close to the feature that owns it.
-
-Validation messages must be understandable to users.
+Validation errors must preserve user-entered data and be understandable to end users.
 
 ---
 
-# 25. Roles and Authorization
+# 25. Authorization and Scoping
 
-The application contains roles such as:
+UI visibility is not a security boundary.
 
-```text
-Organization Admin
-Branch Manager
-Employee
-```
+Authorization must be enforced at appropriate application and backend/data boundaries.
 
-Role restrictions must not be implemented only by hiding buttons.
+## Customer organization scoping
 
-Authorization must be enforced at appropriate application and backend boundaries.
+Organization Admins, Branch Managers, and Employees belong to exactly one customer organization.
+Do not build customer organization switching for these roles.
 
-UI behavior should reflect permissions, but UI visibility is not security.
+## Branch Manager scoping
 
----
+Branch Managers may access only assigned branches.
 
-# 26. Organization Scoping
+If assigned to multiple branches:
 
-Application data may belong to a specific organization.
+- Require/select an active branch context before branch-scoped operations.
+- Scope queries to the active authorized branch where the screen is branch-specific.
+- Allow changing branch only to another branch in the manager's assigned set.
+- Clear branch-scoped state when active branch changes.
 
-Never accidentally mix data between organizations.
+Do not fetch all organization data and merely hide unauthorized rows when data can be scoped earlier.
 
-Organization-scoped queries, state, and caches must use the active organization context.
+## Employee scoping
 
-When switching organization context:
-
-* Clear inappropriate cached state
-* Reload permissions
-* Reload role context
-* Reload branch context
-* Refresh organization-scoped data
-
-Never display cached information belonging to a previously selected organization.
+Employees should access only their own permitted self-service data and operations unless a future requirement explicitly expands their scope.
 
 ---
 
-# 27. Branch Scoping
-
-Branch-restricted roles must never receive data belonging to unauthorized branches.
-
-Do not fetch all organization data and merely hide unauthorized rows in the UI when the backend can scope the query correctly.
-
-Security boundaries should exist as close to the data source as practical.
-
----
-
-# 28. Errors
+# 26. Errors and User-Facing States
 
 Implement a consistent error-handling approach.
 
 Differentiate where useful between:
 
-* Validation errors
-* Network errors
-* Authentication errors
-* Authorization errors
-* Timeout errors
-* Backend failures
-* Offline state
-* Unexpected errors
+- Validation errors
+- Network errors
+- Authentication errors
+- Authorization errors
+- Timeout errors
+- Backend failures
+- Offline state
+- Unexpected errors
 
-Do not expose internal stack traces or technical backend messages directly to users.
+Do not expose raw Firebase, SQL, Firestore, stack-trace, or technical backend errors directly to users.
 
 Do not silently swallow exceptions.
+Do not use `print(error)` as the application error-handling strategy.
 
-Avoid relying on:
+Every asynchronous screen should consider relevant states such as:
 
-```dart
-print(error);
-```
+- Initial loading
+- Refreshing
+- Data loaded
+- Empty
+- Error
+- Offline
+- Partial failure
 
-as an error-handling strategy.
-
-Use proper application logging where required.
-
----
-
-# 29. Loading, Empty, and Error States
-
-Every asynchronous screen should consider:
-
-* Initial loading
-* Refreshing
-* Data loaded
-* Empty state
-* Error state
-* Offline state
-* Partial failure where applicable
-
-Do not leave users looking at blank screens.
-
-Use shared components when states are common across features.
+Mock implementations should make these states testable during UI development.
 
 ---
 
-# 30. Date and Time
+# 27. Date and Time
 
-Business-critical dates and timestamps should not blindly trust the device clock.
+Business-critical timestamps must not blindly trust the device clock.
 
-Use server-confirmed timestamps where required by business rules.
+Use server-confirmed timestamps where required once the real backend is connected.
 
-Keep:
+Keep separate concerns for:
 
-* Storage format
-* Business timezone
-* Display formatting
+- Storage format
+- Business timezone
+- Display formatting
 
-as separate concerns.
-
-Avoid spreading date formatting logic throughout widgets.
+Avoid scattering date/time formatting logic throughout widgets.
 
 ---
 
-# 31. GPS and Location
+# 28. GPS and Location
 
 Keep location logic separate from UI rendering.
 
 Where geofencing is required, isolate:
 
-* GPS acquisition
-* Permission handling
-* Distance calculation
-* Accuracy validation
-* Branch coordinates
-* Radius rules
+- Permission handling
+- GPS acquisition
+- Distance calculation
+- Accuracy validation
+- Branch coordinates
+- Radius rules
 
 Distance calculations should be independently testable.
+Do not embed complex geolocation calculations directly in UI callbacks.
 
-Do not embed complex geolocation mathematics directly in button callbacks.
-
----
-
-# 32. Images and Documents
-
-Keep upload and file-handling logic separated from presentation.
-
-Support appropriate states such as:
-
-* Selecting
-* Capturing
-* Compressing
-* Uploading
-* Uploaded
-* Failed
-* Retrying
-
-Avoid unnecessarily holding large image byte arrays in long-lived application state.
-
-Sensitive documents must not expose raw backend storage URLs unnecessarily.
+For mock-first UI work, use mock location states rather than prematurely integrating device APIs unless requested.
 
 ---
 
-# 33. Security
+# 29. Images and Documents
+
+Keep image/file upload handling separate from presentation.
+
+Support states such as:
+
+- Selecting
+- Capturing
+- Compressing
+- Uploading
+- Uploaded
+- Failed
+- Retrying
+
+Do not keep large image bytes unnecessarily in long-lived state.
+Do not expose raw backend storage URLs for sensitive documents unnecessarily.
+
+During mock-first UI work, use local/mock assets and mock upload states unless real integration is requested.
+
+---
+
+# 30. Security
 
 Never commit:
 
-* Passwords
-* API secrets
-* Service-account credentials
-* Private keys
-* Production tokens
+- Passwords
+- API secrets
+- Service-account credentials
+- Private keys
+- Production tokens
 
-Use environment-specific configuration.
+Do not log:
 
-Do not log sensitive values.
-
-Sensitive data should be displayed only to authorized roles.
+- Passwords
+- Authentication tokens
+- Sensitive personal identifiers
+- Sensitive documents
 
 Use the principle of least privilege.
 
----
-
-# 34. Environment Configuration
-
-Support separate environments where appropriate, for example:
-
-```text
-development
-staging
-production
-```
-
-Environment-specific configuration must not require editing source code manually for each build.
-
-Do not commit secrets in environment files that are intended to remain private.
+Environment-specific configuration must not require manually editing application source code for every environment.
 
 ---
 
-# 35. Dependencies
+# 31. Dependencies
 
 Do not add a package simply because it makes a small task slightly easier.
 
 Before adding a dependency, consider:
 
-* Is it actively maintained?
-* Is it actually necessary?
-* Does Flutter/Dart already provide the capability?
-* What long-term maintenance burden does it introduce?
-* Does it significantly increase application size?
-* Does it conflict with existing architecture?
+- Is it maintained?
+- Is it necessary?
+- Does Flutter/Dart already provide the capability?
+- Does it conflict with existing architecture?
+- Does it add meaningful size/maintenance burden?
 
-When adding a meaningful dependency, document the reason.
-
-Do not introduce multiple libraries solving the same problem.
+Do not add multiple packages solving the same problem.
+Document significant dependency decisions in `docs/architecture.md`.
 
 ---
 
-# 36. Performance
+# 32. Performance
 
 Write efficient Flutter code without premature optimization.
 
 Prefer:
 
-* Lazy lists
-* Pagination where appropriate
-* Efficient image loading
-* Appropriate caching
-* `const` constructors where useful
-* Selective rebuilds
-* Avoiding unnecessary rebuilds
-
-Do not sacrifice clarity for insignificant micro-optimizations.
+- Lazy lists
+- Pagination when needed
+- Efficient image loading
+- Appropriate caching
+- `const` constructors where useful
+- Selective rebuilds
+- Avoiding unnecessary rebuilds
 
 Measure before performing complex optimization.
 
+For dashboards with horizontally scrolling cards/tiles, use lazy/efficient list primitives rather than rendering large off-screen trees unnecessarily.
+
 ---
 
-# 37. Accessibility
+# 33. Accessibility
 
 Accessibility is part of implementation quality.
 
 Consider:
 
-* Minimum touch target sizes
-* Semantic labels
-* Screen readers
-* Large text
-* Logical focus order
-* Sufficient contrast
-* Keyboard navigation on tablets where applicable
+- Minimum touch targets
+- Semantic labels
+- Screen readers
+- Large text
+- Logical focus order
+- Sufficient contrast
+- Keyboard navigation on web/tablets where useful
+- Hover/focus affordances on web where relevant
 
 Never rely only on color to communicate important status.
+Do not disable text scaling simply to preserve visual appearance.
 
 ---
 
-# 38. Testing
+# 34. Testing
 
 Architecture must make important behavior testable.
 
-Write tests where they provide meaningful protection.
+Prioritize tests for:
 
-Prioritize testing for:
+- Business rules
+- Validation
+- Permissions
+- Role routing
+- Branch authorization/context selection
+- Data mapping
+- Repository contracts
+- Geofence calculations
+- Attendance rules
+- Critical state transitions
+- Important reusable widgets
 
-* Business rules
-* Validation
-* Permissions
-* Data mapping
-* Repositories
-* Geofence calculations
-* Attendance rules
-* Critical state transitions
-* Important reusable widgets
-
-Avoid testing trivial framework behavior.
+For mock-first implementation, test presentation against mock repository states where it provides meaningful protection.
 
 When fixing a reproducible bug, add a regression test when practical.
 
+Avoid testing trivial framework behavior.
+
 ---
 
-# 39. Flutter Analyzer
-
-Maintain a clean analyzer result.
+# 35. Analyzer, Formatting, and Validation
 
 After implementation, run:
 
 ```bash
 dart format .
 flutter analyze
-```
-
-Run relevant tests:
-
-```bash
 flutter test
 ```
 
-Do not claim the project is clean if these commands were not actually run.
+For changes materially affecting web behavior, also run an appropriate web build/check when practical, for example:
 
-Fix warnings instead of blindly suppressing them.
+```bash
+flutter build web
+```
 
-Do not disable analyzer rules simply to remove warnings unless there is a documented reason.
-
----
-
-# 40. Imports
-
-Keep imports clean.
-
-Remove:
-
-* Unused imports
-* Duplicate imports
-* Unnecessary barrel dependencies that create coupling
-
-Follow established project import conventions consistently.
+Do not claim commands passed unless they were actually run.
+Fix warnings rather than blindly suppressing analyzer rules.
 
 ---
 
-# 41. Naming
+# 36. Naming, Imports, Utilities, and Constants
 
-Use descriptive names.
-
-Good examples:
+Use descriptive names such as:
 
 ```text
 EmployeeRepository
@@ -1016,11 +1116,7 @@ MyWidget
 CommonThing
 ```
 
-A developer should understand the purpose of a class from its name.
-
----
-
-# 42. Utilities
+Keep imports clean and remove unused/duplicate imports.
 
 Do not create giant miscellaneous files such as:
 
@@ -1030,7 +1126,7 @@ helpers.dart
 common.dart
 ```
 
-containing unrelated functions.
+with unrelated responsibilities.
 
 Prefer focused utilities such as:
 
@@ -1038,35 +1134,14 @@ Prefer focused utilities such as:
 date_extensions.dart
 phone_validator.dart
 distance_calculator.dart
-currency_formatter.dart
 ```
 
-Feature-specific utilities should stay inside the feature.
+Do not create one giant constants file for the whole application.
+Shared constants should be centralized only when genuinely shared; feature-specific constants belong with the feature.
 
 ---
 
-# 43. Constants
-
-Do not create one giant global constants file for the entire application.
-
-Shared constants should be centralized only when genuinely shared.
-
-Feature-specific constants belong with their feature.
-
-Avoid hardcoded:
-
-* Route names
-* Storage keys
-* Role names
-* Breakpoints
-* Backend collection names
-* Important numeric limits
-
-when they represent application-level concepts.
-
----
-
-# 44. Documentation
+# 37. Documentation
 
 Maintain:
 
@@ -1075,135 +1150,121 @@ README.md
 docs/architecture.md
 ```
 
-where appropriate.
+when appropriate.
 
-`docs/architecture.md` should describe actual architectural decisions such as:
+`docs/architecture.md` should describe **actual** decisions such as:
 
-* State-management solution
-* Routing solution
-* Backend integration approach
-* Folder structure
-* Responsive strategy
-* Authentication architecture
-* Environment setup
-* Significant design decisions
+- State management
+- Routing
+- Dependency injection, if any
+- Mock/real repository strategy
+- Firebase Authentication approach
+- SQL Connect/PostgreSQL integration
+- Firestore integration
+- Storage integration
+- Responsive/adaptive strategy
+- Role and branch context
+- Environment configuration
 
-Do not fill documentation with aspirational architecture that the code does not actually follow.
+Do not document aspirational architecture that the code does not follow.
 
-Documentation must reflect reality.
+Before significant architectural changes:
 
----
-
-# 45. Architectural Changes
-
-Before making a significant architectural change:
-
-1. Inspect the existing architecture.
+1. Inspect the current architecture.
 2. Read `docs/architecture.md`.
-3. Explain why the existing approach is insufficient.
+3. Explain why the current approach is insufficient.
 4. Describe the proposed change.
 5. Avoid introducing competing patterns.
-6. Update architecture documentation after the change.
-
-Do not replace working architecture merely because another library or pattern is personally preferred.
+6. Update the architecture documentation afterward.
 
 ---
 
-# 46. Preserve Working Code
+# 38. Preserve Working Code
 
 When modifying an existing feature:
 
-* Make the smallest reasonable change.
-* Reuse established components.
-* Preserve existing behavior unless the requirement changes it.
-* Do not rewrite unrelated modules.
-* Do not perform large opportunistic refactors without reason.
+- Make the smallest reasonable change.
+- Reuse established components.
+- Preserve existing behavior unless the requirement changes it.
+- Do not rewrite unrelated modules.
+- Do not perform large opportunistic refactors without reason.
 
-Refactoring is encouraged when it directly improves the code affected by the task.
-
+Refactor when it directly improves the code touched by the task.
 Avoid unrelated scope expansion.
 
 ---
 
-# 47. Implementation Workflow
+# 39. Implementation Workflow
 
-For every implementation request, follow this process.
+For every implementation request:
 
 ## Step 1 — Inspect
 
 Inspect:
 
-* Relevant files
-* Current architecture
-* Dependencies
-* Existing reusable components
-* Existing tests
+- Relevant files
+- Current architecture
+- Dependencies
+- Existing reusable components
+- Relevant Stitch design/reference
+- Existing tests
 
-Do not assume the project structure.
-
----
+Do not assume project structure or implementation state.
 
 ## Step 2 — Understand
 
 Determine:
 
-* What must change
-* Which feature owns the change
-* Which existing components can be reused
-* Whether the requirement affects mobile, tablet, or both
-* Role and permission implications
-* Data/backend implications
-
----
+- What must change
+- Which feature owns the change
+- Which components can be reused
+- Role/permission implications
+- Organization/branch implications
+- Smartphone behavior
+- Tablet behavior
+- Web behavior
+- Whether the task is mock-only or real-backend integration
 
 ## Step 3 — Plan
 
 Before a significant implementation, briefly state:
 
-* Files to create
-* Files to modify
-* Architectural approach
-* Dependencies to add, if any
-* Important assumptions
+- Files to create
+- Files to modify
+- Architectural approach
+- Dependencies to add, if any
+- Mock/repository approach
+- Important assumptions
 
 Keep the plan concise.
-
-Do not spend excessive time documenting trivial changes.
-
----
 
 ## Step 4 — Implement
 
 Implement the smallest clean solution that completely satisfies the requirement.
 
 Follow existing conventions.
-
 Split responsibilities appropriately.
-
 Do not create monolithic files.
-
----
 
 ## Step 5 — Review
 
 Before considering the task complete, review:
 
-* Mobile layout
-* Tablet layout
-* Portrait behavior
-* Landscape behavior
-* Loading state
-* Empty state
-* Error state
-* Permissions
-* Organization/branch scoping
-* Accessibility
-* Duplicate code
-* Oversized files/classes
+- Stitch fidelity
+- Smartphone layout
+- Tablet portrait layout
+- Tablet landscape layout
+- Web layout
+- Loading state
+- Empty state
+- Error state
+- Permissions
+- Organization/branch scoping
+- Accessibility
+- Duplicate code
+- Oversized files/classes
 
 Refactor where necessary.
-
----
 
 ## Step 6 — Validate
 
@@ -1215,38 +1276,41 @@ flutter analyze
 flutter test
 ```
 
-Run additional relevant tests when applicable.
-
+Run additional relevant checks when applicable.
 Report failures rather than pretending they succeeded.
 
 ---
 
-# 48. Definition of Done
+# 40. Definition of Done
 
 A task is not complete merely because the happy path visually works.
 
 Where relevant, completion includes:
 
-* Correct implementation
-* Mobile support
-* Tablet support
-* Responsive behavior
-* Clear architecture
-* Appropriate separation of concerns
-* Loading behavior
-* Empty behavior
-* Error behavior
-* Permission handling
-* Backend/data scoping
-* Basic accessibility
-* Analyzer passing
-* Relevant tests passing
-* No unnecessary duplication
-* No newly introduced monolithic files
+- Correct implementation
+- Fidelity to the approved Stitch design
+- Smartphone support
+- Tablet portrait support
+- Tablet landscape support
+- Web support for the required capability
+- Responsive/adaptive behavior
+- Clear architecture
+- Separation of concerns
+- Appropriate mock or real repository integration
+- Loading behavior
+- Empty behavior
+- Error behavior
+- Permission handling
+- Organization/branch scoping
+- Basic accessibility
+- Analyzer passing
+- Relevant tests passing
+- No unnecessary duplication
+- No newly introduced monolithic files
 
 ---
 
-# 49. Final Rule
+# 41. Final Rule
 
 Never use:
 
@@ -1255,19 +1319,15 @@ Never use:
 as the implementation strategy.
 
 When a feature grows, organize it.
-
 When responsibilities differ, separate them.
-
 When code repeats, evaluate whether it should be reused.
-
 When architecture becomes difficult to understand, simplify it.
-
-When tablet space is available, use it intentionally.
-
+When tablet or web space is available, use it intentionally.
+When phone space is limited, simplify rather than compress.
 When requirements are simple, keep the solution simple.
 
-Build the project so that future features can be added without turning the repository into a collection of giant, tightly coupled files.
+Build the project so future features can be added without turning the repository into a collection of giant, tightly coupled files.
 
-**Smartphone and tablet support are both mandatory throughout the project.**
+**Android smartphone, Android tablet, and web support are all part of this Flutter application.**
 
-**SOLID, clean architecture, separation of concerns, maintainability, and pragmatic simplicity must be preserved throughout implementation.**
+**SOLID, clean architecture, separation of concerns, maintainability, testability, and pragmatic simplicity must be preserved throughout implementation.**

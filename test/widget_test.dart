@@ -1,17 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/app/app.dart';
-import 'package:workaxis/features/access_control/data/datasources/access_remote_data_source.dart';
-import 'package:workaxis/features/access_control/data/repositories/access_repository_impl.dart';
-import 'package:workaxis/features/authentication/data/datasources/auth_remote_data_source.dart';
-import 'package:workaxis/features/authentication/data/repositories/auth_repository_impl.dart';
+import 'package:workaxis/features/access/data/mock_access_repository.dart';
+import 'package:workaxis/features/authentication/data/mock_auth_repository.dart';
 
 void main() {
-  testWidgets('WorkAxisApp root smoke test', (WidgetTester tester) async {
-    final authDataSource = InMemoryAuthDataSource();
-    final authRepository = AuthRepositoryImpl(remoteDataSource: authDataSource);
-    final accessDataSource = InMemoryAccessDataSource();
-    final accessRepository =
-        AccessRepositoryImpl(remoteDataSource: accessDataSource);
+  testWidgets('WorkAxisApp smoke test launches on SignInScreen', (
+    tester,
+  ) async {
+    final authRepository = MockAuthenticationRepository(delay: Duration.zero);
+    final accessRepository = MockAccessRepository(delay: Duration.zero);
 
     await tester.pumpWidget(
       WorkAxisApp(
@@ -22,5 +19,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('WorkAxis'), findsOneWidget);
+    expect(find.text('Username, email, or phone number'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Sign In'), findsOneWidget);
+
+    authRepository.dispose();
   });
 }

@@ -1,85 +1,101 @@
 import 'package:flutter/material.dart';
-import 'package:workaxis/core/constants/app_radius.dart';
-import 'package:workaxis/core/constants/app_spacing.dart';
-import 'package:workaxis/core/theme/app_colors.dart';
+import 'package:workaxis/app/theme/app_colors.dart';
+import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
 
-enum StatusChipType {
-  active,
-  relieved,
-  absent,
-  pending,
-  disabled,
-}
+enum StatusType { active, pending, urgent, neutral }
 
+/// Operations status chip featuring a 6px status indicator and high-contrast styling.
 class StatusChip extends StatelessWidget {
   const StatusChip({
-    required this.type,
-    this.label,
     super.key,
+    required this.label,
+    required this.type,
+    this.width = 96.0,
   });
 
-  final StatusChipType type;
-  final String? label;
+  factory StatusChip.fromStatus(String status, {double? width = 96.0}) {
+    final lower = status.toLowerCase();
+    final type = lower == 'active'
+        ? StatusType.active
+        : (lower == 'suspended' || lower == 'urgent'
+              ? StatusType.urgent
+              : (lower == 'pending' ? StatusType.pending : StatusType.neutral));
+    return StatusChip(label: status, type: type, width: width);
+  }
+
+  final String label;
+  final StatusType type;
+  final double? width;
 
   @override
   Widget build(BuildContext context) {
-    Color color;
-    Color backgroundColor;
-    IconData iconData;
-    String defaultText;
-
-    switch (type) {
-      case StatusChipType.active:
-        color = AppColors.statusActive;
-        backgroundColor = AppColors.statusActive.withValues(alpha: 0.15);
-        iconData = Icons.check_circle_rounded;
-        defaultText = 'Active';
-      case StatusChipType.relieved:
-        color = AppColors.onSurfaceVariant;
-        backgroundColor = AppColors.statusRelieved.withValues(alpha: 0.25);
-        iconData = Icons.schedule_rounded;
-        defaultText = 'Relieved';
-      case StatusChipType.absent:
-        color = AppColors.statusAbsent;
-        backgroundColor = AppColors.statusAbsent.withValues(alpha: 0.15);
-        iconData = Icons.cancel_rounded;
-        defaultText = 'Absent';
-      case StatusChipType.pending:
-        color = AppColors.statusPending;
-        backgroundColor = AppColors.secondaryContainer.withValues(alpha: 0.35);
-        iconData = Icons.hourglass_top_rounded;
-        defaultText = 'Pending';
-      case StatusChipType.disabled:
-        color = AppColors.statusDisabled;
-        backgroundColor = AppColors.statusDisabled.withValues(alpha: 0.20);
-        iconData = Icons.block_rounded;
-        defaultText = 'Disabled';
-    }
-
-    final displayText = label ?? defaultText;
+    final (textColor, containerColor, borderColor) = _colorsForType(type);
 
     return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm + 2),
+      width: width,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: AppRadius.borderFull,
+        color: containerColor,
+        borderRadius: AppSpacing.roundedPill,
+        border: Border.all(color: borderColor),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: width != null ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisAlignment:
+            width != null ? MainAxisAlignment.center : MainAxisAlignment.start,
         children: [
-          Icon(iconData, size: 16, color: color),
-          const SizedBox(width: AppSpacing.xs + 2),
-          Text(
-            displayText,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
-                ),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: textColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Flexible(
+            child: Text(
+              label,
+              style: AppTypography.labelMono.copyWith(
+                color: textColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  (Color text, Color container, Color border) _colorsForType(StatusType type) {
+    switch (type) {
+      case StatusType.active:
+        return (
+          AppColors.statusActiveText,
+          AppColors.statusActiveContainer,
+          AppColors.statusActiveBorder,
+        );
+      case StatusType.pending:
+        return (
+          AppColors.statusPendingText,
+          AppColors.statusPendingContainer,
+          AppColors.statusPendingBorder,
+        );
+      case StatusType.urgent:
+        return (
+          AppColors.statusUrgentText,
+          AppColors.statusUrgentContainer,
+          AppColors.statusUrgentBorder,
+        );
+      case StatusType.neutral:
+        return (
+          AppColors.statusNeutralText,
+          AppColors.statusNeutralContainer,
+          AppColors.statusNeutralBorder,
+        );
+    }
   }
 }

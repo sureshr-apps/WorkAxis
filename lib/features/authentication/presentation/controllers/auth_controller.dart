@@ -1,217 +1,81 @@
-import 'dart:async';
-import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
-import 'package:workaxis/core/errors/app_exceptions.dart';
-import 'package:workaxis/features/authentication/domain/entities/auth_user.dart';
-import 'package:workaxis/features/authentication/domain/entities/otp_channel.dart';
-import 'package:workaxis/features/authentication/domain/entities/otp_session.dart';
-import 'package:workaxis/features/authentication/domain/repositories/auth_repository.dart';
+import 'package:workaxis/features/authentication/domain/models/app_user.dart';
+import 'package:workaxis/features/authentication/domain/models/authentication_result.dart';
+import 'package:workaxis/features/authentication/domain/repositories/authentication_repository.dart';
 
-sealed class AuthState extends Equatable {
-  const AuthState();
-
-  @override
-  List<Object?> get props => [];
-}
-
-final class AuthInitial extends AuthState {
-  const AuthInitial();
-}
-
-final class AuthOtpSent extends AuthState {
-  const AuthOtpSent({
-    required this.session,
-    this.isResending = false,
-  });
-
-  final OtpSession session;
-  final bool isResending;
-
-  @override
-  List<Object?> get props => [session, isResending];
-}
-
-final class AuthAuthenticating extends AuthState {
-  const AuthAuthenticating({this.message = 'Verifying...'});
-  final String message;
-
-  @override
-  List<Object?> get props => [message];
-}
-
-final class AuthAuthenticated extends AuthState {
-  const AuthAuthenticated(this.user);
-  final AuthUser user;
-
-  @override
-  List<Object?> get props => [user];
-}
-
-final class AuthError extends AuthState {
-  const AuthError(this.exception, {this.previousSession});
-  final AppException exception;
-  final OtpSession? previousSession;
-
-  @override
-  List<Object?> get props => [exception, previousSession];
-}
-
+/// Presentation controller managing user authentication state.
 class AuthController extends ChangeNotifier {
-  AuthController({required AuthRepository authRepository})
-      : _authRepository = authRepository {
-    _init();
-  }
+  AuthController({required this.authRepository});
 
-  final AuthRepository _authRepository;
-  StreamSubscription<AuthUser?>? _authSubscription;
+  final AuthenticationRepository authRepository;
 
-  AuthState _state = const AuthInitial();
-  AuthState get state => _state;
+  AppUser? _currentUser;
+  bool _isLoading = false;
+  String? _errorMessage;
 
-  AuthUser? get currentUser => _authRepository.currentUser;
-  bool get isAuthenticated => _state is AuthAuthenticated;
+  AppUser? get currentUser => _currentUser;
+  bool get isAuthenticated => _currentUser != null;
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
-  void _init() {
-    final current = _authRepository.currentUser;
-    if (current != null) {
-      _state = AuthAuthenticated(current);
-    }
-    _authSubscription = _authRepository.authStateChanges.listen((user) {
-      if (user != null) {
-        _state = AuthAuthenticated(user);
-      } else {
-        if (_state is! AuthInitial && _state is! AuthOtpSent) {
-          _state = const AuthInitial();
-        }
+  /// Attempts to authenticate the user using any valid login alias.
+  Future<bool> signIn({
+    required String identifier,
+    required String password,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await authRepository.signIn(
+        identifier: identifier,
+        password: password,
+      );
+
+      switch (result) {
+        case AuthenticationSuccess(:final user):
+          _currentUser = user;
+          _isLoading = false;
+          _errorMessage = null;
+          notifyListeners();
+          return true;
+        case AuthenticationFailure(:final errorMessage):
+          _currentUser = null;
+          _isLoading = false;
+          _errorMessage = errorMessage;
+          notifyListeners();
+          return false;
       }
-      notifyListeners();
-    });
-  }
-
-  Future<void> sendOtp({
-    required String phoneNumber,
-    OtpChannel channel = OtpChannel.sms,
-    int? resendToken,
-  }) async {
-    _state = const AuthAuthenticating(message: 'Sending code...');
-    notifyListeners();
-
-    try {
-      final session = await _authRepository.sendOtp(
-        phoneNumber: phoneNumber,
-        channel: channel,
-        resendToken: resendToken,
-      );
-      _state = AuthOtpSent(session: session);
-      notifyListeners();
-    } on AppException catch (e) {
-      _state = AuthError(e);
-      notifyListeners();
     } catch (e) {
-      _state = AuthError(AuthException.failed(e.toString()));
+      _currentUser = null;
+      _isLoading = false;
+      _errorMessage =
+          'An unexpected authentication error occurred. Please try again.';
       notifyListeners();
+      return false;
     }
   }
 
-  Future<void> resendOtp({
-    required OtpSession currentSession,
-    OtpChannel? channel,
-  }) async {
-    _state = AuthOtpSent(session: currentSession, isResending: true);
-    notifyListeners();
-
-    try {
-      final targetChannel = channel ?? currentSession.channel;
-      final newSession = await _authRepository.sendOtp(
-        phoneNumber: currentSession.phoneNumber,
-        channel: targetChannel,
-        resendToken: currentSession.resendToken,
-      );
-      _state = AuthOtpSent(session: newSession, isResending: false);
-      notifyListeners();
-    } on AppException catch (e) {
-      _state = AuthError(e, previousSession: currentSession);
-      notifyListeners();
-    } catch (e) {
-      _state = AuthError(
-        AuthException.failed(e.toString()),
-        previousSession: currentSession,
-      );
-      notifyListeners();
-    }
-  }
-
-  Future<void> verifyOtp({
-    required String verificationId,
-    required String smsCode,
-  }) async {
-    final prevSession =
-        _state is AuthOtpSent ? (_state as AuthOtpSent).session : null;
-    _state = const AuthAuthenticating(message: 'Verifying code...');
-    notifyListeners();
-
-    try {
-      final user = await _authRepository.verifyOtp(
-        verificationId: verificationId,
-        smsCode: smsCode,
-      );
-      _state = AuthAuthenticated(user);
-      notifyListeners();
-    } on AppException catch (e) {
-      _state = AuthError(e, previousSession: prevSession);
-      notifyListeners();
-    } catch (e) {
-      _state = AuthError(
-        AuthException.invalidOtp(),
-        previousSession: prevSession,
-      );
-      notifyListeners();
-    }
-  }
-
-  Future<void> signInWithGoogle() async {
-    _state = const AuthAuthenticating(message: 'Connecting to Google...');
-    notifyListeners();
-
-    try {
-      final user = await _authRepository.signInWithGoogle();
-      _state = AuthAuthenticated(user);
-      notifyListeners();
-    } on AppException catch (e) {
-      if (e.code == 'google-sign-in-cancelled') {
-        _state = const AuthInitial();
-        notifyListeners();
-        return;
-      }
-      _state = AuthError(e);
-      notifyListeners();
-    } catch (e) {
-      _state = AuthError(AuthException.failed(e.toString()));
-      notifyListeners();
-    }
-  }
-
+  /// Terminates the current session.
   Future<void> signOut() async {
-    _state = const AuthAuthenticating(message: 'Signing out...');
+    _isLoading = true;
     notifyListeners();
-    await _authRepository.signOut();
-    _state = const AuthInitial();
-    notifyListeners();
+
+    try {
+      await authRepository.signOut();
+    } finally {
+      _currentUser = null;
+      _isLoading = false;
+      _errorMessage = null;
+      notifyListeners();
+    }
   }
 
-  void resetToInitial() {
-    _state = const AuthInitial();
-    notifyListeners();
-  }
-
-  void returnToOtp(OtpSession session) {
-    _state = AuthOtpSent(session: session);
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _authSubscription?.cancel();
-    super.dispose();
+  void clearError() {
+    if (_errorMessage != null) {
+      _errorMessage = null;
+      notifyListeners();
+    }
   }
 }
