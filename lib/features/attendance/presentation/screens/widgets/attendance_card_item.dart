@@ -132,10 +132,7 @@ class AttendanceCardItem extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    StatusChip.fromStatus(
-                      _statusLabel,
-                      width: 96,
-                    ),
+                    StatusChip.fromStatus(_statusLabel, width: 96),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -211,8 +208,8 @@ class AttendanceCardItem extends StatelessWidget {
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w600,
                                     color: entry.kioskEntry
-                                      ? const Color(0xFF475569)
-                                      : const Color(0xFF2563EB),
+                                        ? const Color(0xFF475569)
+                                        : const Color(0xFF2563EB),
                                   ),
                                 ),
                               ],
@@ -283,7 +280,8 @@ class AttendanceCardItem extends StatelessWidget {
                 ),
 
                 // Exception notice if present
-                if (isNeedsReview || (entry.note != null && entry.note!.isNotEmpty)) ...[
+                if (isNeedsReview ||
+                    (entry.note != null && entry.note!.isNotEmpty)) ...[
                   const SizedBox(height: AppSpacing.sm),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -305,7 +303,8 @@ class AttendanceCardItem extends StatelessWidget {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            entry.note ?? 'Shift anomaly needs supervisor verification',
+                            entry.note ??
+                                'Shift anomaly needs supervisor verification',
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
@@ -333,7 +332,9 @@ class AttendanceCardItem extends StatelessWidget {
                                 entry,
                                 AttendanceReviewDecision.verify,
                               ),
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusXs,
+                        ),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -341,8 +342,9 @@ class AttendanceCardItem extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFDCFCE7),
-                            borderRadius:
-                                BorderRadius.circular(AppSpacing.radiusXs),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusXs,
+                            ),
                             border: Border.all(color: const Color(0xFF86EFAC)),
                           ),
                           child: Row(
@@ -374,7 +376,9 @@ class AttendanceCardItem extends StatelessWidget {
                                 entry,
                                 AttendanceReviewDecision.dismiss,
                               ),
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusXs,
+                        ),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -382,8 +386,9 @@ class AttendanceCardItem extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: AppColors.surfaceContainerLow,
-                            borderRadius:
-                                BorderRadius.circular(AppSpacing.radiusXs),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusXs,
+                            ),
                             border: Border.all(color: AppColors.outlineSubtle),
                           ),
                           child: Row(

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/kpi/app_kpi_card.dart';
 import 'package:workaxis/core/widgets/kpi/responsive_kpi_section.dart';
@@ -13,6 +14,7 @@ import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart
 import 'package:workaxis/features/attendance/presentation/controllers/attendance_controller.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_card_item.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_table.dart';
+import 'package:workaxis/features/attendance/presentation/screens/widgets/group_attendance_dialog.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
 class AttendanceOperationsScreen extends StatefulWidget {
@@ -82,198 +84,242 @@ class _AttendanceOperationsScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                    AppPageHeader(
-                      eyebrow: isEmployee
-                          ? 'Self Service'
-                          : 'Time & Attendance',
-                      title: title,
-                      subtitle: isEmployee
-                          ? 'Review your check-in history and shift records.'
-                          : isManager
-                          ? 'Verify attendance and resolve exceptions for $branchName.'
-                          : 'Verify check-ins and resolve organization attendance exceptions.',
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _DateSelector(
-                      date: controller.selectedDate,
-                      onSelected: (date) => _load(date: date),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    ResponsiveKpiSection(
-                      cardHeight: 96,
-                      cards: [
-                        AppKpiCard(
-                          title: 'On time',
-                          value: '$onTime',
-                          accentColor: AppColors.statusActive,
-                          icon: Icons.check_circle_outline,
-                          iconColor: AppColors.statusActiveText,
-                          iconBgColor: AppColors.statusActiveContainer,
-                        ),
-                        AppKpiCard(
-                          title: 'Late arrivals',
-                          value: '$late',
-                          icon: Icons.schedule_outlined,
-                          accentColor: late == 0 ? null : AppColors.statusPending,
-                          iconColor: late == 0
-                              ? AppColors.secondary
-                              : AppColors.statusPendingText,
-                          iconBgColor: late == 0
-                              ? const Color(0xFFF1F5F9)
-                              : AppColors.statusPendingContainer,
-                          valueColor: late == 0
-                              ? null
-                              : AppColors.statusPendingText,
-                        ),
-                        AppKpiCard(
-                          title: 'Needs review',
-                          value: '$exceptions',
-                          icon: Icons.rule_outlined,
-                          accentColor: exceptions == 0 ? null : AppColors.statusUrgent,
-                          iconColor: exceptions == 0
-                              ? AppColors.secondary
-                              : AppColors.statusUrgentText,
-                          iconBgColor: exceptions == 0
-                              ? const Color(0xFFF1F5F9)
-                              : AppColors.statusUrgentContainer,
-                          valueColor: exceptions == 0
-                              ? null
-                              : AppColors.statusUrgentText,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            isEmployee
-                                ? 'My shift records'
-                                : 'Attendance records',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${entries.length} records',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    if (isManager && branchContext == null)
-                      const _AttendanceMessage(
-                        icon: Icons.store_outlined,
-                        title: 'Select an active branch',
-                        detail: 'Choose one of your assigned branches before reviewing attendance.',
-                      )
-                    else if (controller.isLoading)
-                      const Padding(
-                        padding: EdgeInsets.all(AppSpacing.xxl),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (controller.errorMessage != null)
-                      _AttendanceMessage(
-                        icon: Icons.cloud_off_outlined,
-                        title: 'Attendance is unavailable',
-                        detail: controller.errorMessage!,
-                        action: TextButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
-                        ),
-                      )
-                    else if (entries.isEmpty)
-                      const _AttendanceMessage(
-                        icon: Icons.event_available_outlined,
-                        title: 'No attendance records',
-                        detail: 'No check-ins or shift records were found for this date.',
-                      )
-                    else if (!context.isCompact && !context.isMedium)
-                      AttendanceTable(
-                        entries: entries,
-                        getBranchName: (id) => _branchName(id, access),
-                        canReview: canReview,
-                        isSaving: controller.isSaving,
-                        onReview: canReview
-                            ? (entry, decision) =>
-                                  _review(entry, access!, decision)
-                            : null,
-                        onDetails: (entry) => _showDetails(
-                          entry,
-                          _branchName(entry.branchId, access),
-                        ),
-                      )
-                    else if (context.isMedium)
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final cardWidth =
-                              (constraints.maxWidth - AppSpacing.md) / 2;
-                          return Wrap(
-                            spacing: AppSpacing.md,
-                            runSpacing: AppSpacing.md,
-                            children: entries.map((entry) {
-                              return SizedBox(
-                                width: cardWidth,
-                                child: AttendanceCardItem(
-                                  entry: entry,
-                                  branchName: _branchName(entry.branchId, access),
-                                  canReview: canReview,
-                                  isSaving: controller.isSaving,
-                                  onReview: canReview
-                                      ? (e, d) => _review(e, access!, d)
-                                      : null,
-                                  onDetails: () => _showDetails(
-                                    entry,
-                                    _branchName(entry.branchId, access),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          );
-                        },
-                      )
-                    else
-                      Column(
-                        children: [
-                          for (final entry in entries) ...[
-                            AttendanceCardItem(
-                              entry: entry,
-                              branchName: _branchName(entry.branchId, access),
-                              canReview: canReview,
-                              isSaving: controller.isSaving,
-                              onReview: canReview
-                                  ? (e, d) => _review(e, access!, d)
-                                  : null,
-                              onDetails: () => _showDetails(
-                                entry,
-                                _branchName(entry.branchId, access),
+                  AppPageHeader(
+                    eyebrow: isEmployee ? 'Self Service' : 'Time & Attendance',
+                    title: title,
+                    subtitle: isEmployee
+                        ? 'Review your check-in history and shift records.'
+                        : isManager
+                        ? 'Verify attendance and resolve exceptions for $branchName.'
+                        : 'Verify check-ins and resolve organization attendance exceptions.',
+                    actions: canReview && access != null
+                        ? [
+                            AppButton.primary(
+                              text: 'Group Check-In',
+                              iconData: Icons.group_add_outlined,
+                              isFullWidth: false,
+                              onPressed: () => _openGroupAttendance(
+                                context,
+                                access,
+                                _branchId,
                               ),
                             ),
-                            const SizedBox(height: AppSpacing.md),
-                          ],
-                        ],
+                          ]
+                        : null,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _DateSelector(
+                    date: controller.selectedDate,
+                    onSelected: (date) => _load(date: date),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  ResponsiveKpiSection(
+                    cardHeight: 96,
+                    cards: [
+                      AppKpiCard(
+                        title: 'On time',
+                        value: '$onTime',
+                        accentColor: AppColors.statusActive,
+                        icon: Icons.check_circle_outline,
+                        iconColor: AppColors.statusActiveText,
+                        iconBgColor: AppColors.statusActiveContainer,
                       ),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
-                ),
+                      AppKpiCard(
+                        title: 'Late arrivals',
+                        value: '$late',
+                        icon: Icons.schedule_outlined,
+                        accentColor: late == 0 ? null : AppColors.statusPending,
+                        iconColor: late == 0
+                            ? AppColors.secondary
+                            : AppColors.statusPendingText,
+                        iconBgColor: late == 0
+                            ? const Color(0xFFF1F5F9)
+                            : AppColors.statusPendingContainer,
+                        valueColor: late == 0
+                            ? null
+                            : AppColors.statusPendingText,
+                      ),
+                      AppKpiCard(
+                        title: 'Needs review',
+                        value: '$exceptions',
+                        icon: Icons.rule_outlined,
+                        accentColor: exceptions == 0
+                            ? null
+                            : AppColors.statusUrgent,
+                        iconColor: exceptions == 0
+                            ? AppColors.secondary
+                            : AppColors.statusUrgentText,
+                        iconBgColor: exceptions == 0
+                            ? const Color(0xFFF1F5F9)
+                            : AppColors.statusUrgentContainer,
+                        valueColor: exceptions == 0
+                            ? null
+                            : AppColors.statusUrgentText,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          isEmployee
+                              ? 'My shift records'
+                              : 'Attendance records',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${entries.length} records',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (isManager && branchContext == null)
+                    const _AttendanceMessage(
+                      icon: Icons.store_outlined,
+                      title: 'Select an active branch',
+                      detail: 'Choose one of your assigned branches before reviewing attendance.',
+                    )
+                  else if (controller.isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(AppSpacing.xxl),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (controller.errorMessage != null)
+                    _AttendanceMessage(
+                      icon: Icons.cloud_off_outlined,
+                      title: 'Attendance is unavailable',
+                      detail: controller.errorMessage!,
+                      action: TextButton.icon(
+                        onPressed: _load,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                      ),
+                    )
+                  else if (entries.isEmpty)
+                    const _AttendanceMessage(
+                      icon: Icons.event_available_outlined,
+                      title: 'No attendance records',
+                      detail: 'No check-ins or shift records were found for this date.',
+                    )
+                  else if (!context.isCompact && !context.isMedium)
+                    AttendanceTable(
+                      entries: entries,
+                      getBranchName: (id) => _branchName(id, access),
+                      canReview: canReview,
+                      isSaving: controller.isSaving,
+                      onReview: canReview
+                          ? (entry, decision) =>
+                                _review(entry, access!, decision)
+                          : null,
+                      onDetails: (entry) => _showDetails(
+                        entry,
+                        _branchName(entry.branchId, access),
+                      ),
+                    )
+                  else if (context.isMedium)
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final cardWidth =
+                            (constraints.maxWidth - AppSpacing.md) / 2;
+                        return Wrap(
+                          spacing: AppSpacing.md,
+                          runSpacing: AppSpacing.md,
+                          children: entries.map((entry) {
+                            return SizedBox(
+                              width: cardWidth,
+                              child: AttendanceCardItem(
+                                entry: entry,
+                                branchName: _branchName(entry.branchId, access),
+                                canReview: canReview,
+                                isSaving: controller.isSaving,
+                                onReview: canReview
+                                    ? (e, d) => _review(e, access!, d)
+                                    : null,
+                                onDetails: () => _showDetails(
+                                  entry,
+                                  _branchName(entry.branchId, access),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    )
+                  else
+                    Column(
+                      children: [
+                        for (final entry in entries) ...[
+                          AttendanceCardItem(
+                            entry: entry,
+                            branchName: _branchName(entry.branchId, access),
+                            canReview: canReview,
+                            isSaving: controller.isSaving,
+                            onReview: canReview
+                                ? (e, d) => _review(e, access!, d)
+                                : null,
+                            onDetails: () => _showDetails(
+                              entry,
+                              _branchName(entry.branchId, access),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                        ],
+                      ],
+                    ),
+                  const SizedBox(height: AppSpacing.xxl),
+                ],
               ),
             ),
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
   String _branchName(String id, UserAccessContext? access) {
     for (final branch in access?.assignedBranches ?? const []) {
       if (branch.id == id) return branch.name;
     }
     return 'Branch';
+  }
+
+  Future<void> _openGroupAttendance(
+    BuildContext context,
+    UserAccessContext access,
+    String? activeBranchId,
+  ) async {
+    final controller = context.read<AttendanceController>();
+    final messenger = ScaffoldMessenger.of(context);
+    final success = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => GroupAttendanceDialog(
+        access: access,
+        initialBranchId: activeBranchId,
+        initialDate: controller.selectedDate,
+        existingEntries: controller.entries,
+        onSubmit: (request) =>
+            controller.markGroupAttendance(access: access, request: request),
+      ),
+    );
+
+    if (success == true && mounted) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Group attendance check-in recorded successfully.'),
+          backgroundColor: AppColors.statusActive,
+        ),
+      );
+    }
   }
 
   Future<void> _review(

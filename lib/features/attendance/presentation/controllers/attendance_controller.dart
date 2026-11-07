@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
+import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
 import 'package:workaxis/features/attendance/domain/repositories/attendance_repository.dart';
 
 class AttendanceController extends ChangeNotifier {
@@ -77,4 +78,43 @@ class AttendanceController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<bool> markGroupAttendance({
+    required UserAccessContext access,
+    required GroupAttendanceRequest request,
+  }) async {
+    _isSaving = true;
+    _actionErrorMessage = null;
+    notifyListeners();
+    try {
+      final updatedEntries = await repository.markGroupAttendance(
+        access: access,
+        request: request,
+      );
+      if (_sameDate(_selectedDate, request.workDate)) {
+        final map = {for (final e in _entries) e.id: e};
+        for (final e in updatedEntries) {
+          map[e.id] = e;
+        }
+        _entries = map.values.toList()
+          ..sort(
+            (a, b) => (a.checkInAt ?? a.workDate).compareTo(
+              b.checkInAt ?? b.workDate,
+            ),
+          );
+      }
+      return true;
+    } catch (_) {
+      _actionErrorMessage = 'Could not record group attendance. Try again.';
+      return false;
+    } finally {
+      _isSaving = false;
+      notifyListeners();
+    }
+  }
+
+  bool _sameDate(DateTime left, DateTime right) =>
+      left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
 }

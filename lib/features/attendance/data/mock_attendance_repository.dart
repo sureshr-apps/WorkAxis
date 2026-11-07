@@ -1,5 +1,6 @@
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
+import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
 import 'package:workaxis/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
@@ -195,6 +196,74 @@ class MockAttendanceRepository implements AttendanceRepository {
     );
     _entries[entryId] = updated;
     return updated;
+  }
+
+  @override
+  Future<List<AttendanceEntry>> markGroupAttendance({
+    required UserAccessContext access,
+    required GroupAttendanceRequest request,
+  }) async {
+    if (access.user.role != UserRole.orgAdmin &&
+        access.user.role != UserRole.branchManager) {
+      throw StateError(
+        'You do not have permission to record group attendance.',
+      );
+    }
+    final branchId = _validateBranchScope(access, request.branchId);
+    if (branchId == null) {
+      throw StateError(
+        'A valid branch must be specified for group attendance.',
+      );
+    }
+    if (request.attendees.isEmpty) {
+      throw StateError('At least one attendee is required.');
+    }
+
+    final orgId = access.organization?.id ?? 'org-acme';
+    final results = <AttendanceEntry>[];
+    var counter = 0;
+
+    for (final attendee in request.attendees) {
+      // Find if an entry already exists for this employee on this date
+      final existingKey = _entries.keys.cast<String?>().firstWhere((key) {
+        final entry = _entries[key]!;
+        return entry.organizationId == orgId &&
+            entry.branchId == branchId &&
+            entry.employeeId == attendee.employeeId &&
+            _sameDate(entry.workDate, request.workDate);
+      }, orElse: () => null);
+
+      final entryId =
+          existingKey ??
+          'att-grp-${DateTime.now().millisecondsSinceEpoch}-${counter++}';
+
+      final finalNote = request.note != null && request.note!.isNotEmpty
+          ? '${request.shiftName}: ${request.note}'
+          : 'Group check-in (${request.shiftName})';
+
+      final newEntry = AttendanceEntry(
+        id: entryId,
+        organizationId: orgId,
+        branchId: branchId,
+        employeeId: attendee.employeeId,
+        employeeName: attendee.employeeName,
+        workDate: DateTime(
+          request.workDate.year,
+          request.workDate.month,
+          request.workDate.day,
+        ),
+        status: request.status,
+        reviewStatus: AttendanceReviewStatus.none,
+        checkInAt: request.checkInAt,
+        note: finalNote,
+        kioskEntry: false,
+      );
+
+      _entries[entryId] = newEntry;
+      results.add(newEntry);
+    }
+
+    return results;
   }
 
   String? _validateBranchScope(UserAccessContext access, String? requested) {

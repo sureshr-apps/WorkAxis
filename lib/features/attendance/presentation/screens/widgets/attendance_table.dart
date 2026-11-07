@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
@@ -94,9 +95,7 @@ class AttendanceTable extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       decoration: const BoxDecoration(
         color: AppColors.surfaceContainerLow,
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
       alignment: Alignment.center,
       child: Row(
@@ -348,15 +347,18 @@ class AttendanceTable extends StatelessWidget {
                         if (canReview && isNeedsReview) ...[
                           // Quick Verify Button
                           IconButton(
-                            icon: const Icon(Icons.check_circle_rounded, size: 20),
+                            icon: const Icon(
+                              Icons.check_circle_rounded,
+                              size: 20,
+                            ),
                             color: const Color(0xFF16A34A),
                             tooltip: 'Verify attendance',
                             onPressed: isSaving
                                 ? null
                                 : () => onReview?.call(
-                                      entry,
-                                      AttendanceReviewDecision.verify,
-                                    ),
+                                    entry,
+                                    AttendanceReviewDecision.verify,
+                                  ),
                             visualDensity: VisualDensity.compact,
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(
@@ -373,9 +375,9 @@ class AttendanceTable extends StatelessWidget {
                             onPressed: isSaving
                                 ? null
                                 : () => onReview?.call(
-                                      entry,
-                                      AttendanceReviewDecision.dismiss,
-                                    ),
+                                    entry,
+                                    AttendanceReviewDecision.dismiss,
+                                  ),
                             visualDensity: VisualDensity.compact,
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(
@@ -473,10 +475,7 @@ class AttendanceTable extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(
-              color: dot,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Flexible(
@@ -594,9 +593,7 @@ class AttendanceTable extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       decoration: const BoxDecoration(
         color: AppColors.surfaceContainerLow,
-        border: Border(
-          top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-        ),
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -620,10 +617,7 @@ class AttendanceTable extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(4),

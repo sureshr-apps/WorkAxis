@@ -31,7 +31,9 @@ void main() {
     attendanceRepository = MockAttendanceRepository();
     accessController = AccessController(accessRepository: accessRepository);
     branchContextController = BranchContextController();
-    attendanceController = AttendanceController(repository: attendanceRepository);
+    attendanceController = AttendanceController(
+      repository: attendanceRepository,
+    );
   });
 
   tearDown(() {
@@ -65,7 +67,9 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<AccessController>.value(value: accessController),
+          ChangeNotifierProvider<AccessController>.value(
+            value: accessController,
+          ),
           ChangeNotifierProvider<BranchContextController>.value(
             value: branchContextController,
           ),
@@ -84,38 +88,39 @@ void main() {
   }
 
   group('AttendanceOperationsScreen Widget Tests', () {
-    testWidgets('renders Organization Attendance with clean table and KPI tiles', (
-      tester,
-    ) async {
-      await pumpAttendanceScreen(tester, role: UserRole.orgAdmin);
+    testWidgets(
+      'renders Organization Attendance with clean table and KPI tiles',
+      (tester) async {
+        await pumpAttendanceScreen(tester, role: UserRole.orgAdmin);
 
-      // Verify title & subtitles
-      expect(find.text('Organization Attendance'), findsOneWidget);
-      expect(find.text('TIME & ATTENDANCE'), findsOneWidget);
+        // Verify title & subtitles
+        expect(find.text('Organization Attendance'), findsOneWidget);
+        expect(find.text('TIME & ATTENDANCE'), findsOneWidget);
 
-      // Verify KPI titles
-      expect(find.text('On time'), findsOneWidget);
-      expect(find.text('Late arrivals'), findsOneWidget);
-      expect(find.text('Needs review'), findsWidgets);
+        // Verify KPI titles
+        expect(find.text('On time'), findsOneWidget);
+        expect(find.text('Late arrivals'), findsOneWidget);
+        expect(find.text('Needs review'), findsWidgets);
 
-      // Verify AttendanceTable rendered
-      expect(find.byType(AttendanceTable), findsOneWidget);
+        // Verify AttendanceTable rendered
+        expect(find.byType(AttendanceTable), findsOneWidget);
 
-      // Verify Table Column Headers
-      expect(find.text('EMPLOYEE'), findsOneWidget);
-      expect(find.text('BRANCH / HUB'), findsOneWidget);
-      expect(find.text('CHECK IN'), findsOneWidget);
-      expect(find.text('CHECK OUT'), findsOneWidget);
-      expect(find.text('METHOD'), findsOneWidget);
-      expect(find.text('STATUS'), findsOneWidget);
-      expect(find.text('EXCEPTION & REVIEW'), findsOneWidget);
-      expect(find.text('ACTIONS'), findsOneWidget);
+        // Verify Table Column Headers
+        expect(find.text('EMPLOYEE'), findsOneWidget);
+        expect(find.text('BRANCH / HUB'), findsOneWidget);
+        expect(find.text('CHECK IN'), findsOneWidget);
+        expect(find.text('CHECK OUT'), findsOneWidget);
+        expect(find.text('METHOD'), findsOneWidget);
+        expect(find.text('STATUS'), findsOneWidget);
+        expect(find.text('EXCEPTION & REVIEW'), findsOneWidget);
+        expect(find.text('ACTIONS'), findsOneWidget);
 
-      // Verify India Fleet indicator in Table Footer
-      expect(find.text('Platform Fleet: '), findsOneWidget);
-      expect(find.text('INDIA'), findsOneWidget);
-      expect(find.text('Showing 6 attendance records'), findsOneWidget);
-    });
+        // Verify India Fleet indicator in Table Footer
+        expect(find.text('Platform Fleet: '), findsOneWidget);
+        expect(find.text('INDIA'), findsOneWidget);
+        expect(find.text('Showing 6 attendance records'), findsOneWidget);
+      },
+    );
 
     testWidgets('displays date selector with Today and Yesterday chips', (
       tester,
@@ -136,14 +141,15 @@ void main() {
       expect(find.text('Details'), findsWidgets);
     });
 
-    testWidgets('renders 2-column balanced grid of AttendanceCardItem on tablet', (
-      tester,
-    ) async {
-      await pumpAttendanceScreen(tester, role: UserRole.orgAdmin, width: 768);
+    testWidgets(
+      'renders 2-column balanced grid of AttendanceCardItem on tablet',
+      (tester) async {
+        await pumpAttendanceScreen(tester, role: UserRole.orgAdmin, width: 768);
 
-      expect(find.byType(AttendanceCardItem), findsWidgets);
-      expect(find.byType(AttendanceTable), findsNothing);
-      expect(find.byType(Wrap), findsWidgets);
-    });
+        expect(find.byType(AttendanceCardItem), findsWidgets);
+        expect(find.byType(AttendanceTable), findsNothing);
+        expect(find.byType(Wrap), findsWidgets);
+      },
+    );
   });
 }

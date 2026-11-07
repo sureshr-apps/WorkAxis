@@ -1,5 +1,6 @@
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
+import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
 
 abstract interface class AttendanceRepository {
   Future<List<AttendanceEntry>> getAttendance({
@@ -14,5 +15,10 @@ abstract interface class AttendanceRepository {
     required String entryId,
     required String activeBranchId,
     required AttendanceReviewDecision decision,
+  });
+
+  Future<List<AttendanceEntry>> markGroupAttendance({
+    required UserAccessContext access,
+    required GroupAttendanceRequest request,
   });
 }
