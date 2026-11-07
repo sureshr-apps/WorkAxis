@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:workaxis/app/config/backend_config.dart';
+import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/domain/repositories/access_repository.dart';
 import 'package:workaxis/features/attendance/data/firestore_attendance_repository.dart';
@@ -12,22 +13,26 @@ import 'package:workaxis/features/authentication/domain/repositories/authenticat
 import 'package:workaxis/features/branch_dashboard/data/mock_branch_dashboard_repository.dart';
 import 'package:workaxis/features/branch_dashboard/domain/repositories/branch_dashboard_repository.dart';
 import 'package:workaxis/features/branches/data/mock_branch_management_repository.dart';
+import 'package:workaxis/features/branches/data/sql_connect_branch_management_repository.dart';
 import 'package:workaxis/features/branches/domain/repositories/branch_management_repository.dart';
 import 'package:workaxis/features/employee_home/data/mock_employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_repository.dart';
 import 'package:workaxis/features/employees/data/mock_organization_members_repository.dart';
+import 'package:workaxis/features/employees/data/sql_connect_organization_members_repository.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 import 'package:workaxis/features/organization_dashboard/data/mock_organization_dashboard_repository.dart';
 import 'package:workaxis/features/organization_dashboard/domain/repositories/organization_dashboard_repository.dart';
 import 'package:workaxis/features/platform_dashboard/data/mock_platform_dashboard_repository.dart';
 import 'package:workaxis/features/platform_dashboard/domain/repositories/platform_dashboard_repository.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_repository.dart';
+import 'package:workaxis/features/platform_organizations/data/sql_connect_platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_organizations/domain/repositories/platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_users/data/mock_platform_users_repository.dart';
 import 'package:workaxis/features/platform_users/domain/repositories/platform_users_repository.dart';
 import 'package:workaxis/features/reports/data/mock_reports_repository.dart';
 import 'package:workaxis/features/reports/domain/repositories/reports_repository.dart';
 import 'package:workaxis/features/returns/data/mock_returns_repository.dart';
+import 'package:workaxis/features/returns/data/sql_connect_returns_repository.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
 
 /// Bundle containing all core domain repositories required by the application.
@@ -72,21 +77,25 @@ class BackendFactory {
   static BackendRepositories createRepositories({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
+    WorkaxisConnectorConnector? connector,
   }) {
     if (BackendConfig.isFirebase) {
       return BackendRepositories(
         authRepository: FirebaseAuthRepository(auth: auth, firestore: firestore),
         accessRepository: MockAccessRepository(),
         platformRepository: MockPlatformDashboardRepository(),
-        platformOrganizationsRepository: MockPlatformOrganizationsRepository(),
+        platformOrganizationsRepository:
+            SqlConnectPlatformOrganizationsRepository(connector: connector),
         platformUsersRepository: MockPlatformUsersRepository(),
         orgRepository: MockOrganizationDashboardRepository(),
         branchRepository: MockBranchDashboardRepository(),
         employeeRepository: MockEmployeeHomeRepository(),
-        branchManagementRepository: MockBranchManagementRepository(),
-        organizationMembersRepository: MockOrganizationMembersRepository(),
+        branchManagementRepository:
+            SqlConnectBranchManagementRepository(connector: connector),
+        organizationMembersRepository:
+            SqlConnectOrganizationMembersRepository(connector: connector),
         attendanceRepository: FirestoreAttendanceRepository(firestore: firestore),
-        returnsRepository: MockReturnsRepository(),
+        returnsRepository: SqlConnectReturnsRepository(connector: connector),
         reportsRepository: MockReportsRepository(),
       );
     }
