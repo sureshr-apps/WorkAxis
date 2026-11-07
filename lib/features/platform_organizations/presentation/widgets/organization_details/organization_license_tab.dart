@@ -417,12 +417,15 @@ class _ResponsiveLicenseCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (cardsInline) {
-      return Row(
-        children: [
-          Expanded(child: first),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: second),
-        ],
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: first),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: second),
+          ],
+        ),
       );
     }
 
@@ -489,22 +492,25 @@ class _CommercialAgreementPane extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: _DateCard(
-                  label: 'Agreement Start',
-                  value: dateFormat.format(license.agreementStart),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _DateCard(
+                    label: 'Agreement Start',
+                    value: dateFormat.format(license.agreementStart),
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _DateCard(
-                  label: 'Agreement Expiry',
-                  value: dateFormat.format(license.agreementExpiry),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: _DateCard(
+                    label: 'Agreement Expiry',
+                    value: dateFormat.format(license.agreementExpiry),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           Container(

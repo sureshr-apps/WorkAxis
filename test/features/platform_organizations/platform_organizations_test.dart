@@ -344,6 +344,25 @@ void main() {
 
       expect(find.text('PLAN ENTITLEMENTS'), findsOneWidget);
       expect(find.text('COMMERCIAL AGREEMENT'), findsOneWidget);
+      expect(find.text('Negotiated Price (One-time)'), findsOneWidget);
+      expect(find.text('Annual Maintenance Price'), findsOneWidget);
+
+      // Verify Negotiated Price and Annual Maintenance Price cards have the exact same height
+      final negotiatedLabel = find.text('Negotiated Price (One-time)');
+      final annualLabel = find.text('Annual Maintenance Price');
+      final negotiatedCard = find.ancestor(
+        of: negotiatedLabel,
+        matching: find.byType(Container),
+      ).first;
+      final annualCard = find.ancestor(
+        of: annualLabel,
+        matching: find.byType(Container),
+      ).first;
+      expect(
+        tester.getSize(negotiatedCard).height,
+        equals(tester.getSize(annualCard).height),
+      );
+
       expect(find.text('LICENSE HISTORY'), findsOneWidget);
       expect(find.text('EVENT'), findsOneWidget);
       expect(find.text('ANNUAL MAINTENANCE'), findsOneWidget);
