@@ -1,0 +1,127 @@
+# WorkAxis Seed Data
+
+mutation SeedWorkAxisData @transaction {
+  organization_insertMany(data: [
+    {
+      id: "org-acme"
+      name: "Acme Corporation"
+      code: "ORG-ACM-01"
+      category: "Retail"
+      country: "India"
+      status: "active"
+      currency: "INR"
+    }
+  ])
+
+  commercialAgreement_insertMany(data: [
+    {
+      id: "agr-acme-01"
+      organization: { id: "org-acme" }
+      agreementReference: "AGR-ORG-ACM-01"
+      planName: "Basic"
+      planTier: "Level 1"
+      negotiatedPrice: 40000.0
+      annualMaintenancePrice: 5000.0
+      maxStores: 18
+      maxUsers: 540
+      startDate: "2026-11-07"
+      expiryDate: "2027-11-07"
+      status: "active"
+    }
+  ])
+
+  licenseEvent_insertMany(data: [
+    {
+      id: "evt-acme-01"
+      organization: { id: "org-acme" }
+      eventType: "LICENSE_ASSIGNED"
+      planName: "Basic"
+      planTier: "Level 1"
+      validityPeriod: "2026-11-07 to 2027-11-07"
+      storesCount: 18
+      usersCount: 540
+      oneTimePrice: 40000.0
+      annualMaintenancePrice: 5000.0
+    }
+  ])
+
+  branch_insertMany(data: [
+    {
+      id: "br-acme-01"
+      organization: { id: "org-acme" }
+      name: "Downtown Flagship"
+      code: "ACM-DT-01"
+      location: "Sector 8, Industrial Corridor"
+      status: "active"
+      isMainBranch: true
+      geofenceRadiusMeters: 125
+      latitude: 12.9716
+      longitude: 77.5946
+      kioskEnabled: true
+    },
+    {
+      id: "br-acme-02"
+      organization: { id: "org-acme" }
+      name: "Metro Hub"
+      code: "ACM-MH-02"
+      location: "Connaught Place"
+      status: "active"
+      isMainBranch: false
+      geofenceRadiusMeters: 150
+      latitude: 28.6315
+      longitude: 77.2167
+      kioskEnabled: false
+    }
+  ])
+
+  organizationMember_insertMany(data: [
+    {
+      id: "usr-acme-admin"
+      organization: { id: "org-acme" }
+      fullName: "David Warner"
+      username: "david.warner"
+      email: "d.warner@acmecorp.com"
+      phone: "+919876543210"
+      role: "orgAdmin"
+      status: "active"
+    },
+    {
+      id: "usr-acme-bm"
+      organization: { id: "org-acme" }
+      fullName: "Marcus Chen"
+      username: "marcus.chen"
+      email: "m.chen@acmecorp.com"
+      phone: "+919876543211"
+      role: "branchManager"
+      status: "active"
+    },
+    {
+      id: "usr-acme-emp"
+      organization: { id: "org-acme" }
+      fullName: "Alex Rivera"
+      username: "alex.rivera"
+      email: "a.rivera@acmecorp.com"
+      phone: "+919876543212"
+      role: "employee"
+      status: "active"
+    }
+  ])
+
+  userBranchAssignment_insertMany(data: [
+    {
+      id: "asgn-01"
+      member: { id: "usr-acme-bm" }
+      branch: { id: "br-acme-01" }
+    },
+    {
+      id: "asgn-02"
+      member: { id: "usr-acme-bm" }
+      branch: { id: "br-acme-02" }
+    },
+    {
+      id: "asgn-03"
+      member: { id: "usr-acme-emp" }
+      branch: { id: "br-acme-01" }
+    }
+  ])
+}
