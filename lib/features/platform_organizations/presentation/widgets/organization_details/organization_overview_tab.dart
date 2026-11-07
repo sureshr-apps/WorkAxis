@@ -506,47 +506,67 @@ class _BrandAssetRow extends StatelessWidget {
   final bool narrow;
   final VoidCallback onUpload;
 
-  @override
-  Widget build(BuildContext context) {
-    final image = Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        border: Border.all(color: AppColors.outlineVariant),
-        borderRadius: AppSpacing.roundedXs,
-      ),
-      child: Icon(icon, size: 30, color: AppColors.secondary),
-    );
-    final details = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.onSurface,
-          ),
+  Widget _buildPlaceholder({double? height, double width = 104}) {
+    return InkWell(
+      onTap: onUpload,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLow,
+          border: Border.all(color: AppColors.outlineVariant, width: 1.5),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          description,
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            height: 1.4,
+        child: Center(
+          child: Icon(
+            icon,
+            size: 38,
             color: AppColors.secondary,
           ),
         ),
-        const SizedBox(height: AppSpacing.sm),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: GoogleFonts.inter(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.onSurface,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              description,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                height: 1.35,
+                color: AppColors.secondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
         FilledButton.tonalIcon(
           onPressed: onUpload,
           icon: const Icon(Icons.upload_outlined, size: 16),
           label: const Text('Upload'),
           style: FilledButton.styleFrom(
             foregroundColor: Colors.white,
-            backgroundColor: AppColors.tertiaryContainer,
-            minimumSize: const Size(82, 36),
+            backgroundColor: AppColors.primary,
+            minimumSize: const Size(88, 34),
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             shape: RoundedRectangleBorder(borderRadius: AppSpacing.roundedXs),
           ),
@@ -565,18 +585,20 @@ class _BrandAssetRow extends StatelessWidget {
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                image,
+                _buildPlaceholder(height: 104, width: 104),
                 const SizedBox(height: AppSpacing.md),
                 details,
               ],
             )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                image,
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: details),
-              ],
+          : IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildPlaceholder(width: 104),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: details),
+                ],
+              ),
             ),
     );
   }
