@@ -128,7 +128,9 @@ void main() {
       expect(branchController.hasActiveBranch, isFalse);
     });
 
-    testWidgets('renders cleanly on smartphone (390x844) without overflow', (tester) async {
+    testWidgets('renders cleanly on smartphone (390x844) without overflow', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -143,7 +145,9 @@ void main() {
       expect(find.text('Downtown Flagship'), findsOneWidget);
     });
 
-    testWidgets('renders cleanly on tablet (768x1024) without overflow', (tester) async {
+    testWidgets('renders cleanly on tablet (768x1024) without overflow', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(768, 1024);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {

@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/validation/contact_validators.dart';
+import 'package:workaxis/core/validation/login_email.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
+import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 
+/// Create/edit dialog for organization accounts.
+///
+/// Business rules (who may change role/branches, scope checks) live in
+/// `OrganizationMemberPolicy`; this widget only collects input, runs field
+/// format checks and surfaces the failure message reported by the controller.
+/// The dialog pops with `true` only after a successful save.
 class OrganizationMemberEditorDialog extends StatefulWidget {
   const OrganizationMemberEditorDialog({
     super.key,
@@ -16,6 +26,7 @@ class OrganizationMemberEditorDialog extends StatefulWidget {
     required this.activeBranchId,
     required this.isSaving,
     required this.onSave,
+    this.saveErrorMessage,
     this.member,
   });
 
@@ -24,6 +35,9 @@ class OrganizationMemberEditorDialog extends StatefulWidget {
   final OrganizationMember? member;
   final bool isSaving;
   final Future<OrganizationMember?> Function(OrganizationMember, String) onSave;
+
+  /// Reads the controller's latest action failure after [onSave] returns null.
+  final String? Function()? saveErrorMessage;
 
   @override
   State<OrganizationMemberEditorDialog> createState() =>
@@ -39,7 +53,6 @@ class _OrganizationMemberEditorDialogState
   late final TextEditingController _password;
   late final Set<String> _branches;
   late UserRole _role;
-  late AccountStatus _status;
   String? _error;
   bool _saving = false;
 
@@ -53,13 +66,12 @@ class _OrganizationMemberEditorDialogState
     final member = widget.member;
     _name = TextEditingController(text: member?.fullName ?? '');
     _username = TextEditingController(text: member?.username ?? '');
-    _email = TextEditingController(text: member?.email ?? '');
+    _email = TextEditingController(text: LoginEmail.displayable(member?.email));
     _phone = TextEditingController(text: member?.phone ?? '');
     _password = TextEditingController();
-    _role = _isBranchManager
-        ? UserRole.employee
-        : member?.role ?? UserRole.employee;
-    _status = member?.status ?? AccountStatus.active;
+    // Editing preserves the account's current role; only creation by a
+    // Branch Manager is forced to Employee.
+    _role = member?.role ?? UserRole.employee;
     _branches = member != null
         ? {...member.branchIds}
         : widget.activeBranchId == null
@@ -79,10 +91,106 @@ class _OrganizationMemberEditorDialogState
 
   @override
   Widget build(BuildContext context) {
-    final content = ListView(
+    final title = _editing ? 'Edit account' : 'Add employee';
+    final actions = [
+      AppButton.outlined(
+        text: 'Cancel',
+        onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+      ),
+      AppButton.primary(
+        text: _editing ? 'Save changes' : 'Create account',
+        isLoading: _saving || widget.isSaving,
+        onPressed: _save,
+      ),
+    ];
+    if (context.isCompact) {
+      return Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(title: Text(title)),
+          body: SafeArea(child: _buildForm()),
+          bottomNavigationBar: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Row(
+                children: [
+                  Expanded(child: actions.first),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(child: actions.last),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 620,
+          maxHeight: context.screenHeight * 0.9,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(title, style: AppTypography.headlineMedium),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    constraints: const BoxConstraints(
+                      minWidth: AppSpacing.minTouchTarget,
+                      minHeight: AppSpacing.minTouchTarget,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(child: _buildForm()),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  actions.first,
+                  const SizedBox(width: AppSpacing.sm),
+                  actions.last,
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm() {
+    // Role and branch assignment are chosen only when creating an account or
+    // when the caller is an Organization Admin editing someone else.
+    final canChooseRole = !_isBranchManager;
+    final hint = AppTypography.bodySmall.copyWith(
+      color: AppColors.onSurfaceVariant,
+    );
+    return ListView(
       shrinkWrap: true,
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
+        if (_error != null) ...[
+          ErrorBanner(message: _error!),
+          const SizedBox(height: AppSpacing.md),
+        ],
         AppTextField(
           controller: _name,
           label: 'Full name',
@@ -93,30 +201,26 @@ class _OrganizationMemberEditorDialogState
           controller: _username,
           label: 'Username',
           hintText: 'Unique sign-in username',
+          enabled: !_editing,
         ),
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _email,
-          label: 'Email address',
+          label: 'Email address (optional)',
           keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _phone,
-          label: 'Phone number',
+          label: 'Phone number (optional)',
           keyboardType: TextInputType.phone,
         ),
         const SizedBox(height: AppSpacing.md),
         if (!_editing) ...[
           AppPasswordField(controller: _password, label: 'Initial password'),
-          const SizedBox(height: AppSpacing.xs),
-          const Text(
-            'This mock pass does not save credentials or enable sign-in.',
-            style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
-          ),
           const SizedBox(height: AppSpacing.md),
         ],
-        if (!_isBranchManager) ...[
+        if (canChooseRole) ...[
           DropdownButtonFormField<UserRole>(
             initialValue: _role,
             decoration: const InputDecoration(labelText: 'Role'),
@@ -138,28 +242,9 @@ class _OrganizationMemberEditorDialogState
           ),
           const SizedBox(height: AppSpacing.md),
         ],
-        if (_editing) ...[
-          DropdownButtonFormField<AccountStatus>(
-            initialValue: _status,
-            decoration: const InputDecoration(labelText: 'Account status'),
-            items: AccountStatus.values
-                .map(
-                  (status) => DropdownMenuItem(
-                    value: status,
-                    child: Text(
-                      status.name == 'active' ? 'Active' : 'Suspended',
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-            onChanged: (status) =>
-                setState(() => _status = status ?? AccountStatus.active),
-          ),
-          const SizedBox(height: AppSpacing.md),
-        ],
         Text(
           _isBranchManager ? 'Active branch' : 'Branch assignment',
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: AppTypography.labelLarge,
         ),
         const SizedBox(height: AppSpacing.xs),
         for (final branch in widget.access.activeAssignedBranches)
@@ -179,151 +264,67 @@ class _OrganizationMemberEditorDialogState
                   }),
           ),
         if (_isBranchManager)
-          const Text(
-            'Branch manager accounts can only create employees in the selected branch.',
-            style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+          Text(
+            _editing
+                ? 'Branch assignments are preserved when a manager edits an employee.'
+                : 'Branch manager accounts can only create employees in the selected branch.',
+            style: hint,
           ),
-        if (_error != null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Text(_error!, style: const TextStyle(color: AppColors.error)),
-        ],
       ],
-    );
-    final actions = [
-      AppButton.outlined(
-        text: 'Cancel',
-        onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-      ),
-      AppButton.primary(
-        text: _editing ? 'Save changes' : 'Create account',
-        isLoading: _saving || widget.isSaving,
-        onPressed: _save,
-      ),
-    ];
-    if (context.isCompact) {
-      return Dialog.fullscreen(
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text(_editing ? 'Edit account' : 'Add employee'),
-          ),
-          body: SafeArea(child: content),
-          bottomNavigationBar: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Row(
-                children: [
-                  Expanded(child: actions.first),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: actions.last),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return Dialog(
-      child: SizedBox(
-        width: 620,
-        height: 700,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.sm,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _editing ? 'Edit account' : 'Add employee',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.of(context).pop(false),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(child: content),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  actions.first,
-                  const SizedBox(width: AppSpacing.sm),
-                  actions.last,
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
+  String? _validateInput() {
+    if (_name.text.trim().isEmpty) return 'Enter the full name.';
+    if (!_editing) {
+      final usernameError = ContactValidators.username(_username.text);
+      if (usernameError != null) return usernameError;
+      final passwordError = ContactValidators.password(_password.text);
+      if (passwordError != null) return passwordError;
+    }
+    return ContactValidators.optionalEmail(_email.text) ??
+        ContactValidators.optionalPhone(_phone.text);
+  }
+
   Future<void> _save() async {
-    final name = _name.text.trim();
-    final username = _username.text.trim();
-    final email = _email.text.trim();
-    final password = _password.text;
-    if (name.isEmpty ||
-        username.isEmpty ||
-        !email.contains('@') ||
-        (!_editing && password.length < 8)) {
-      setState(
-        () => _error = 'Enter a name, username, valid email, and an initial password of at least 8 characters.',
-      );
+    final organizationId = widget.access.organization?.id;
+    if (organizationId == null) {
+      setState(() => _error = 'No organization context is available.');
       return;
     }
-    if (_branches.isEmpty) {
-      setState(
-        () => _error = 'Assign this account to at least one active branch.',
-      );
+    final inputError = _validateInput();
+    if (inputError != null) {
+      setState(() => _error = inputError);
       return;
     }
-    if (_isBranchManager && widget.activeBranchId != null) {
-      _branches
-        ..clear()
-        ..add(widget.activeBranchId!);
-    }
-    final previous = widget.member;
+    final phone = _phone.text.trim();
     final draft = OrganizationMember(
-      id: previous?.id ?? '',
-      organizationId: widget.access.organization!.id,
-      fullName: name,
-      username: username,
-      email: email,
-      phone: _phone.text.trim().isEmpty ? null : _phone.text.trim(),
+      id: widget.member?.id ?? '',
+      authUid: widget.member?.authUid,
+      organizationId: organizationId,
+      fullName: _name.text.trim(),
+      username: _username.text.trim(),
+      email: _email.text.trim(),
+      phone: phone.isEmpty ? null : phone,
       role: _role,
       branchIds: _branches.toList(growable: false),
-      status: _status,
+      status: widget.member?.status ?? AccountStatus.active,
     );
     setState(() {
       _saving = true;
       _error = null;
     });
-    final saved = await widget.onSave(draft, password);
+    final saved = await widget.onSave(draft, _password.text);
     if (!mounted) return;
     if (saved == null) {
       setState(() {
         _saving = false;
-        _error = 'Could not save the account. Check your scope and try again.';
+        _error =
+            widget.saveErrorMessage?.call() ??
+            'The account could not be saved. Try again.';
       });
-    } else {
-      Navigator.of(context).pop(true);
+      return;
     }
+    Navigator.of(context).pop(true);
   }
 }

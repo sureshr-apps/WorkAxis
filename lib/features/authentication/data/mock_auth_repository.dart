@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/authentication/data/mock_auth_data_source.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
@@ -15,6 +16,9 @@ class MockAuthenticationRepository implements AuthenticationRepository {
 
   final MockAuthDataSource _dataSource;
   final Duration delay;
+
+  /// Fixture credentials for the debug-only sign-in quick fill.
+  MockAuthDataSource get dataSource => _dataSource;
   final StreamController<AppUser?> _authStateController =
       StreamController<AppUser?>.broadcast();
 
@@ -37,11 +41,7 @@ class MockAuthenticationRepository implements AuthenticationRepository {
     }
 
     final record = _dataSource.findByIdentifier(trimmedIdentifier);
-    final isPasswordMatch =
-        record != null &&
-        (record.password == password ||
-            password == 'password123' ||
-            password == 'Password123');
+    final isPasswordMatch = record != null && record.password == password;
     if (record == null || !isPasswordMatch) {
       return const AuthenticationResult.failure(
         errorMessage: 'Invalid username, email, or password.',
@@ -71,6 +71,37 @@ class MockAuthenticationRepository implements AuthenticationRepository {
     }
     _currentUser = null;
     _authStateController.add(null);
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+    final user = _currentUser;
+    if (user == null) {
+      throw const AuthenticationException(
+        'No signed-in user',
+        userMessage: 'Please sign in again before changing your password.',
+      );
+    }
+    final record = _dataSource.findByIdentifier(user.username);
+    if (record == null || record.password != currentPassword) {
+      throw const AuthenticationException(
+        'Current password mismatch',
+        userMessage: 'Your current password is incorrect.',
+      );
+    }
+    if (newPassword.length < 8) {
+      throw const AuthenticationException(
+        'New password too short',
+        userMessage: 'New password must be at least 8 characters long.',
+      );
+    }
+    _dataSource.updatePassword(user.id, newPassword);
   }
 
   @override

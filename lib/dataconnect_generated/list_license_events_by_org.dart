@@ -4,16 +4,32 @@ class ListLicenseEventsByOrgVariablesBuilder {
   String orgId;
 
   final FirebaseDataConnect _dataConnect;
-  ListLicenseEventsByOrgVariablesBuilder(this._dataConnect, {required  this.orgId,});
-  Deserializer<ListLicenseEventsByOrgData> dataDeserializer = (dynamic json)  => ListLicenseEventsByOrgData.fromJson(jsonDecode(json));
-  Serializer<ListLicenseEventsByOrgVariables> varsSerializer = (ListLicenseEventsByOrgVariables vars) => jsonEncode(vars.toJson());
-  Future<QueryResult<ListLicenseEventsByOrgData, ListLicenseEventsByOrgVariables>> execute() {
+  ListLicenseEventsByOrgVariablesBuilder(
+    this._dataConnect, {
+    required this.orgId,
+  });
+  Deserializer<ListLicenseEventsByOrgData> dataDeserializer = (dynamic json) =>
+      ListLicenseEventsByOrgData.fromJson(jsonDecode(json));
+  Serializer<ListLicenseEventsByOrgVariables> varsSerializer = (
+    ListLicenseEventsByOrgVariables vars,
+  ) => jsonEncode(vars.toJson());
+  Future<
+    QueryResult<ListLicenseEventsByOrgData, ListLicenseEventsByOrgVariables>
+  >
+  execute() {
     return ref().execute();
   }
 
   QueryRef<ListLicenseEventsByOrgData, ListLicenseEventsByOrgVariables> ref() {
-    ListLicenseEventsByOrgVariables vars= ListLicenseEventsByOrgVariables(orgId: orgId,);
-    return _dataConnect.query("ListLicenseEventsByOrg", dataDeserializer, varsSerializer, vars);
+    ListLicenseEventsByOrgVariables vars = ListLicenseEventsByOrgVariables(
+      orgId: orgId,
+    );
+    return _dataConnect.query(
+      "ListLicenseEventsByOrg",
+      dataDeserializer,
+      varsSerializer,
+      vars,
+    );
   }
 }
 
@@ -29,43 +45,55 @@ class ListLicenseEventsByOrgLicenseEvents {
   final double oneTimePrice;
   final double annualMaintenancePrice;
   final Timestamp createdAt;
-  ListLicenseEventsByOrgLicenseEvents.fromJson(dynamic json):
-  
-  id = nativeFromJson<String>(json['id']),
-  eventType = nativeFromJson<String>(json['eventType']),
-  planName = nativeFromJson<String>(json['planName']),
-  planTier = nativeFromJson<String>(json['planTier']),
-  validityPeriod = nativeFromJson<String>(json['validityPeriod']),
-  storesCount = nativeFromJson<int>(json['storesCount']),
-  usersCount = nativeFromJson<int>(json['usersCount']),
-  oneTimePrice = nativeFromJson<double>(json['oneTimePrice']),
-  annualMaintenancePrice = nativeFromJson<double>(json['annualMaintenancePrice']),
-  createdAt = Timestamp.fromJson(json['createdAt']);
+  ListLicenseEventsByOrgLicenseEvents.fromJson(dynamic json)
+    : id = nativeFromJson<String>(json['id']),
+      eventType = nativeFromJson<String>(json['eventType']),
+      planName = nativeFromJson<String>(json['planName']),
+      planTier = nativeFromJson<String>(json['planTier']),
+      validityPeriod = nativeFromJson<String>(json['validityPeriod']),
+      storesCount = nativeFromJson<int>(json['storesCount']),
+      usersCount = nativeFromJson<int>(json['usersCount']),
+      oneTimePrice = nativeFromJson<double>(json['oneTimePrice']),
+      annualMaintenancePrice = nativeFromJson<double>(
+        json['annualMaintenancePrice'],
+      ),
+      createdAt = Timestamp.fromJson(json['createdAt']);
   @override
   bool operator ==(Object other) {
-    if(identical(this, other)) {
+    if (identical(this, other)) {
       return true;
     }
-    if(other.runtimeType != runtimeType) {
+    if (other.runtimeType != runtimeType) {
       return false;
     }
 
-    final ListLicenseEventsByOrgLicenseEvents otherTyped = other as ListLicenseEventsByOrgLicenseEvents;
-    return id == otherTyped.id && 
-    eventType == otherTyped.eventType && 
-    planName == otherTyped.planName && 
-    planTier == otherTyped.planTier && 
-    validityPeriod == otherTyped.validityPeriod && 
-    storesCount == otherTyped.storesCount && 
-    usersCount == otherTyped.usersCount && 
-    oneTimePrice == otherTyped.oneTimePrice && 
-    annualMaintenancePrice == otherTyped.annualMaintenancePrice && 
-    createdAt == otherTyped.createdAt;
-    
+    final ListLicenseEventsByOrgLicenseEvents otherTyped =
+        other as ListLicenseEventsByOrgLicenseEvents;
+    return id == otherTyped.id &&
+        eventType == otherTyped.eventType &&
+        planName == otherTyped.planName &&
+        planTier == otherTyped.planTier &&
+        validityPeriod == otherTyped.validityPeriod &&
+        storesCount == otherTyped.storesCount &&
+        usersCount == otherTyped.usersCount &&
+        oneTimePrice == otherTyped.oneTimePrice &&
+        annualMaintenancePrice == otherTyped.annualMaintenancePrice &&
+        createdAt == otherTyped.createdAt;
   }
+
   @override
-  int get hashCode => Object.hashAll([id.hashCode, eventType.hashCode, planName.hashCode, planTier.hashCode, validityPeriod.hashCode, storesCount.hashCode, usersCount.hashCode, oneTimePrice.hashCode, annualMaintenancePrice.hashCode, createdAt.hashCode]);
-  
+  int get hashCode => Object.hashAll([
+    id.hashCode,
+    eventType.hashCode,
+    planName.hashCode,
+    planTier.hashCode,
+    validityPeriod.hashCode,
+    storesCount.hashCode,
+    usersCount.hashCode,
+    oneTimePrice.hashCode,
+    annualMaintenancePrice.hashCode,
+    createdAt.hashCode,
+  ]);
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
@@ -77,7 +105,9 @@ class ListLicenseEventsByOrgLicenseEvents {
     json['storesCount'] = nativeToJson<int>(storesCount);
     json['usersCount'] = nativeToJson<int>(usersCount);
     json['oneTimePrice'] = nativeToJson<double>(oneTimePrice);
-    json['annualMaintenancePrice'] = nativeToJson<double>(annualMaintenancePrice);
+    json['annualMaintenancePrice'] = nativeToJson<double>(
+      annualMaintenancePrice,
+    );
     json['createdAt'] = createdAt.toJson();
     return json;
   }
@@ -99,27 +129,26 @@ class ListLicenseEventsByOrgLicenseEvents {
 @immutable
 class ListLicenseEventsByOrgData {
   final List<ListLicenseEventsByOrgLicenseEvents> licenseEvents;
-  ListLicenseEventsByOrgData.fromJson(dynamic json):
-  
-  licenseEvents = (json['licenseEvents'] as List<dynamic>)
-        .map((e) => ListLicenseEventsByOrgLicenseEvents.fromJson(e))
-        .toList();
+  ListLicenseEventsByOrgData.fromJson(dynamic json)
+    : licenseEvents = (json['licenseEvents'] as List<dynamic>)
+          .map((e) => ListLicenseEventsByOrgLicenseEvents.fromJson(e))
+          .toList();
   @override
   bool operator ==(Object other) {
-    if(identical(this, other)) {
+    if (identical(this, other)) {
       return true;
     }
-    if(other.runtimeType != runtimeType) {
+    if (other.runtimeType != runtimeType) {
       return false;
     }
 
-    final ListLicenseEventsByOrgData otherTyped = other as ListLicenseEventsByOrgData;
+    final ListLicenseEventsByOrgData otherTyped =
+        other as ListLicenseEventsByOrgData;
     return licenseEvents == otherTyped.licenseEvents;
-    
   }
+
   @override
   int get hashCode => licenseEvents.hashCode;
-  
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
@@ -127,34 +156,33 @@ class ListLicenseEventsByOrgData {
     return json;
   }
 
-  ListLicenseEventsByOrgData({
-    required this.licenseEvents,
-  });
+  ListLicenseEventsByOrgData({required this.licenseEvents});
 }
 
 @immutable
 class ListLicenseEventsByOrgVariables {
   final String orgId;
-  @Deprecated('fromJson is deprecated for Variable classes as they are no longer required for deserialization.')
-  ListLicenseEventsByOrgVariables.fromJson(Map<String, dynamic> json):
-  
-  orgId = nativeFromJson<String>(json['orgId']);
+  @Deprecated(
+    'fromJson is deprecated for Variable classes as they are no longer required for deserialization.',
+  )
+  ListLicenseEventsByOrgVariables.fromJson(Map<String, dynamic> json)
+    : orgId = nativeFromJson<String>(json['orgId']);
   @override
   bool operator ==(Object other) {
-    if(identical(this, other)) {
+    if (identical(this, other)) {
       return true;
     }
-    if(other.runtimeType != runtimeType) {
+    if (other.runtimeType != runtimeType) {
       return false;
     }
 
-    final ListLicenseEventsByOrgVariables otherTyped = other as ListLicenseEventsByOrgVariables;
+    final ListLicenseEventsByOrgVariables otherTyped =
+        other as ListLicenseEventsByOrgVariables;
     return orgId == otherTyped.orgId;
-    
   }
+
   @override
   int get hashCode => orgId.hashCode;
-  
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
@@ -162,8 +190,5 @@ class ListLicenseEventsByOrgVariables {
     return json;
   }
 
-  ListLicenseEventsByOrgVariables({
-    required this.orgId,
-  });
+  ListLicenseEventsByOrgVariables({required this.orgId});
 }
-

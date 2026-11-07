@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
+import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/kpi/app_kpi_card.dart';
 import 'package:workaxis/core/widgets/kpi/responsive_kpi_section.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
@@ -28,36 +30,34 @@ class OrganizationOverviewTab extends StatelessWidget {
           final profileWidth = contentWidth * 7 / 12;
           final detailsWidth = contentWidth * 5 / 12;
 
-          return IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  flex: 7,
-                  child: _OrganizationProfileCard(
-                    organization: organization,
-                    compactRows: profileWidth < 500,
-                  ),
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 7,
+                child: _OrganizationProfileCard(
+                  organization: organization,
+                  compactRows: profileWidth < 500,
                 ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    children: [
-                      _OrganizationMetrics(
-                        organization: organization,
-                        license: license,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _BrandingAndPaymentCard(
-                        onUpload: onUpload,
-                        narrowAssets: detailsWidth < 360,
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                flex: 5,
+                child: Column(
+                  children: [
+                    _OrganizationMetrics(
+                      organization: organization,
+                      license: license,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _BrandingAndPaymentCard(
+                      onUpload: onUpload,
+                      narrowAssets: detailsWidth < 360,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           );
         }
 
@@ -105,9 +105,7 @@ class _OrganizationProfileCard extends StatelessWidget {
             ),
             decoration: const BoxDecoration(
               color: AppColors.surfaceContainerLow,
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFE2E8F0)),
-              ),
+              border: Border(bottom: BorderSide(color: AppColors.kpiBorder)),
             ),
             child: Row(
               children: [
@@ -120,8 +118,7 @@ class _OrganizationProfileCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'ORGANIZATION PROFILE',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
+                    style: AppTypography.labelMedium.copyWith(
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.6,
                       color: AppColors.onSurface,
@@ -135,10 +132,10 @@ class _OrganizationProfileCard extends StatelessWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFDCFCE7),
+                    color: AppColors.kpiPositiveBackground,
                     borderRadius: BorderRadius.circular(100),
                     border: Border.all(
-                      color: const Color(0xFF86EFAC),
+                      color: AppColors.statusActiveBorder,
                       width: 1,
                     ),
                   ),
@@ -148,15 +145,14 @@ class _OrganizationProfileCard extends StatelessWidget {
                       const Icon(
                         Icons.verified_outlined,
                         size: 12,
-                        color: Color(0xFF15803D),
+                        color: AppColors.kpiPositive,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         'Entity Verified',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
+                        style: AppTypography.labelSmall.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF15803D),
+                          color: AppColors.kpiPositive,
                         ),
                       ),
                     ],
@@ -184,11 +180,11 @@ class _OrganizationProfileCard extends StatelessWidget {
                       border: Border.all(color: AppColors.outlineSubtle),
                     ),
                     child: Text(
-                      (organization.taxIdentification?.trim().isNotEmpty ?? false)
+                      (organization.taxIdentification?.trim().isNotEmpty ??
+                              false)
                           ? organization.taxIdentification!.trim()
                           : '—',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 12,
+                      style: AppTypography.labelMono.copyWith(
                         fontWeight: FontWeight.w600,
                         color: AppColors.onSurface,
                       ),
@@ -203,8 +199,7 @@ class _OrganizationProfileCard extends StatelessWidget {
                     children: [
                       Text(
                         organization.contactName ?? 'Not provided',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
+                        style: AppTypography.bodyMedium.copyWith(
                           fontWeight: FontWeight.w700,
                           color: AppColors.onSurface,
                         ),
@@ -216,33 +211,31 @@ class _OrganizationProfileCard extends StatelessWidget {
                           vertical: 9,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: AppColors.surface,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(color: AppColors.kpiBorder),
                         ),
                         child: Row(
                           children: [
                             const Icon(
                               Icons.mail_outline,
                               size: 16,
-                              color: Color(0xFF0284C7),
+                              color: AppColors.primary,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 organization.contactEmail ?? 'No email',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12.5,
+                                style: AppTypography.labelMedium.copyWith(
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF0F172A),
+                                  color: AppColors.kpiValue,
                                 ),
                               ),
                             ),
                             Text(
                               'Platform Contact',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: const Color(0xFF64748B),
+                              style: AppTypography.labelSmall.copyWith(
+                                color: AppColors.kpiMuted,
                               ),
                             ),
                           ],
@@ -255,33 +248,31 @@ class _OrganizationProfileCard extends StatelessWidget {
                           vertical: 9,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: AppColors.surface,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(color: AppColors.kpiBorder),
                         ),
                         child: Row(
                           children: [
                             const Icon(
                               Icons.call_outlined,
                               size: 16,
-                              color: Color(0xFF0284C7),
+                              color: AppColors.primary,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 organization.contactPhone ?? 'No phone',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12.5,
+                                style: AppTypography.labelMedium.copyWith(
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF0F172A),
+                                  color: AppColors.kpiValue,
                                 ),
                               ),
                             ),
                             Text(
                               'Direct Operations Line',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: const Color(0xFF64748B),
+                              style: AppTypography.labelSmall.copyWith(
+                                color: AppColors.kpiMuted,
                               ),
                             ),
                           ],
@@ -300,9 +291,9 @@ class _OrganizationProfileCard extends StatelessWidget {
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(color: AppColors.kpiBorder),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,16 +301,15 @@ class _OrganizationProfileCard extends StatelessWidget {
                         const Icon(
                           Icons.location_on_outlined,
                           size: 18,
-                          color: Color(0xFF0284C7),
+                          color: AppColors.primary,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             organization.address ?? 'Not provided',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
+                            style: AppTypography.bodyMedium.copyWith(
                               fontWeight: FontWeight.w500,
-                              color: const Color(0xFF0F172A),
+                              color: AppColors.kpiValue,
                               height: 1.4,
                             ),
                           ),
@@ -388,7 +378,7 @@ class _ProfileLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     label,
-    style: GoogleFonts.inter(fontSize: 12, color: AppColors.secondary),
+    style: AppTypography.labelMedium.copyWith(color: AppColors.secondary),
   );
 }
 
@@ -409,7 +399,7 @@ class _OrganizationMetrics extends StatelessWidget {
         AppKpiCard(
           title: 'Stores Active',
           value: '${organization.branchCount}',
-          accentColor: const Color(0xFF003366),
+          accentColor: AppColors.primaryDark,
           icon: Icons.storefront_outlined,
           iconColor: AppColors.primary,
           iconBgColor: AppColors.primaryContainer,
@@ -417,10 +407,10 @@ class _OrganizationMetrics extends StatelessWidget {
         AppKpiCard(
           title: 'Tenant Admins',
           value: '${organization.admins.length}',
-          accentColor: const Color(0xFF0284C7),
+          accentColor: AppColors.primary,
           icon: Icons.people_outline,
-          iconColor: const Color(0xFF0284C7),
-          iconBgColor: const Color(0xFFE0F2FE),
+          iconColor: AppColors.primary,
+          iconBgColor: AppColors.primaryContainer,
         ),
       ],
     );
@@ -455,8 +445,7 @@ class _BrandingAndPaymentCard extends StatelessWidget {
             ),
             child: Text(
               'BRANDING & PAYMENT',
-              style: GoogleFonts.inter(
-                fontSize: 12,
+              style: AppTypography.labelMedium.copyWith(
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.4,
                 color: AppColors.onSurface,
@@ -518,13 +507,7 @@ class _BrandAssetRow extends StatelessWidget {
           border: Border.all(color: AppColors.outlineVariant, width: 1.5),
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
-        child: Center(
-          child: Icon(
-            icon,
-            size: 38,
-            color: AppColors.secondary,
-          ),
-        ),
+        child: Center(child: Icon(icon, size: 38, color: AppColors.secondary)),
       ),
     );
   }
@@ -541,8 +524,7 @@ class _BrandAssetRow extends StatelessWidget {
           children: [
             Text(
               title,
-              style: GoogleFonts.inter(
-                fontSize: 13.5,
+              style: AppTypography.bodyMedium.copyWith(
                 fontWeight: FontWeight.w700,
                 color: AppColors.onSurface,
               ),
@@ -550,8 +532,7 @@ class _BrandAssetRow extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               description,
-              style: GoogleFonts.inter(
-                fontSize: 11,
+              style: AppTypography.labelSmall.copyWith(
                 height: 1.35,
                 color: AppColors.secondary,
               ),
@@ -559,17 +540,11 @@ class _BrandAssetRow extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        FilledButton.tonalIcon(
+        AppButton.primary(
+          text: 'Upload',
+          iconData: Icons.upload_outlined,
+          isFullWidth: false,
           onPressed: onUpload,
-          icon: const Icon(Icons.upload_outlined, size: 16),
-          label: const Text('Upload'),
-          style: FilledButton.styleFrom(
-            foregroundColor: Colors.white,
-            backgroundColor: AppColors.primary,
-            minimumSize: const Size(88, 34),
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            shape: RoundedRectangleBorder(borderRadius: AppSpacing.roundedXs),
-          ),
         ),
       ],
     );
@@ -590,15 +565,13 @@ class _BrandAssetRow extends StatelessWidget {
                 details,
               ],
             )
-          : IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildPlaceholder(width: 104),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(child: details),
-                ],
-              ),
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildPlaceholder(height: 104, width: 104),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(child: details),
+              ],
             ),
     );
   }
@@ -615,18 +588,7 @@ class _DetailsPanel extends StatelessWidget {
       color: AppColors.surfaceContainerLowest,
       border: Border.all(color: AppColors.outlineSubtle),
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x06000000),
-          offset: Offset(0, 2),
-          blurRadius: 8,
-        ),
-        BoxShadow(
-          color: Color(0x04000000),
-          offset: Offset(0, 1),
-          blurRadius: 2,
-        ),
-      ],
+      boxShadow: AppShadows.card,
     ),
     child: child,
   );

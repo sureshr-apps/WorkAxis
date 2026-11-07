@@ -76,6 +76,33 @@ void main() {
       expect(failure.errorMessage, 'Invalid username, email, or password.');
     });
 
+    test('rejects the former universal passwords for every account', () async {
+      for (final identifier in ['owner', 'orgadmin', 'employee']) {
+        for (final password in ['password123', 'Password123']) {
+          final result = await repository.signIn(
+            identifier: identifier,
+            password: password,
+          );
+          expect(
+            result,
+            isA<AuthenticationFailure>(),
+            reason: '$identifier / $password',
+          );
+        }
+      }
+    });
+
+    test('exposes demo credentials only through the mock fixture', () {
+      final accounts = repository.dataSource.demoAccounts;
+      expect(accounts.map((a) => a.label), contains('Platform Owner'));
+      for (final account in accounts) {
+        expect(
+          repository.dataSource.findByIdentifier(account.username)?.password,
+          account.password,
+        );
+      }
+    });
+
     test('fails authentication with unknown identifier', () async {
       final result = await repository.signIn(
         identifier: 'nonexistent_user',

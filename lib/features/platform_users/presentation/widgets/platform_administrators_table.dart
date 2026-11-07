@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
+import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/formatting/date_time_formatters.dart';
+import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
+import 'package:workaxis/core/widgets/table_header_cell.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
+import 'package:workaxis/features/platform_users/domain/administrator_activity_label.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_action_menu.dart';
+import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_avatar.dart';
 
 /// Dense desktop table following the existing WorkAxis Organizations catalog.
 class PlatformAdministratorsTable extends StatelessWidget {
@@ -15,6 +20,7 @@ class PlatformAdministratorsTable extends StatelessWidget {
     required this.administrators,
     required this.onSelect,
     this.onAction,
+    this.now = systemNow,
   });
 
   final List<PlatformAdministrator> administrators;
@@ -25,33 +31,28 @@ class PlatformAdministratorsTable extends StatelessWidget {
   )?
   onAction;
 
+  /// Clock used for the relative "last active" text.
+  final Now now;
+
+  static const double _minimumTableWidth = 1060;
+  static const double _actionsWidth = 80;
+
   @override
   Widget build(BuildContext context) {
-    const minimumTableWidth = 1060.0;
+    final currentTime = now();
     return LayoutBuilder(
       builder: (context, constraints) {
         final tableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-                  .clamp(minimumTableWidth, double.infinity)
+                  .clamp(_minimumTableWidth, double.infinity)
                   .toDouble()
-            : minimumTableWidth;
+            : _minimumTableWidth;
         return Container(
           decoration: BoxDecoration(
             color: AppColors.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            borderRadius: AppSpacing.roundedMd,
             border: Border.all(color: AppColors.outlineSubtle),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x06000000),
-                offset: Offset(0, 2),
-                blurRadius: 8,
-              ),
-              BoxShadow(
-                color: Color(0x04000000),
-                offset: Offset(0, 1),
-                blurRadius: 2,
-              ),
-            ],
+            boxShadow: AppShadows.card,
           ),
           clipBehavior: Clip.antiAlias,
           child: SingleChildScrollView(
@@ -61,92 +62,21 @@ class PlatformAdministratorsTable extends StatelessWidget {
               width: tableWidth,
               child: Column(
                 children: [
-                  _buildHeader(),
-                  for (
-                    var index = 0;
-                    index < administrators.length;
-                    index++
-                  ) ...[
-                    if (index > 0)
+                  const _Header(),
+                  for (var i = 0; i < administrators.length; i++) ...[
+                    if (i > 0)
                       const Divider(
                         height: 1,
                         thickness: 1,
                         color: AppColors.outlineSubtle,
                       ),
-                    _buildRow(administrators[index]),
+                    _Row(
+                      administrator: administrators[i],
+                      now: currentTime,
+                      onTap: () => onSelect(administrators[i]),
+                    ),
                   ],
-                  Container(
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                    ),
-                    decoration: const BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
-                      border: Border(
-                        top: BorderSide(color: AppColors.outlineSubtle),
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Showing ${administrators.length} platform administrators',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppColors.secondary,
-                          ),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Platform Fleet: ',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: AppColors.secondary,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceContainerHigh,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(
-                                  color: AppColors.outlineSubtle,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.statusActive,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    'INDIA',
-                                    style: GoogleFonts.robotoMono(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.onSurface,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  _Footer(count: administrators.length),
                 ],
               ),
             ),
@@ -155,75 +85,86 @@ class PlatformAdministratorsTable extends StatelessWidget {
       },
     );
   }
+}
 
-  Widget _buildHeader() {
+class _Header extends StatelessWidget {
+  const _Header();
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      height: 44,
+      constraints: const BoxConstraints(minHeight: 44),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       color: AppColors.surfaceContainerLow,
       alignment: Alignment.center,
-      child: Row(
+      child: const Row(
         children: [
-          const Expanded(flex: 3, child: _ColumnLabel('USER')),
-          const Expanded(flex: 4, child: _ColumnLabel('SIGN-IN IDENTIFIERS')),
-          const Expanded(flex: 2, child: _ColumnLabel('STATUS')),
-          const Expanded(flex: 2, child: _ColumnLabel('LAST ACTIVE')),
-          const Expanded(flex: 2, child: _ColumnLabel('CREATED')),
-          SizedBox(
-            width: 80,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: _ColumnLabel('ACTIONS', alignEnd: true),
-              ),
-            ),
-          ),
+          TableHeaderCell('USER', flex: 3),
+          TableHeaderCell('SIGN-IN IDENTIFIERS', flex: 4),
+          TableHeaderCell('STATUS', flex: 2),
+          TableHeaderCell('LAST ACTIVE', flex: 2),
+          TableHeaderCell('CREATED', flex: 2),
+          SizedBox(width: PlatformAdministratorsTable._actionsWidth),
         ],
       ),
     );
   }
+}
 
-  Widget _buildRow(PlatformAdministrator administrator) {
+class _Row extends StatelessWidget {
+  const _Row({
+    required this.administrator,
+    required this.now,
+    required this.onTap,
+  });
+
+  final PlatformAdministrator administrator;
+  final DateTime now;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     final statusLabel = administrator.status == AccountStatus.active
         ? 'Active'
         : 'Suspended';
     return InkWell(
-      onTap: () => onSelect(administrator),
+      onTap: onTap,
       hoverColor: AppColors.surfaceContainerLow,
-      child: SizedBox(
-        height: 76,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 76),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
           child: Row(
             children: [
               Expanded(
                 flex: 3,
                 child: Row(
                   children: [
-                    _TableAvatar(initials: administrator.initials),
+                    PlatformAdministratorAvatar(
+                      initials: administrator.initials,
+                      size: 38,
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             administrator.fullName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
+                            style: AppTypography.bodyMedium.copyWith(
                               fontWeight: FontWeight.w600,
-                              color: AppColors.onSurface,
                             ),
                           ),
                           Text(
                             'Platform Administrator',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
+                            style: AppTypography.labelSmall.copyWith(
                               color: AppColors.secondary,
                             ),
                           ),
@@ -236,24 +177,19 @@ class PlatformAdministratorsTable extends StatelessWidget {
               Expanded(
                 flex: 4,
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      administrator.email,
+                      administrator.email.isEmpty ? '—' : administrator.email,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.onSurface,
-                      ),
+                      style: AppTypography.labelMedium,
                     ),
                     Text(
                       '@${administrator.username}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
+                      style: AppTypography.labelSmall.copyWith(
                         color: AppColors.secondary,
                       ),
                     ),
@@ -264,37 +200,30 @@ class PlatformAdministratorsTable extends StatelessWidget {
                 flex: 2,
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: StatusChip.fromStatus(
-                    statusLabel,
-                    width: 96,
-                  ),
+                  child: StatusChip.fromStatus(statusLabel),
                 ),
               ),
               Expanded(
                 flex: 2,
                 child: Text(
-                  _lastActiveLabel(administrator.lastActiveAt),
+                  AdministratorActivityLabel.short(
+                    administrator.lastActiveAt,
+                    now,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: AppColors.onSurfaceVariant,
-                  ),
+                  style: AppTypography.bodySmall,
                 ),
               ),
               Expanded(
                 flex: 2,
                 child: Text(
-                  DateFormat('MMM d, yyyy').format(administrator.createdAt),
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: AppColors.onSurfaceVariant,
-                  ),
+                  AppFormatters.formatDate(administrator.createdAt),
+                  style: AppTypography.bodySmall,
                 ),
               ),
-              // Details Action Pill
               SizedBox(
-                width: 80,
+                width: PlatformAdministratorsTable._actionsWidth,
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: FittedBox(
@@ -304,13 +233,12 @@ class PlatformAdministratorsTable extends StatelessWidget {
                       children: [
                         Text(
                           'Details',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
+                          style: AppTypography.labelMedium.copyWith(
                             fontWeight: FontWeight.w600,
                             color: AppColors.primary,
                           ),
                         ),
-                        const SizedBox(width: 2),
+                        const SizedBox(width: AppSpacing.xxs),
                         const Icon(
                           Icons.chevron_right_rounded,
                           size: 16,
@@ -327,61 +255,26 @@ class PlatformAdministratorsTable extends StatelessWidget {
       ),
     );
   }
-
-  String _lastActiveLabel(DateTime? lastActive) {
-    if (lastActive == null) return 'Never';
-    final elapsed = DateTime.now().difference(lastActive);
-    if (elapsed.inMinutes < 60) return '${elapsed.inMinutes}m ago';
-    if (elapsed.inHours < 24) return '${elapsed.inHours}h ago';
-    if (elapsed.inDays == 1) return 'Yesterday';
-    return '${elapsed.inDays}d ago';
-  }
 }
 
-class _ColumnLabel extends StatelessWidget {
-  const _ColumnLabel(this.label, {this.alignEnd = false});
+class _Footer extends StatelessWidget {
+  const _Footer({required this.count});
 
-  final String label;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      textAlign: alignEnd ? TextAlign.end : TextAlign.start,
-      style: GoogleFonts.inter(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.8,
-        color: AppColors.onSurfaceVariant,
-      ),
-    );
-  }
-}
-
-class _TableAvatar extends StatelessWidget {
-  const _TableAvatar({required this.initials});
-
-  final String initials;
+  final int count;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 38,
-      height: 38,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.outlineSubtle),
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        border: Border(top: BorderSide(color: AppColors.outlineSubtle)),
       ),
+      alignment: Alignment.centerLeft,
       child: Text(
-        initials,
-        style: GoogleFonts.inter(
-          fontSize: 12.5,
-          fontWeight: FontWeight.w700,
-          color: AppColors.primary,
-        ),
+        'Showing $count platform administrators',
+        style: AppTypography.bodySmall.copyWith(color: AppColors.secondary),
       ),
     );
   }

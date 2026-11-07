@@ -10,6 +10,19 @@ class MockAccountRecord {
   final String password;
 }
 
+/// A development-only sign-in shortcut shown on the debug sign-in screen.
+class MockDemoAccount {
+  const MockDemoAccount({
+    required this.label,
+    required this.username,
+    required this.password,
+  });
+
+  final String label;
+  final String username;
+  final String password;
+}
+
 /// In-memory mock data source for representative users across all supported roles.
 class MockAuthDataSource {
   MockAuthDataSource() {
@@ -17,6 +30,35 @@ class MockAuthDataSource {
   }
 
   final Map<String, MockAccountRecord> _recordsByUserId = {};
+
+  /// Fixture credentials surfaced as quick-fill chips (debug + mock only).
+  List<MockDemoAccount> get demoAccounts {
+    MockDemoAccount demo(String label, String username) {
+      final record = findByIdentifier(username)!;
+      return MockDemoAccount(
+        label: label,
+        username: username,
+        password: record.password,
+      );
+    }
+
+    return [
+      demo('Platform Owner', 'owner'),
+      demo('Org Admin', 'orgadmin'),
+      demo('Branch Mgr', 'manager_multi'),
+      demo('Employee', 'employee'),
+    ];
+  }
+
+  /// Replaces the stored password for [userId] (mock password change).
+  void updatePassword(String userId, String newPassword) {
+    final record = _recordsByUserId[userId];
+    if (record == null) return;
+    _recordsByUserId[userId] = MockAccountRecord(
+      user: record.user,
+      password: newPassword,
+    );
+  }
 
   void _initRecords() {
     final records = <MockAccountRecord>[

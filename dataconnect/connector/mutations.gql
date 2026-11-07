@@ -1,14 +1,31 @@
 # WorkAxis Mutations
+#
+# Identity-bearing writes (OrganizationMember, UserBranchAssignment, roles,
+# status) are NOT exposed to clients: they are performed by Cloud Functions
+# (provisionUser, updateUserAccount, setUserStatus) using the Admin SDK.
+# Claims referenced below: role, organizationId, branchIds, status.
+# Unset optional variables must be OMITTED by the client.
+
+# ---------------------------------------------------------------------------
+# Organizations (platform only)
+# ---------------------------------------------------------------------------
 
 mutation CreateOrganization(
-  $id: String!
+  $id: String
   $name: String!
   $code: String!
   $category: String
   $country: String
   $status: String
   $currency: String
-) @auth(level: USER) {
+  $taxIdentification: String
+  $description: String
+  $contactName: String
+  $contactEmail: String
+  $contactPhone: String
+  $address: String
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin'] && (!has(vars.status) || vars.status in ['active','suspended'])") {
   organization_insert(data: {
     id: $id
     name: $name
@@ -17,27 +34,140 @@ mutation CreateOrganization(
     country: $country
     status: $status
     currency: $currency
+    taxIdentification: $taxIdentification
+    description: $description
+    contactName: $contactName
+    contactEmail: $contactEmail
+    contactPhone: $contactPhone
+    address: $address
   })
 }
 
+# Writes category as its own column (no more description-prefix encoding).
+# `status` cannot be changed here: suspension must also revoke member claims,
+# so it goes through the setOrganizationStatus callable.
 mutation UpdateOrganization(
   $id: String!
   $name: String
   $status: String
   $category: String
   $country: String
-) @auth(level: USER) {
+  $currency: String
+  $logoUrl: String
+  $taxIdentification: String
+  $description: String
+  $contactName: String
+  $contactEmail: String
+  $contactPhone: String
+  $address: String
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin'] && !has(vars.status)") {
   organization_update(
     id: $id
     data: {
       name: $name
-      status: $status
       category: $category
       country: $country
+      currency: $currency
+      logoUrl: $logoUrl
+      taxIdentification: $taxIdentification
+      description: $description
+      contactName: $contactName
+      contactEmail: $contactEmail
+      contactPhone: $contactPhone
+      address: $address
     }
   )
 }
 
+mutation CreateCommercialAgreement(
+  $orgId: String!
+  $agreementReference: String!
+  $planName: String!
+  $planTier: String!
+  $negotiatedPrice: Float!
+  $annualMaintenancePrice: Float!
+  $maxStores: Int!
+  $maxUsers: Int!
+  $startDate: Date!
+  $expiryDate: Date!
+  $status: String
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin'] && (!has(vars.status) || vars.status in ['active','suspended'])") {
+  commercialAgreement_insert(data: {
+    organizationId: $orgId
+    agreementReference: $agreementReference
+    planName: $planName
+    planTier: $planTier
+    negotiatedPrice: $negotiatedPrice
+    annualMaintenancePrice: $annualMaintenancePrice
+    maxStores: $maxStores
+    maxUsers: $maxUsers
+    startDate: $startDate
+    expiryDate: $expiryDate
+    status: $status
+  })
+}
+
+mutation UpdateCommercialAgreement(
+  $id: String!
+  $planName: String
+  $planTier: String
+  $negotiatedPrice: Float
+  $annualMaintenancePrice: Float
+  $maxStores: Int
+  $maxUsers: Int
+  $startDate: Date
+  $expiryDate: Date
+  $status: String
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin'] && (!has(vars.status) || vars.status in ['active','suspended'])") {
+  commercialAgreement_update(
+    id: $id
+    data: {
+      planName: $planName
+      planTier: $planTier
+      negotiatedPrice: $negotiatedPrice
+      annualMaintenancePrice: $annualMaintenancePrice
+      maxStores: $maxStores
+      maxUsers: $maxUsers
+      startDate: $startDate
+      expiryDate: $expiryDate
+      status: $status
+    }
+  )
+}
+
+mutation CreateLicenseEvent(
+  $orgId: String!
+  $eventType: String!
+  $planName: String!
+  $planTier: String!
+  $validityPeriod: String!
+  $storesCount: Int!
+  $usersCount: Int!
+  $oneTimePrice: Float!
+  $annualMaintenancePrice: Float!
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin'] && vars.eventType in ['LICENSE_ASSIGNED','PLAN_CHANGED','TERMS_MODIFIED','RENEWED']") {
+  licenseEvent_insert(data: {
+    organizationId: $orgId
+    eventType: $eventType
+    planName: $planName
+    planTier: $planTier
+    validityPeriod: $validityPeriod
+    storesCount: $storesCount
+    usersCount: $usersCount
+    oneTimePrice: $oneTimePrice
+    annualMaintenancePrice: $annualMaintenancePrice
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Branches (platform, or Org Admin of the owning organization)
+# ---------------------------------------------------------------------------
+
+# Legacy signature (client-supplied id). Prefer AddBranch.
 mutation CreateBranch(
   $id: String!
   $orgId: String!
@@ -49,7 +179,8 @@ mutation CreateBranch(
   $latitude: Float
   $longitude: Float
   $kioskEnabled: Boolean
-) @auth(level: USER) {
+)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId)) && (!has(vars.geofenceRadiusMeters) || (vars.geofenceRadiusMeters >= 10 && vars.geofenceRadiusMeters <= 5000)) && (!has(vars.latitude) || (vars.latitude >= -90.0 && vars.latitude <= 90.0)) && (!has(vars.longitude) || (vars.longitude >= -180.0 && vars.longitude <= 180.0))") {
   branch_insert(data: {
     id: $id
     organizationId: $orgId
@@ -64,6 +195,77 @@ mutation CreateBranch(
   })
 }
 
+# Server-generated id (returns it as branch_insert.id).
+mutation AddBranch(
+  $orgId: String!
+  $name: String!
+  $code: String!
+  $location: String
+  $isMainBranch: Boolean
+  $geofenceRadiusMeters: Int
+  $latitude: Float
+  $longitude: Float
+  $kioskEnabled: Boolean
+)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId)) && (!has(vars.geofenceRadiusMeters) || (vars.geofenceRadiusMeters >= 10 && vars.geofenceRadiusMeters <= 5000)) && (!has(vars.latitude) || (vars.latitude >= -90.0 && vars.latitude <= 90.0)) && (!has(vars.longitude) || (vars.longitude >= -180.0 && vars.longitude <= 180.0))") {
+  branch_insert(data: {
+    organizationId: $orgId
+    name: $name
+    code: $code
+    location: $location
+    isMainBranch: $isMainBranch
+    geofenceRadiusMeters: $geofenceRadiusMeters
+    latitude: $latitude
+    longitude: $longitude
+    kioskEnabled: $kioskEnabled
+  })
+}
+
+mutation UpdateBranch(
+  $id: String!
+  $name: String
+  $code: String
+  $location: String
+  $status: String
+  $isMainBranch: Boolean
+  $geofenceRadiusMeters: Int
+  $latitude: Float
+  $longitude: Float
+  $kioskEnabled: Boolean
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin','orgAdmin'] && (!has(vars.status) || vars.status in ['active','suspended']) && (!has(vars.geofenceRadiusMeters) || (vars.geofenceRadiusMeters >= 10 && vars.geofenceRadiusMeters <= 5000)) && (!has(vars.latitude) || (vars.latitude >= -90.0 && vars.latitude <= 90.0)) && (!has(vars.longitude) || (vars.longitude >= -180.0 && vars.longitude <= 180.0))")
+@transaction {
+  query @redact {
+    existing: branch(id: $id)
+    @check(
+      expr: "this != null && (auth.token.role in ['platformOwner','platformAdmin'] || this.organization.id == auth.token.organizationId)"
+      message: "Branch not found or access denied."
+    ) {
+      id
+      organization { id }
+    }
+  }
+  branch_update(
+    id: $id
+    data: {
+      name: $name
+      code: $code
+      location: $location
+      status: $status
+      isMainBranch: $isMainBranch
+      geofenceRadiusMeters: $geofenceRadiusMeters
+      latitude: $latitude
+      longitude: $longitude
+      kioskEnabled: $kioskEnabled
+    }
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Members: client writes are disabled. Use the provisionUser,
+# updateUserAccount and setUserStatus callables.
+# ---------------------------------------------------------------------------
+
 mutation CreateOrganizationMember(
   $id: String!
   $orgId: String!
@@ -73,7 +275,7 @@ mutation CreateOrganizationMember(
   $phone: String
   $role: String!
   $status: String
-) @auth(level: USER) {
+) @auth(level: NO_ACCESS) {
   organizationMember_insert(data: {
     id: $id
     organizationId: $orgId
@@ -86,6 +288,13 @@ mutation CreateOrganizationMember(
   })
 }
 
+# ---------------------------------------------------------------------------
+# Returns
+# ---------------------------------------------------------------------------
+
+# Legacy signature. Submitter must be an Employee or Branch Manager of the
+# branch; employeeUid is stamped from auth.uid; the supplied employeeId must
+# be the caller's member id or uid. Prefer SubmitReturn.
 mutation CreateReturnRecord(
   $id: String!
   $orgId: String!
@@ -96,28 +305,170 @@ mutation CreateReturnRecord(
   $invoiceNumber: String!
   $returnReason: String!
   $amount: Float!
-) @auth(level: USER) {
+  $productTitle: String
+  $quantity: Float
+  $unit: String
+  $billImageUrl: String
+  $remarks: String
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['employee','branchManager'] && auth.token.organizationId == vars.orgId && vars.branchId in auth.token.branchIds && vars.employeeName != ''")
+@transaction {
+  query @redact {
+    me: organizationMember(first: { where: { authUid: { eq_expr: "auth.uid" } } })
+    @check(
+      expr: "this != null && (this.id == vars.employeeId || this.authUid == vars.employeeId)"
+      message: "Submitter does not match the signed-in user."
+    ) {
+      id
+      authUid
+      fullName
+    }
+    targetBranch: branch(id: $branchId)
+    @check(
+      expr: "this != null && this.status == 'active' && this.organization.id == vars.orgId"
+      message: "Branch not found or inactive."
+    ) {
+      id
+      status
+      organization { id }
+    }
+  }
   returnRecord_insert(data: {
     id: $id
     organizationId: $orgId
     branchId: $branchId
     employeeId: $employeeId
-    employeeName: $employeeName
+    employeeUid_expr: "auth.uid"
+    employeeName_expr: "response.query.me.fullName"
     customerName: $customerName
     invoiceNumber: $invoiceNumber
     returnReason: $returnReason
     amount: $amount
+    productTitle: $productTitle
+    quantity: $quantity
+    unit: $unit
+    billImageUrl: $billImageUrl
+    remarks: $remarks
   })
 }
 
-mutation UpdateReturnRecordStatus(
+# Server-generated id; org, submitter id/name and uid are derived server-side.
+mutation SubmitReturn(
+  $branchId: String!
+  $productTitle: String!
+  $returnReason: String!
+  $quantity: Float!
+  $unit: String!
+  $invoiceNumber: String!
+  $billImageUrl: String
+  $remarks: String
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['employee','branchManager'] && vars.branchId in auth.token.branchIds && vars.quantity > 0.0")
+@transaction {
+  query @redact {
+    me: organizationMember(first: { where: { authUid: { eq_expr: "auth.uid" } } })
+    @check(expr: "this != null", message: "Member not found.") {
+      id
+      fullName
+    }
+    targetBranch: branch(id: $branchId)
+    @check(
+      expr: "this != null && this.status == 'active' && this.organization.id == auth.token.organizationId"
+      message: "Branch not found or inactive."
+    ) {
+      id
+      status
+      organization { id }
+    }
+  }
+  returnRecord_insert(data: {
+    organizationId_expr: "auth.token.organizationId"
+    branchId: $branchId
+    employeeId_expr: "response.query.me.id"
+    employeeUid_expr: "auth.uid"
+    employeeName_expr: "response.query.me.fullName"
+    customerName: $productTitle
+    amount: $quantity
+    productTitle: $productTitle
+    quantity: $quantity
+    unit: $unit
+    invoiceNumber: $invoiceNumber
+    returnReason: $returnReason
+    billImageUrl: $billImageUrl
+    remarks: $remarks
+  })
+}
+
+# Review a return. Only an Org Admin of the org or a Branch Manager of the
+# return's branch; only pending returns. Reviewer identity and time are
+# recorded server-side from auth.uid and the request time.
+mutation UpdateReturnRecordReview(
   $id: String!
   $status: String!
-) @auth(level: USER) {
+  $reviewerNotes: String
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['orgAdmin','branchManager'] && vars.status in ['approved','rejected']")
+@transaction {
+  query @redact {
+    reviewer: organizationMember(first: { where: { authUid: { eq_expr: "auth.uid" } } })
+    @check(expr: "this != null", message: "Reviewer not found.") {
+      id
+      fullName
+    }
+    existing: returnRecord(id: $id)
+    @check(
+      expr: "this != null && this.status == 'pending' && ((auth.token.role == 'orgAdmin' && this.organization.id == auth.token.organizationId) || (auth.token.role == 'branchManager' && this.branch.id in auth.token.branchIds))"
+      message: "Return not found, already reviewed, or access denied."
+    ) {
+      id
+      status
+      organization { id }
+      branch { id }
+    }
+  }
   returnRecord_update(
     id: $id
     data: {
       status: $status
+      reviewerNotes: $reviewerNotes
+      reviewerUid_expr: "auth.uid"
+      reviewerName_expr: "response.query.reviewer.fullName"
+      reviewedAt_expr: "request.time"
+    }
+  )
+}
+
+# Legacy signature; same rules as UpdateReturnRecordReview.
+mutation UpdateReturnRecordStatus(
+  $id: String!
+  $status: String!
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['orgAdmin','branchManager'] && vars.status in ['approved','rejected']")
+@transaction {
+  query @redact {
+    reviewer: organizationMember(first: { where: { authUid: { eq_expr: "auth.uid" } } })
+    @check(expr: "this != null", message: "Reviewer not found.") {
+      id
+      fullName
+    }
+    existing: returnRecord(id: $id)
+    @check(
+      expr: "this != null && this.status == 'pending' && ((auth.token.role == 'orgAdmin' && this.organization.id == auth.token.organizationId) || (auth.token.role == 'branchManager' && this.branch.id in auth.token.branchIds))"
+      message: "Return not found, already reviewed, or access denied."
+    ) {
+      id
+      status
+      organization { id }
+      branch { id }
+    }
+  }
+  returnRecord_update(
+    id: $id
+    data: {
+      status: $status
+      reviewerUid_expr: "auth.uid"
+      reviewerName_expr: "response.query.reviewer.fullName"
+      reviewedAt_expr: "request.time"
     }
   )
 }

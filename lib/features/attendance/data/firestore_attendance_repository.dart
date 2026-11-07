@@ -1,22 +1,48 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/errors/backend_error_mapper.dart';
+import 'package:workaxis/core/time/business_time.dart';
+import 'package:workaxis/core/time/clock.dart';
+import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
+import 'package:workaxis/features/attendance/data/attendance_entry_mapper.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
 import 'package:workaxis/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
-/// Production implementation of [AttendanceRepository] utilizing Cloud Firestore (NoSQL)
-/// for high-throughput, exponentially growing attendance event records and batch punches.
+/// Production [AttendanceRepository] on Cloud Firestore.
+///
+/// Reads are scoped before they are sent (organization, active branch or own
+/// uid) so the queries satisfy `firestore.rules`. Manager-created entries and
+/// reviews carry `FieldValue.serverTimestamp()` because the rules require
+/// `checkInAt == request.time` / `reviewedAt == request.time`; business-day
+/// keys are computed in the business timezone from the injected clock, never
+/// from the device-local date. Employee punches do not go through here: they
+/// use the `recordAttendancePunch` callable.
 class FirestoreAttendanceRepository implements AttendanceRepository {
-  FirestoreAttendanceRepository({FirebaseFirestore? firestore})
-      : _customFirestore = firestore;
+  FirestoreAttendanceRepository({FirebaseFirestore? firestore, Now? now})
+    : _customFirestore = firestore,
+      _now = now ?? systemNow;
+
+  /// Upper bound on documents returned by one query.
+  static const int maxEntriesPerQuery = 500;
+
+  /// Firestore batches hold at most 500 writes (one per attendee plus the
+  /// audit record).
+  static const int maxGroupAttendees = 400;
+
+  /// How far back a manager may record a group check-in (see rules).
+  static const int maxBackdateDays = 6;
+
+  /// Written as `source` on manager group entries; the rules require it.
+  static const String groupEntrySource = 'manager-group';
 
   final FirebaseFirestore? _customFirestore;
-  FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
+  final Now _now;
 
-  static final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
+  FirebaseFirestore get _firestore =>
+      _customFirestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('attendance_entries');
@@ -28,63 +54,25 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
     String? activeBranchId,
     String? employeeId,
   }) async {
-    final dateString = _dateFormat.format(date);
-    Query<Map<String, dynamic>> query =
-        _collection.where('workDateString', isEqualTo: dateString);
-
-    // Enforce role-based access scoping
-    if (access.user.isPlatformLevel) {
-      // Platform operators may optionally filter by branch or view all
-      if (activeBranchId != null && activeBranchId.isNotEmpty) {
-        query = query.where('branchId', isEqualTo: activeBranchId);
-      }
-    } else {
-      final orgId = access.organization?.id;
-      if (orgId == null || orgId.isEmpty) {
-        throw const AccessDeniedException(
-          'No organization context associated with current session.',
-        );
-      }
-      query = query.where('organizationId', isEqualTo: orgId);
-
-      switch (access.user.role) {
-        case UserRole.orgAdmin:
-          if (activeBranchId != null && activeBranchId.isNotEmpty) {
-            query = query.where('branchId', isEqualTo: activeBranchId);
-          }
-          break;
-
-        case UserRole.branchManager:
-          final effectiveBranch = activeBranchId ?? access.activeBranch?.branchId;
-          if (effectiveBranch == null ||
-              !access.assignedBranches.any((b) => b.id == effectiveBranch)) {
-            throw const AccessDeniedException(
-              'Branch Manager is not authorized for the requested branch context.',
-            );
-          }
-          query = query.where('branchId', isEqualTo: effectiveBranch);
-          break;
-
-        case UserRole.employee:
-          // Employees are strictly restricted to their own attendance entries
-          query = query.where('employeeId', isEqualTo: access.user.id);
-          break;
-
-        default:
-          throw const AccessDeniedException('Unauthorized role for attendance queries.');
-      }
-    }
-
-    if (employeeId != null && employeeId.isNotEmpty) {
-      query = query.where('employeeId', isEqualTo: employeeId);
-    }
-
     try {
-      final snapshot = await query.get();
-      return snapshot.docs.map((doc) => _mapDocToEntry(doc.id, doc.data())).toList();
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to retrieve attendance entries: ${e.toString()}');
+      final query = _scopedQuery(
+        access: access,
+        dayKey: BusinessTime.keyOfDate(date),
+        requestedBranchId: activeBranchId,
+        requestedEmployeeId: employeeId,
+      );
+      final snapshot = await query.limit(maxEntriesPerQuery).get();
+      final entries = [
+        for (final doc in snapshot.docs)
+          AttendanceEntryMapper.fromData(doc.id, doc.data()),
+      ];
+      entries.sort(
+        (a, b) =>
+            (a.checkInAt ?? a.workDate).compareTo(b.checkInAt ?? b.workDate),
+      );
+      return entries;
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
   }
 
@@ -95,42 +83,46 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
     required String activeBranchId,
     required AttendanceReviewDecision decision,
   }) async {
-    // Only Org Admins or authorized Branch Managers may review exceptions
-    if (access.user.role == UserRole.branchManager) {
-      if (!access.assignedBranches.any((b) => b.id == activeBranchId)) {
+    try {
+      final orgId = _requireManagerOrg(access, 'review attendance exceptions');
+      final isBranchManager = access.user.role == UserRole.branchManager;
+      if (isBranchManager) {
+        _requireAssignedActiveBranch(access, activeBranchId);
+      }
+
+      final docRef = _collection.doc(entryId);
+      final snapshot = await docRef.get();
+      final data = snapshot.data();
+      if (!snapshot.exists || data == null) {
+        throw const NotFoundException('Attendance record not found.');
+      }
+      final inScope =
+          data['organizationId'] == orgId &&
+          (!isBranchManager || data['branchId'] == activeBranchId);
+      if (!inScope) {
         throw const AccessDeniedException(
-          'You are not authorized to review exceptions for this branch.',
+          'Attendance record is outside the reviewer scope.',
         );
       }
-    } else if (access.user.role != UserRole.orgAdmin && !access.user.isPlatformLevel) {
-      throw const AccessDeniedException(
-        'You lack permissions to review attendance exceptions.',
-      );
+
+      final newStatus = decision == AttendanceReviewDecision.verify
+          ? AttendanceReviewStatus.verified
+          : AttendanceReviewStatus.dismissed;
+
+      await docRef.update({
+        'reviewStatus': newStatus.name,
+        'reviewedBy': access.user.name,
+        'reviewedById': access.user.id,
+        'reviewedAt': FieldValue.serverTimestamp(),
+      });
+
+      return AttendanceEntryMapper.fromData(entryId, {
+        ...data,
+        'reviewStatus': newStatus.name,
+      });
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
-
-    final docRef = _collection.doc(entryId);
-    final docSnapshot = await docRef.get();
-    if (!docSnapshot.exists || docSnapshot.data() == null) {
-      throw const NotFoundException('Attendance record not found.');
-    }
-
-    final newReviewStatus = decision == AttendanceReviewDecision.verify
-        ? AttendanceReviewStatus.verified
-        : AttendanceReviewStatus.dismissed;
-
-    final updatePayload = <String, dynamic>{
-      'reviewStatus': newReviewStatus.name,
-      'reviewedBy': access.user.name,
-      'reviewedById': access.user.id,
-      'reviewedAt': FieldValue.serverTimestamp(),
-    };
-
-    await docRef.update(updatePayload);
-
-    final updatedData = Map<String, dynamic>.from(docSnapshot.data()!)
-      ..addAll(updatePayload);
-
-    return _mapDocToEntry(entryId, updatedData);
   }
 
   @override
@@ -138,128 +130,229 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
     required UserAccessContext access,
     required GroupAttendanceRequest request,
   }) async {
-    if (access.user.role == UserRole.branchManager) {
-      if (!access.assignedBranches.any((b) => b.id == request.branchId)) {
-        throw const AccessDeniedException(
-          'You are not authorized to record group check-in for this branch.',
-        );
-      }
-    } else if (access.user.role != UserRole.orgAdmin && !access.user.isPlatformLevel) {
-      throw const AccessDeniedException(
-        'You lack permissions to record group attendance.',
+    try {
+      final orgId = _requireManagerOrg(access, 'record group attendance');
+      _requireAssignedActiveBranch(access, request.branchId);
+      _validateGroupRequest(request);
+
+      final workDate = DateTime(
+        request.workDate.year,
+        request.workDate.month,
+        request.workDate.day,
       );
-    }
+      _requireWithinBackdateWindow(workDate);
+      final dayKey = BusinessTime.keyOfDate(workDate);
 
-    final orgId = access.organization?.id ?? 'org-platform';
-    final dateString = _dateFormat.format(request.workDate);
-    final batch = _firestore.batch();
-    final results = <AttendanceEntry>[];
+      await _rejectAlreadyRecorded(orgId, request, dayKey);
 
-    final batchLogRef = _firestore.collection('group_attendance_batches').doc();
-    batch.set(batchLogRef, {
-      'id': batchLogRef.id,
-      'organizationId': orgId,
-      'branchId': request.branchId,
-      'workDate': dateString,
-      'shiftName': request.shiftName,
-      'attendeeCount': request.attendees.length,
-      'createdBy': access.user.name,
-      'createdById': access.user.id,
-      'createdAt': FieldValue.serverTimestamp(),
-      'note': request.note,
-    });
-
-    for (final attendee in request.attendees) {
-      final docRef = _collection.doc();
-      final entry = AttendanceEntry(
-        id: docRef.id,
-        organizationId: orgId,
-        branchId: request.branchId,
-        employeeId: attendee.employeeId,
-        employeeName: attendee.employeeName,
-        workDate: DateTime(
-          request.workDate.year,
-          request.workDate.month,
-          request.workDate.day,
-        ),
-        status: request.status,
-        reviewStatus: AttendanceReviewStatus.none,
-        checkInAt: request.checkInAt,
-        note: request.note,
-        kioskEntry: false,
-      );
-
-      batch.set(docRef, {
-        'id': entry.id,
-        'organizationId': entry.organizationId,
-        'branchId': entry.branchId,
-        'employeeId': entry.employeeId,
-        'employeeName': entry.employeeName,
-        'workDate': Timestamp.fromDate(entry.workDate),
-        'workDateString': dateString,
-        'status': entry.status.name,
-        'reviewStatus': entry.reviewStatus.name,
-        'checkInAt': Timestamp.fromDate(entry.checkInAt!),
-        'checkOutAt': null,
-        'note': entry.note,
-        'kioskEntry': entry.kioskEntry,
-        'source': 'group_batch',
+      final batch = _firestore.batch();
+      final batchLogRef = _firestore
+          .collection('group_attendance_batches')
+          .doc();
+      batch.set(batchLogRef, {
+        'id': batchLogRef.id,
+        'organizationId': orgId,
+        'branchId': request.branchId,
+        'workDate': dayKey,
+        'shiftName': request.shiftName,
+        'attendeeCount': request.attendees.length,
+        'createdBy': access.user.name,
+        'createdById': access.user.id,
         'createdAt': FieldValue.serverTimestamp(),
+        'note': request.note,
       });
 
-      results.add(entry);
-    }
+      final recordedAt = _now();
+      final results = <AttendanceEntry>[];
+      for (final attendee in request.attendees) {
+        // One entry per employee per day, same id scheme as employee punches.
+        final entryId = '${attendee.employeeId}_$dayKey';
+        batch.set(_collection.doc(entryId), {
+          'id': entryId,
+          'organizationId': orgId,
+          'branchId': request.branchId,
+          'employeeId': attendee.employeeId,
+          'employeeName': attendee.employeeName,
+          'workDate': Timestamp.fromDate(BusinessTime.startOfDay(workDate)),
+          'workDateString': dayKey,
+          'status': request.status.name,
+          'reviewStatus': AttendanceReviewStatus.none.name,
+          'checkInAt': FieldValue.serverTimestamp(),
+          'note': request.note,
+          'kioskEntry': false,
+          'source': groupEntrySource,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        results.add(
+          AttendanceEntry(
+            id: entryId,
+            organizationId: orgId,
+            branchId: request.branchId,
+            employeeId: attendee.employeeId,
+            employeeName: attendee.employeeName,
+            workDate: workDate,
+            status: request.status,
+            reviewStatus: AttendanceReviewStatus.none,
+            // Provisional until the next load returns the server timestamp.
+            checkInAt: recordedAt,
+            note: request.note,
+          ),
+        );
+      }
 
-    try {
       await batch.commit();
       return results;
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to commit group attendance batch: ${e.toString()}');
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
   }
 
-  AttendanceEntry _mapDocToEntry(String docId, Map<String, dynamic> data) {
-    DateTime parseDate(dynamic val, DateTime fallback) {
-      if (val is Timestamp) return val.toDate();
-      if (val is String) return DateTime.tryParse(val) ?? fallback;
-      return fallback;
+  Query<Map<String, dynamic>> _scopedQuery({
+    required UserAccessContext access,
+    required String dayKey,
+    required String? requestedBranchId,
+    required String? requestedEmployeeId,
+  }) {
+    final role = access.user.role;
+    if (role.isPlatformLevel) {
+      throw const AccessDeniedException(
+        'Platform users do not have an organization attendance scope.',
+      );
+    }
+    final orgId = access.organization?.id;
+    if (orgId == null || orgId.isEmpty) {
+      throw const AccessDeniedException(
+        'No organization context associated with current session.',
+      );
     }
 
-    final workDate = parseDate(data['workDate'], DateTime.now());
-    final checkInAt = data['checkInAt'] != null
-        ? parseDate(data['checkInAt'], workDate)
-        : null;
-    final checkOutAt = data['checkOutAt'] != null
-        ? parseDate(data['checkOutAt'], workDate)
-        : null;
+    var query = _collection
+        .where('organizationId', isEqualTo: orgId)
+        .where('workDateString', isEqualTo: dayKey);
 
-    final statusStr = data['status'] as String? ?? 'present';
-    final reviewStr = data['reviewStatus'] as String? ?? 'none';
+    switch (role) {
+      case UserRole.orgAdmin:
+        if (requestedBranchId != null && requestedBranchId.isNotEmpty) {
+          query = query.where('branchId', isEqualTo: requestedBranchId);
+        }
+      case UserRole.branchManager:
+        final branchId = requestedBranchId ?? access.activeBranch?.branchId;
+        if (branchId == null) {
+          throw const AccessDeniedException(
+            'Branch Manager has no active branch context.',
+          );
+        }
+        _requireAssignedActiveBranch(access, branchId);
+        query = query.where('branchId', isEqualTo: branchId);
+      case UserRole.employee:
+        if (requestedEmployeeId != null &&
+            requestedEmployeeId.isNotEmpty &&
+            requestedEmployeeId != access.user.id) {
+          throw const AccessDeniedException(
+            'Employees can only view their own attendance.',
+          );
+        }
+        query = query.where('employeeId', isEqualTo: access.user.id);
+      default:
+        throw const AccessDeniedException(
+          'Unauthorized role for attendance queries.',
+        );
+    }
 
-    final status = AttendanceStatus.values.firstWhere(
-      (s) => s.name.toLowerCase() == statusStr.toLowerCase(),
-      orElse: () => AttendanceStatus.present,
+    if (role != UserRole.employee &&
+        requestedEmployeeId != null &&
+        requestedEmployeeId.isNotEmpty) {
+      query = query.where('employeeId', isEqualTo: requestedEmployeeId);
+    }
+    return query;
+  }
+
+  /// Org Admins and Branch Managers only; returns the organization id.
+  String _requireManagerOrg(UserAccessContext access, String action) {
+    final role = access.user.role;
+    if (role != UserRole.orgAdmin && role != UserRole.branchManager) {
+      throw AccessDeniedException('Role ${role.name} may not $action.');
+    }
+    final orgId = access.organization?.id;
+    if (orgId == null || orgId.isEmpty) {
+      throw const AccessDeniedException(
+        'No organization context associated with current session.',
+      );
+    }
+    return orgId;
+  }
+
+  /// [branchId] must be an active branch in the user's assigned set.
+  void _requireAssignedActiveBranch(UserAccessContext access, String branchId) {
+    final BranchSummary? branch = access.assignedBranches
+        .where((b) => b.id == branchId)
+        .firstOrNull;
+    if (branch == null || !branch.isActive) {
+      throw const AccessDeniedException(
+        'Branch is not an active branch assigned to the current user.',
+      );
+    }
+  }
+
+  void _validateGroupRequest(GroupAttendanceRequest request) {
+    if (request.attendees.isEmpty) {
+      throw const DatabaseException(
+        'Group attendance without attendees.',
+        userMessage: 'Select at least one employee.',
+      );
+    }
+    if (request.attendees.length > maxGroupAttendees) {
+      throw const DatabaseException(
+        'Too many group attendees.',
+        userMessage: 'Record at most $maxGroupAttendees employees at a time.',
+      );
+    }
+    if (request.status != AttendanceStatus.present &&
+        request.status != AttendanceStatus.late) {
+      throw const DatabaseException(
+        'Group attendance status must be present or late.',
+        userMessage: 'Group check-in can only mark employees present or late.',
+      );
+    }
+  }
+
+  void _requireWithinBackdateWindow(DateTime workDate) {
+    final today = BusinessTime.today(_now);
+    final earliest = today.subtract(const Duration(days: maxBackdateDays));
+    if (workDate.isAfter(today) || workDate.isBefore(earliest)) {
+      throw const DatabaseException(
+        'Group attendance date outside the allowed window.',
+        userMessage:
+            'Group check-in can only be recorded for today or the last '
+            '$maxBackdateDays days.',
+      );
+    }
+  }
+
+  /// One entry per employee per day: refuse to overwrite existing ones.
+  Future<void> _rejectAlreadyRecorded(
+    String orgId,
+    GroupAttendanceRequest request,
+    String dayKey,
+  ) async {
+    final existing = await _collection
+        .where('organizationId', isEqualTo: orgId)
+        .where('branchId', isEqualTo: request.branchId)
+        .where('workDateString', isEqualTo: dayKey)
+        .limit(maxEntriesPerQuery)
+        .get();
+    final recorded = {
+      for (final doc in existing.docs) doc.data()['employeeId'] as String?,
+    };
+    final duplicates = request.attendees.where(
+      (a) => recorded.contains(a.employeeId),
     );
-
-    final reviewStatus = AttendanceReviewStatus.values.firstWhere(
-      (r) => r.name.toLowerCase() == reviewStr.toLowerCase(),
-      orElse: () => AttendanceReviewStatus.none,
-    );
-
-    return AttendanceEntry(
-      id: docId,
-      organizationId: data['organizationId'] as String? ?? '',
-      branchId: data['branchId'] as String? ?? '',
-      employeeId: data['employeeId'] as String? ?? '',
-      employeeName: data['employeeName'] as String? ?? 'Employee',
-      workDate: workDate,
-      status: status,
-      reviewStatus: reviewStatus,
-      checkInAt: checkInAt,
-      checkOutAt: checkOutAt,
-      note: data['note'] as String?,
-      kioskEntry: data['kioskEntry'] as bool? ?? false,
-    );
+    if (duplicates.isNotEmpty) {
+      throw const DatabaseException(
+        'Group attendance includes employees already recorded.',
+        userMessage:
+            'Some selected employees already have attendance for this day.',
+      );
+    }
   }
 }

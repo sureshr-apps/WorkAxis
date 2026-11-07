@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attendance_summary.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attention_item.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/organization_dashboard_summary.dart';
@@ -21,55 +19,51 @@ class MockOrganizationDashboardDataSource {
     return const [
       AttentionItem(
         id: 'att-1',
+        kind: AttentionKind.pendingReturns,
+        severity: AttentionSeverity.pending,
         title: 'Return Requests Pending Sign-off',
         subtitle: 'Central Depot & South Bay',
         details: 'High-value freight returns waiting for manager sign-off from Central Depot & South Bay.',
-        statusType: StatusType.pending,
         statusLabel: '7 Items',
         timestamp: '3 hrs ago',
         badgeText: '7 Items',
         actionLabel: 'Review Returns',
-        actionIcon: Icons.arrow_forward,
-        itemIcon: Icons.assignment_return,
       ),
       AttentionItem(
         id: 'att-2',
+        kind: AttentionKind.missingCheckOut,
+        severity: AttentionSeverity.urgent,
         title: 'Missing Check-Out Records',
         subtitle: "Yesterday's night shift",
         details: "Staff from yesterday's night shift finished shift without punch-out terminal verification.",
-        statusType: StatusType.urgent,
         statusLabel: '4 Staff',
         timestamp: '4 hrs ago',
         badgeText: '4 Staff',
         actionLabel: 'Resolve Pings',
-        actionIcon: Icons.done_all,
-        itemIcon: Icons.timer_off,
       ),
       AttentionItem(
         id: 'att-3',
+        kind: AttentionKind.branchOffline,
+        severity: AttentionSeverity.neutral,
         title: 'North Gate Unit Offline',
         subtitle: 'Scheduled dock maintenance',
         details: 'Distribution hub marked Offline for scheduled dock maintenance. Terminal sync paused.',
-        statusType: StatusType.neutral,
         statusLabel: 'Inactive',
         timestamp: 'Today',
         badgeText: 'Inactive',
         actionLabel: 'Inspect Unit',
-        actionIcon: Icons.build,
-        itemIcon: Icons.domain_disabled,
       ),
       AttentionItem(
         id: 'att-4',
+        kind: AttentionKind.shiftTransfers,
+        severity: AttentionSeverity.info,
         title: 'Unassigned Shift Transfers',
         subtitle: 'East Depot & South Bay',
         details: 'Peer exchange requests between East Depot and South Bay pending org confirmation.',
-        statusType: StatusType.active,
         statusLabel: '3 Swaps',
         timestamp: 'Ongoing',
         badgeText: '3 Swaps',
         actionLabel: 'Review',
-        actionIcon: Icons.rule,
-        itemIcon: Icons.swap_horiz,
       ),
     ];
   }

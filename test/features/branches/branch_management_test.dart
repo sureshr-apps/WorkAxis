@@ -22,7 +22,10 @@ void main() {
 
     setUp(() async {
       dataSource = MockAccessDataSource();
-      accessRepo = MockAccessRepository(dataSource: dataSource, delay: Duration.zero);
+      accessRepo = MockAccessRepository(
+        dataSource: dataSource,
+        delay: Duration.zero,
+      );
       branchRepo = MockBranchManagementRepository(accessDataSource: dataSource);
 
       const adminUser = AppUser(
@@ -57,7 +60,28 @@ void main() {
       );
     }
 
-    testWidgets('renders cleanly on smartphone (390x844) without overflow', (tester) async {
+    testWidgets('search field is seeded from the controller query', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      branchController.setSearchQuery('Downtown');
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      final field = tester.widget<TextField>(find.byType(TextField).first);
+      expect(field.controller?.text, 'Downtown');
+      expect(find.text('Downtown Flagship'), findsOneWidget);
+    });
+
+    testWidgets('renders cleanly on smartphone (390x844) without overflow', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -71,14 +95,18 @@ void main() {
       expect(find.text('Branch Management'), findsOneWidget);
       expect(find.text('Downtown Flagship'), findsOneWidget);
 
-      final statusChips = tester.widgetList<StatusChip>(find.byType(StatusChip));
+      final statusChips = tester.widgetList<StatusChip>(
+        find.byType(StatusChip),
+      );
       expect(statusChips, isNotEmpty);
       for (final chip in statusChips) {
         expect(chip.width, 96);
       }
     });
 
-    testWidgets('renders cleanly on tablet (768x1024) without overflow', (tester) async {
+    testWidgets('renders cleanly on tablet (768x1024) without overflow', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(768, 1024);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {

@@ -1,26 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
-import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/constants/app_breakpoints.dart';
+import 'package:workaxis/core/responsive/content_width_scope.dart';
 
 /// Canonical, responsive layout template for KPI sections across all viewports.
 ///
-/// Responsive Adaptations:
-/// - **Smartphone (`isCompact`, < 600dp)**:
-///   Full-width horizontal swipeable PageView with pagination dots. Each tile
-///   spans 100% width, aligning perfectly with other screen sections.
-/// - **Tablet (`isMedium`, 600dp – 839dp)**:
-///   Balanced 2-column grid (rows of 2 `Expanded` cards) spanning 100% width.
-/// - **Desktop / Web (`expanded`, ≥ 840dp)**:
-///   Balanced single-row grid (all cards in a single `Row` of `Expanded` cards).
+/// The layout is chosen from the content width published by the enclosing page
+/// ([ContentWidthScope], which excludes the sidebar), falling back to the screen
+/// width. A `LayoutBuilder` is deliberately avoided: this widget is embedded in
+/// `IntrinsicHeight` rows, which cannot size a `LayoutBuilder`.
+///
+/// - **Compact (< 600dp available)**:
+///   Full-width horizontal swipeable PageView with pagination dots.
+/// - **Medium (600dp – 839dp available)**:
+///   Balanced 2-column grid spanning 100% width.
+/// - **Expanded (>= 840dp available)**:
+///   Balanced single-row grid; falls back to 2 columns if cards would be
+///   narrower than [minCardWidth].
+///
+/// Cards have a minimum height of [cardHeight] and grow with text scale.
 class ResponsiveKpiSection extends StatefulWidget {
   final List<Widget> cards;
   final double cardHeight;
+  final double minCardWidth;
 
   const ResponsiveKpiSection({
     super.key,
     required this.cards,
     this.cardHeight = 96,
+    this.minCardWidth = 160,
   });
 
   @override
@@ -45,90 +54,94 @@ class _ResponsiveKpiSectionState extends State<ResponsiveKpiSection> {
 
   @override
   Widget build(BuildContext context) {
-    final isCompact = context.isCompact;
-    final isMedium = context.isMedium;
+    // Width available to the content (after the sidebar), not the screen.
+    final width = ContentWidthScope.of(context);
+    if (width < AppBreakpoints.mediumMin) return _buildCarousel(context);
+    if (width < AppBreakpoints.expandedMin) return _buildGrid(columns: 2);
+
     final cards = widget.cards;
+    final perCard =
+        (width - AppSpacing.md * (cards.length - 1)) /
+        (cards.isEmpty ? 1 : cards.length);
+    final columns = perCard >= widget.minCardWidth ? cards.length : 2;
+    return _buildGrid(columns: columns < 1 ? 1 : columns);
+  }
 
-    if (isCompact) {
-      // Smartphone: Full-width swipeable PageView with animated pagination dots
-      return Column(
-        children: [
-          SizedBox(
-            height: widget.cardHeight,
-            child: PageView.builder(
-              controller: _pageController,
-              padEnds: false,
-              physics: const BouncingScrollPhysics(),
-              itemCount: cards.length,
-              onPageChanged: (idx) {
-                setState(() => _currentPage = idx);
-              },
-              itemBuilder: (context, index) {
-                return cards[index];
-              },
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(cards.length, (index) {
-              final isSelected = index == _currentPage;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: isSelected ? 20 : 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.outlineVariant,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              );
-            }),
-          ),
-        ],
-      );
-    } else if (isMedium) {
-      // Tablet: 2-column balanced grid spanning 100% width
-      final rows = <Widget>[];
-      for (int i = 0; i < cards.length; i += 2) {
-        final card1 = cards[i];
-        final card2 = (i + 1 < cards.length) ? cards[i + 1] : null;
+  Widget _buildCarousel(BuildContext context) {
+    final cards = widget.cards;
+    // The carousel needs a bounded height; scale it with the text scale so
+    // larger fonts do not overflow.
+    final scaledHeight = MediaQuery.textScalerOf(context)
+        .scale(widget.cardHeight);
+    final height = scaledHeight < widget.cardHeight
+        ? widget.cardHeight
+        : scaledHeight;
 
-        rows.add(
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(height: widget.cardHeight, child: card1),
+    return Column(
+      children: [
+        SizedBox(
+          height: height,
+          child: PageView.builder(
+            controller: _pageController,
+            padEnds: false,
+            physics: const BouncingScrollPhysics(),
+            itemCount: cards.length,
+            onPageChanged: (idx) => setState(() => _currentPage = idx),
+            itemBuilder: (context, index) => cards[index],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(cards.length, (index) {
+            final isSelected = index == _currentPage;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: isSelected ? 20 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.primary
+                    : AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(999),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: card2 != null
-                    ? SizedBox(height: widget.cardHeight, child: card2)
-                    : const SizedBox.shrink(),
-              ),
-            ],
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGrid({required int columns}) {
+    final cards = widget.cards;
+    final rows = <Widget>[];
+    for (var start = 0; start < cards.length; start += columns) {
+      final children = <Widget>[];
+      for (var offset = 0; offset < columns; offset++) {
+        if (offset > 0) children.add(const SizedBox(width: AppSpacing.md));
+        final index = start + offset;
+        children.add(
+          Expanded(
+            child: index < cards.length
+                ? ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: widget.cardHeight),
+                    child: cards[index],
+                  )
+                : const SizedBox.shrink(),
           ),
         );
-        if (i + 2 < cards.length) {
-          rows.add(const SizedBox(height: AppSpacing.md));
-        }
       }
-
-      return Column(children: rows);
-    } else {
-      // Desktop / Web: Balanced N-column row spanning 100% width
-      return Row(
-        children: [
-          for (int i = 0; i < cards.length; i++) ...[
-            if (i > 0) const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: SizedBox(height: widget.cardHeight, child: cards[i]),
-            ),
-          ],
-        ],
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: AppSpacing.md));
+      rows.add(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          ),
+        ),
       );
     }
+    return Column(children: rows);
   }
 }

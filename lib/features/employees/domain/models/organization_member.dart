@@ -12,9 +12,15 @@ class OrganizationMember {
     required this.branchIds,
     required this.status,
     this.phone,
+    this.authUid,
   });
 
+  /// SQL member id (assigned by the server).
   final String id;
+
+  /// Firebase Auth uid of the account; the target of account callables.
+  /// Null for seed rows that have no sign-in identity yet.
+  final String? authUid;
   final String organizationId;
   final String fullName;
   final String username;
@@ -33,20 +39,24 @@ class OrganizationMember {
   }
 
   OrganizationMember copyWith({
+    String? id,
+    String? authUid,
     String? fullName,
     String? username,
     String? email,
     String? phone,
+    bool clearPhone = false,
     UserRole? role,
     List<String>? branchIds,
     AccountStatus? status,
   }) => OrganizationMember(
-    id: id,
+    id: id ?? this.id,
+    authUid: authUid ?? this.authUid,
     organizationId: organizationId,
     fullName: fullName ?? this.fullName,
     username: username ?? this.username,
     email: email ?? this.email,
-    phone: phone ?? this.phone,
+    phone: clearPhone ? null : phone ?? this.phone,
     role: role ?? this.role,
     branchIds: branchIds ?? this.branchIds,
     status: status ?? this.status,

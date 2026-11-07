@@ -1,22 +1,35 @@
-import 'dart:math';
 import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/errors/backend_error_mapper.dart';
+import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/returns/data/data_connect_returns_remote.dart';
+import 'package:workaxis/features/returns/data/returns_remote.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
+import 'package:workaxis/features/returns/domain/services/returns_scope.dart';
 
-/// Production implementation of [ReturnsRepository] using Firebase SQL Connect.
+/// Production [ReturnsRepository] using Firebase SQL Connect.
+///
+/// Employees use `ListMyReturns`, managers `ListReturnsByBranchPaged` for the
+/// active branch, and Organization Admins `ListReturnsByOrgPaged` (one query
+/// for the whole organization, optionally narrowed to a branch).
 class SqlConnectReturnsRepository implements ReturnsRepository {
   SqlConnectReturnsRepository({
     WorkaxisConnectorConnector? connector,
-  }) : _customConnector = connector;
+    ReturnsRemote? remote,
+    this._scope = const ReturnsScope(),
+    Now? now,
+  }) : _remote = remote ?? DataConnectReturnsRemote(connector: connector),
+       _now = now ?? systemNow;
 
-  final WorkaxisConnectorConnector? _customConnector;
-  WorkaxisConnectorConnector get _connector =>
-      _customConnector ?? WorkaxisConnectorConnector.instance;
+  /// Rows fetched per query.
+  static const int pageSize = 100;
 
-  final Random _random = Random();
+  final ReturnsRemote _remote;
+  final ReturnsScope _scope;
+  final Now _now;
 
   @override
   Future<List<ReturnItem>> getReturns({
@@ -24,34 +37,44 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
     String? activeBranchId,
     ReturnStatus? statusFilter,
   }) async {
-    final effectiveBranchId = activeBranchId ??
-        access.activeBranch?.branchId ??
-        (access.assignedBranches.isNotEmpty ? access.assignedBranches.first.id : '');
-
-    if (effectiveBranchId.isEmpty) {
-      return const [];
-    }
-
     try {
-      final response =
-          await _connector.listReturnsByBranch(branchId: effectiveBranchId).execute();
+      final scope = _scope.forRead(access, activeBranchId);
+      final orgId = access.organization!.id;
 
-      var items = response.data.returnRecords
-          .map((r) => _toReturnItem(access, effectiveBranchId, r))
-          .toList();
-
-      if (access.user.role == UserRole.employee) {
-        items = items.where((r) => r.employeeId == access.user.id).toList();
+      if (scope.ownOnly) {
+        return await _remote.listMine(
+          organizationId: orgId,
+          employeeUid: access.user.id,
+          limit: pageSize,
+          status: statusFilter,
+        );
       }
 
-      if (statusFilter != null) {
-        items = items.where((r) => r.status == statusFilter).toList();
+      if (access.user.role == UserRole.orgAdmin) {
+        return await _remote.listByOrganization(
+          organizationId: orgId,
+          limit: pageSize,
+          branchId: scope.branches.length == 1 && activeBranchId != null
+              ? scope.branches.single.id
+              : null,
+          status: statusFilter,
+        );
       }
 
-      return items;
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to retrieve returns: ${e.toString()}');
+      final perBranch = await Future.wait(
+        scope.branches.map(
+          (branch) => _remote.listByBranch(
+            organizationId: orgId,
+            branch: branch,
+            limit: pageSize,
+            status: statusFilter,
+          ),
+        ),
+      );
+      return [for (final rows in perBranch) ...rows]
+        ..sort((a, b) => b.returnDate.compareTo(a.returnDate));
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
   }
 
@@ -61,39 +84,15 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
     String? branchId,
     required CreateReturnInput input,
   }) async {
-    final effectiveBranch = branchId ??
-        access.activeBranch?.branchId ??
-        (access.assignedBranches.isNotEmpty ? access.assignedBranches.first.id : 'br-main');
-
-    final orgId = access.organization?.id ?? 'org-default';
-    final id = 'RET-${_random.nextInt(900000) + 100000}';
-
     try {
-      await _connector
-          .createReturnRecord(
-            id: id,
-            orgId: orgId,
-            branchId: effectiveBranch,
-            employeeId: access.user.id,
-            employeeName: access.user.name,
-            customerName: input.productTitle,
-            invoiceNumber: input.invoiceNumber,
-            returnReason: input.reason.name,
-            amount: input.quantity,
-          )
-          .execute();
-
+      final branch = _scope.forSubmit(access, branchId);
+      final id = await _remote.submit(branchId: branch.id, input: input);
+      final remarks = input.remarks?.trim();
       return ReturnItem(
         id: id,
-        organizationId: orgId,
-        branchId: effectiveBranch,
-        branchName: access.assignedBranches
-                .where((b) => b.id == effectiveBranch)
-                .map((b) => b.name)
-                .firstOrNull ??
-            (access.assignedBranches.isNotEmpty
-                ? access.assignedBranches.first.name
-                : 'Branch'),
+        organizationId: access.organization!.id,
+        branchId: branch.id,
+        branchName: branch.name,
         employeeId: access.user.id,
         employeeName: access.user.name,
         productTitle: input.productTitle,
@@ -101,86 +100,62 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
         quantity: input.quantity,
         unit: input.unit,
         invoiceNumber: input.invoiceNumber,
-        returnDate: DateTime.now(),
+        // Display value until the next load returns the server timestamp.
+        returnDate: _now(),
         status: ReturnStatus.pending,
-        remarks: input.remarks,
         billImageUrl: input.billImageUrl,
+        remarks: remarks == null || remarks.isEmpty ? null : remarks,
       );
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to submit return: ${e.toString()}');
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
   }
 
   @override
   Future<ReturnItem> reviewReturn({
-    required String returnId,
+    required UserAccessContext access,
+    String? activeBranchId,
+    required ReturnItem returnItem,
     required ReturnStatus decision,
-    required String reviewerNotes,
-    required String reviewerName,
+    String? reviewerNotes,
   }) async {
     try {
-      await _connector
-          .updateReturnRecordStatus(id: returnId, status: decision.name)
-          .execute();
+      final branch = _scope.forReview(access, activeBranchId, returnItem);
+      if (decision == ReturnStatus.pending) {
+        throw const DatabaseException(
+          'Review decision must be approved or rejected.',
+        );
+      }
+      if (returnItem.status != ReturnStatus.pending) {
+        throw const DatabaseException(
+          'Return already reviewed.',
+          userMessage: 'This return has already been reviewed.',
+        );
+      }
 
-      return ReturnItem(
-        id: returnId,
-        organizationId: '',
-        branchId: '',
-        branchName: '',
-        employeeId: '',
-        employeeName: '',
-        productTitle: 'Product Return',
-        reason: ReturnReason.damaged,
-        quantity: 1,
-        unit: 'pcs',
-        invoiceNumber: '',
-        returnDate: DateTime.now(),
-        status: decision,
+      await _remote.review(
+        returnId: returnItem.id,
+        decision: decision,
         reviewerNotes: reviewerNotes,
-        reviewedBy: reviewerName,
-        reviewedAt: DateTime.now(),
       );
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to review return: ${e.toString()}');
+
+      // Re-read so reviewer name and review time are the server's values.
+      final refreshed = await _remote.listByBranch(
+        organizationId: access.organization!.id,
+        branch: branch,
+        limit: pageSize,
+      );
+      final updated = refreshed.where((r) => r.id == returnItem.id).firstOrNull;
+      // The decision is already saved; if the row fell outside the first page,
+      // reflect it locally rather than reporting a failure.
+      return updated ??
+          returnItem.copyWith(
+            status: decision,
+            reviewerNotes: reviewerNotes,
+            reviewedBy: access.user.name,
+          );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
-  }
-
-  ReturnItem _toReturnItem(
-    UserAccessContext access,
-    String branchId,
-    ListReturnsByBranchReturnRecords r,
-  ) {
-    final status = ReturnStatus.values.firstWhere(
-      (s) => s.name.toLowerCase() == r.status.toLowerCase(),
-      orElse: () => ReturnStatus.pending,
-    );
-    final reason = ReturnReason.values.firstWhere(
-      (re) => re.name.toLowerCase() == r.returnReason.toLowerCase(),
-      orElse: () => ReturnReason.other,
-    );
-
-    final branchName = access.assignedBranches
-        .where((b) => b.id == branchId)
-        .map((b) => b.name)
-        .firstOrNull ?? 'Branch';
-
-    return ReturnItem(
-      id: r.id,
-      organizationId: access.organization?.id ?? '',
-      branchId: branchId,
-      branchName: branchName,
-      employeeId: r.employeeId,
-      employeeName: r.employeeName,
-      productTitle: r.customerName,
-      reason: reason,
-      quantity: r.amount,
-      unit: 'items',
-      invoiceNumber: r.invoiceNumber,
-      returnDate: r.createdAt.toDateTime(),
-      status: status,
-    );
   }
 }

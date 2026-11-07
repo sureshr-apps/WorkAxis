@@ -1,3 +1,6 @@
+import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/time/business_time.dart';
+import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
@@ -5,8 +8,8 @@ import 'package:workaxis/features/attendance/domain/repositories/attendance_repo
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
 class MockAttendanceRepository implements AttendanceRepository {
-  MockAttendanceRepository() {
-    final today = DateTime.now();
+  MockAttendanceRepository({Now? now}) : _now = now ?? systemNow {
+    final today = BusinessTime.today(_now);
     final entries = [
       _entry(
         'att-01',
@@ -125,6 +128,7 @@ class MockAttendanceRepository implements AttendanceRepository {
     }
   }
 
+  final Now _now;
   final Map<String, AttendanceEntry> _entries = {};
 
   @override
@@ -135,12 +139,18 @@ class MockAttendanceRepository implements AttendanceRepository {
     String? employeeId,
   }) async {
     final organizationId = access.organization?.id;
-    if (organizationId == null) return const [];
+    if (access.user.role.isPlatformLevel || organizationId == null) {
+      throw const AccessDeniedException(
+        'No organization attendance scope for this session.',
+      );
+    }
     final branchId = _validateBranchScope(access, activeBranchId);
     if (access.user.role == UserRole.employee &&
         employeeId != null &&
         employeeId != access.user.id) {
-      throw StateError('Employees can only view their own attendance.');
+      throw const AccessDeniedException(
+        'Employees can only view their own attendance.',
+      );
     }
     final scopedEmployee = access.user.role == UserRole.employee
         ? access.user.id
@@ -177,17 +187,24 @@ class MockAttendanceRepository implements AttendanceRepository {
   }) async {
     if (access.user.role != UserRole.orgAdmin &&
         access.user.role != UserRole.branchManager) {
-      throw StateError('You do not have permission to review attendance.');
+      throw const AccessDeniedException(
+        'You do not have permission to review attendance.',
+      );
     }
     final branchId = _validateBranchScope(access, activeBranchId);
     final entry = _entries[entryId];
     if (entry == null ||
         entry.organizationId != access.organization?.id ||
         (branchId != null && entry.branchId != branchId)) {
-      throw StateError('This attendance record is outside your access scope.');
+      throw const AccessDeniedException(
+        'This attendance record is outside your access scope.',
+      );
     }
     if (entry.reviewStatus != AttendanceReviewStatus.needsReview) {
-      throw StateError('This attendance item has already been reviewed.');
+      throw const DatabaseException(
+        'Attendance already reviewed.',
+        userMessage: 'This attendance item has already been reviewed.',
+      );
     }
     final updated = entry.copyWith(
       reviewStatus: decision == AttendanceReviewDecision.verify
@@ -205,37 +222,49 @@ class MockAttendanceRepository implements AttendanceRepository {
   }) async {
     if (access.user.role != UserRole.orgAdmin &&
         access.user.role != UserRole.branchManager) {
-      throw StateError(
+      throw const AccessDeniedException(
         'You do not have permission to record group attendance.',
       );
     }
     final branchId = _validateBranchScope(access, request.branchId);
     if (branchId == null) {
-      throw StateError(
+      throw const AccessDeniedException(
         'A valid branch must be specified for group attendance.',
       );
     }
     if (request.attendees.isEmpty) {
-      throw StateError('At least one attendee is required.');
+      throw const DatabaseException(
+        'At least one attendee is required.',
+        userMessage: 'Select at least one employee.',
+      );
     }
 
-    final orgId = access.organization?.id ?? 'org-acme';
+    final orgId = access.organization?.id;
+    if (orgId == null) {
+      throw const AccessDeniedException('An organization context is required.');
+    }
     final results = <AttendanceEntry>[];
-    var counter = 0;
+
+    // One entry per employee per day: never record the same person twice.
+    for (final attendee in request.attendees) {
+      final alreadyRecorded = _entries.values.any(
+        (entry) =>
+            entry.organizationId == orgId &&
+            entry.employeeId == attendee.employeeId &&
+            _sameDate(entry.workDate, request.workDate),
+      );
+      if (alreadyRecorded) {
+        throw const DatabaseException(
+          'Group attendance includes employees already recorded.',
+          userMessage:
+              'Some selected employees already have attendance for this day.',
+        );
+      }
+    }
 
     for (final attendee in request.attendees) {
-      // Find if an entry already exists for this employee on this date
-      final existingKey = _entries.keys.cast<String?>().firstWhere((key) {
-        final entry = _entries[key]!;
-        return entry.organizationId == orgId &&
-            entry.branchId == branchId &&
-            entry.employeeId == attendee.employeeId &&
-            _sameDate(entry.workDate, request.workDate);
-      }, orElse: () => null);
-
       final entryId =
-          existingKey ??
-          'att-grp-${DateTime.now().millisecondsSinceEpoch}-${counter++}';
+          'att-grp-${attendee.employeeId}-${BusinessTime.keyOfDate(request.workDate)}';
 
       final finalNote = request.note != null && request.note!.isNotEmpty
           ? '${request.shiftName}: ${request.note}'
@@ -254,7 +283,7 @@ class MockAttendanceRepository implements AttendanceRepository {
         ),
         status: request.status,
         reviewStatus: AttendanceReviewStatus.none,
-        checkInAt: request.checkInAt,
+        checkInAt: _now(),
         note: finalNote,
         kioskEntry: false,
       );
@@ -272,13 +301,17 @@ class MockAttendanceRepository implements AttendanceRepository {
           !access.assignedBranches.any(
             (branch) => branch.id == requested && branch.isActive,
           )) {
-        throw StateError('Choose an active branch assigned to your account.');
+        throw const AccessDeniedException(
+          'Choose an active branch assigned to your account.',
+        );
       }
       return requested;
     }
     if (requested != null &&
         !access.assignedBranches.any((b) => b.id == requested)) {
-      throw StateError('This branch is outside your organization.');
+      throw const AccessDeniedException(
+        'This branch is outside your organization.',
+      );
     }
     return requested;
   }

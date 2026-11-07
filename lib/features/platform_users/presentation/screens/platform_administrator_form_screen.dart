@@ -1,22 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/time/clock.dart';
+import 'package:workaxis/core/validation/contact_validators.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
+import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 import 'package:workaxis/features/platform_users/presentation/controllers/platform_users_controller.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_profile_fields.dart';
 
 class PlatformAdministratorFormScreen extends StatefulWidget {
-  const PlatformAdministratorFormScreen({super.key, this.administratorId});
+  const PlatformAdministratorFormScreen({
+    super.key,
+    this.administratorId,
+    this.now = systemNow,
+  });
 
   final String? administratorId;
+
+  /// Clock used to stamp the draft's creation time.
+  final Now now;
 
   bool get isEditing => administratorId != null;
 
@@ -39,6 +50,7 @@ class _PlatformAdministratorFormScreenState
   String? _nameError;
   String? _usernameError;
   String? _emailError;
+  String? _phoneError;
   String? _passwordError;
   String? _confirmPasswordError;
 
@@ -49,6 +61,9 @@ class _PlatformAdministratorFormScreenState
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadProfile());
     } else {
       _profileLoaded = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<PlatformUsersController>().clearActionError();
+      });
     }
   }
 
@@ -64,9 +79,12 @@ class _PlatformAdministratorFormScreenState
   }
 
   Future<void> _loadProfile() async {
-    final administrator = await context
-        .read<PlatformUsersController>()
-        .loadAdministrator(widget.administratorId!);
+    if (!mounted) return;
+    final controller = context.read<PlatformUsersController>()
+      ..clearActionError();
+    final administrator = await controller.loadAdministrator(
+      widget.administratorId!,
+    );
     if (!mounted) return;
     if (administrator != null) {
       _nameController.text = administrator.fullName;
@@ -79,26 +97,19 @@ class _PlatformAdministratorFormScreenState
 
   bool _validate() {
     final name = _nameController.text.trim();
-    final username = _usernameController.text.trim();
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
     final confirmation = _confirmPasswordController.text;
+    final password = _passwordController.text;
 
     setState(() {
       _nameError = name.isEmpty ? 'Enter the administrator’s full name.' : null;
-      _usernameError = username.isEmpty
-          ? 'Choose a username.'
-          : !RegExp(r'^[a-zA-Z0-9._-]{3,32}$').hasMatch(username)
-          ? 'Use 3–32 letters, numbers, dots, underscores, or hyphens.'
-          : null;
-      _emailError = email.isEmpty
-          ? 'Enter a work email address.'
-          : !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)
-          ? 'Enter a valid email address.'
-          : null;
-      _passwordError = !widget.isEditing && password.length < 8
-          ? 'Use at least 8 characters.'
-          : null;
+      _usernameError = widget.isEditing
+          ? null
+          : ContactValidators.username(_usernameController.text);
+      _emailError = ContactValidators.optionalEmail(_emailController.text);
+      _phoneError = ContactValidators.optionalPhone(_phoneController.text);
+      _passwordError = widget.isEditing
+          ? null
+          : ContactValidators.password(password);
       _confirmPasswordError = !widget.isEditing && confirmation != password
           ? 'Passwords do not match.'
           : null;
@@ -106,6 +117,7 @@ class _PlatformAdministratorFormScreenState
     return _nameError == null &&
         _usernameError == null &&
         _emailError == null &&
+        _phoneError == null &&
         _passwordError == null &&
         _confirmPasswordError == null;
   }
@@ -113,21 +125,26 @@ class _PlatformAdministratorFormScreenState
   Future<void> _save() async {
     if (!_validate()) return;
 
-    final controller = context.read<PlatformUsersController>();
-    controller.clearActionError();
-    final normalizedPhone = _phoneController.text.trim();
+    final controller = context.read<PlatformUsersController>()
+      ..clearActionError();
+    final normalizedPhone = ContactValidators.normalizePhone(
+      _phoneController.text,
+    );
+    final email = _emailController.text.trim().toLowerCase();
     PlatformAdministrator? saved;
 
     if (widget.isEditing) {
       final current = controller.selectedAdministrator;
-      if (current == null) return;
+      if (current == null) {
+        _toast('This administrator is no longer loaded. Go back and retry.');
+        return;
+      }
       saved = await controller.updateAdministrator(
         current.copyWith(
           fullName: _nameController.text.trim(),
-          username: _usernameController.text.trim(),
-          email: _emailController.text.trim().toLowerCase(),
+          email: email,
           phone: normalizedPhone,
-          clearPhone: normalizedPhone.isEmpty,
+          clearPhone: normalizedPhone == null,
         ),
       );
     } else {
@@ -135,42 +152,68 @@ class _PlatformAdministratorFormScreenState
         administrator: PlatformAdministrator(
           id: 'new-platform-administrator',
           fullName: _nameController.text.trim(),
-          username: _usernameController.text.trim(),
-          email: _emailController.text.trim().toLowerCase(),
-          phone: normalizedPhone.isEmpty ? null : normalizedPhone,
+          username: _usernameController.text.trim().toLowerCase(),
+          email: email,
+          phone: normalizedPhone,
           status: AccountStatus.active,
-          createdAt: DateTime.now(),
+          createdAt: widget.now(),
         ),
         initialPassword: _passwordController.text,
       );
     }
 
-    if (!mounted || saved == null) return;
+    if (!mounted) return;
+    if (saved == null) {
+      // The banner above the form shows the reason; scroll position may hide
+      // it, so also announce the failure.
+      _toast(
+        controller.actionErrorMessage ??
+            'The administrator could not be saved. Try again.',
+      );
+      return;
+    }
     _passwordController.clear();
     _confirmPasswordController.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          widget.isEditing
-              ? '${saved.fullName} updated.'
-              : '${saved.fullName} added as a Platform Administrator.',
-        ),
-      ),
+    _toast(
+      widget.isEditing
+          ? '${saved.fullName} updated.'
+          : '${saved.fullName} added as a Platform Administrator.',
     );
     context.go(AppRoutes.platformUserDetailsPath(saved.id));
   }
+
+  void _toast(String message) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
 
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<PlatformUsersController>();
     final isCompact = context.isCompact;
     final current = controller.selectedAdministrator;
+    final currentMatches = current?.id == widget.administratorId;
 
-    if (!_profileLoaded || (widget.isEditing && current == null)) {
-      if (controller.errorMessage != null && !controller.isLoading) {
-        return _LoadError(
-          message: controller.errorMessage!,
-          onBack: () => context.go(AppRoutes.platformUsers),
+    if (!_profileLoaded || (widget.isEditing && !currentMatches)) {
+      if (_profileLoaded && !controller.isLoading) {
+        return Scaffold(
+          body: SafeArea(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ErrorState(
+                  message:
+                      controller.errorMessage ??
+                      'This platform administrator could not be found.',
+                  onRetry: _loadProfile,
+                ),
+                AppButton.outlined(
+                  text: 'Back to Platform Users',
+                  isFullWidth: false,
+                  onPressed: () => context.go(AppRoutes.platformUsers),
+                ),
+              ],
+            ),
+          ),
         );
       }
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -183,19 +226,19 @@ class _PlatformAdministratorFormScreenState
           padding: EdgeInsets.all(isCompact ? AppSpacing.md : AppSpacing.xl),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 860),
+              constraints: const BoxConstraints(
+                maxWidth: AppBreakpoints.maxContentWidth,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TextButton.icon(
-                    onPressed: () => context.go(AppRoutes.platformUsers),
-                    icon: const Icon(Icons.arrow_back, size: 18),
-                    label: const Text('Platform Users'),
-                    style: TextButton.styleFrom(
-                      alignment: Alignment.centerLeft,
-                      minimumSize: const Size(48, 48),
-                      foregroundColor: AppColors.primary,
-                      padding: EdgeInsets.zero,
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppButton.outlined(
+                      text: 'Platform Users',
+                      iconData: Icons.arrow_back,
+                      isFullWidth: false,
+                      onPressed: () => context.go(AppRoutes.platformUsers),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
@@ -210,10 +253,13 @@ class _PlatformAdministratorFormScreenState
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   if (controller.actionErrorMessage != null) ...[
-                    _SubmissionError(message: controller.actionErrorMessage!),
+                    ErrorBanner(
+                      message: controller.actionErrorMessage!,
+                      onDismiss: controller.clearActionError,
+                    ),
                     const SizedBox(height: AppSpacing.md),
                   ],
-                  PlatformAdministratorRoleNote(),
+                  const PlatformAdministratorRoleNote(),
                   const SizedBox(height: AppSpacing.md),
                   PlatformAdministratorProfileFields(
                     nameController: _nameController,
@@ -223,6 +269,8 @@ class _PlatformAdministratorFormScreenState
                     nameError: _nameError,
                     usernameError: _usernameError,
                     emailError: _emailError,
+                    phoneError: _phoneError,
+                    usernameEnabled: !widget.isEditing,
                   ),
                   if (!widget.isEditing) ...[
                     const SizedBox(height: AppSpacing.md),
@@ -297,69 +345,6 @@ class _FormActions extends StatelessWidget {
         const SizedBox(width: AppSpacing.sm),
         save,
       ],
-    );
-  }
-}
-
-class _SubmissionError extends StatelessWidget {
-  const _SubmissionError({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.statusUrgentContainer,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.statusUrgentBorder),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: AppColors.statusUrgent),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: AppColors.statusUrgentText,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LoadError extends StatelessWidget {
-  const _LoadError({required this.message, required this.onBack});
-
-  final String message;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(message, textAlign: TextAlign.center),
-              const SizedBox(height: AppSpacing.md),
-              AppButton.outlined(
-                text: 'Back to Platform Users',
-                onPressed: onBack,
-                isFullWidth: false,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

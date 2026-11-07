@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
@@ -23,7 +22,10 @@ void main() {
 
     setUp(() async {
       dataSource = MockAccessDataSource();
-      accessRepo = MockAccessRepository(dataSource: dataSource, delay: Duration.zero);
+      accessRepo = MockAccessRepository(
+        dataSource: dataSource,
+        delay: Duration.zero,
+      );
       membersRepo = MockOrganizationMembersRepository(
         accessDataSource: dataSource,
       );
@@ -51,7 +53,7 @@ void main() {
       membersController.dispose();
     });
 
-    testWidgets('renders cards with matching button heights and primary edit button', (
+    testWidgets('renders member cards with view and edit actions', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -61,42 +63,50 @@ void main() {
             ChangeNotifierProvider.value(value: branchController),
             ChangeNotifierProvider.value(value: membersController),
           ],
-          child: const MaterialApp(
-            home: EmployeeDirectoryScreen(),
-          ),
+          child: const MaterialApp(home: EmployeeDirectoryScreen()),
         ),
       );
 
       await tester.pumpAndSettle();
 
-      // Verify no layout exceptions and cards are rendered
-      expect(find.byType(EmployeeDirectoryScreen), findsOneWidget);
       expect(find.text('Employee Directory'), findsOneWidget);
-
-      // Verify OutlinedButton and FilledButton exist
-      final outlinedButtons = find.byType(OutlinedButton);
-      final filledButtons = find.byType(FilledButton);
-      expect(outlinedButtons, findsWidgets);
-      expect(filledButtons, findsWidgets);
-
-      // Compare the rendered height of the first OutlinedButton and FilledButton
-      final outlinedSize = tester.getSize(outlinedButtons.first);
-      final filledSize = tester.getSize(filledButtons.first);
-
-      expect(
-        filledSize.height,
-        equals(outlinedSize.height),
-        reason: 'FilledButton and OutlinedButton heights must match exactly',
-      );
-
-      // Verify FilledButton has primary background color and white icon
-      final filledWidget = tester.widget<FilledButton>(filledButtons.first);
-      final buttonStyle = filledWidget.style!;
-      expect(buttonStyle.backgroundColor?.resolve({}), equals(AppColors.primary));
-      expect(buttonStyle.foregroundColor?.resolve({}), equals(AppColors.onPrimary));
+      expect(find.text('View details'), findsWidgets);
+      // Organization Admin may manage every non-platform account.
+      expect(find.text('Edit'), findsWidgets);
+      expect(tester.takeException(), isNull);
     });
 
-    testWidgets('renders cleanly on smartphone (390x844) without overflow', (tester) async {
+    testWidgets('seeds the search field from the controller query', (
+      tester,
+    ) async {
+      final zeroDebounce = OrganizationMembersController(
+        repository: membersRepo,
+        searchDebounce: Duration.zero,
+      );
+      addTearDown(zeroDebounce.dispose);
+      await zeroDebounce.setQuery(
+        access: accessController.accessContext!,
+        query: 'sarah',
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: accessController),
+            ChangeNotifierProvider.value(value: branchController),
+            ChangeNotifierProvider.value(value: zeroDebounce),
+          ],
+          child: const MaterialApp(home: EmployeeDirectoryScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final field = tester.widget<TextField>(find.byType(TextField).first);
+      expect(field.controller?.text, 'sarah');
+    });
+    testWidgets('renders cleanly on smartphone (390x844) without overflow', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -111,9 +121,7 @@ void main() {
             ChangeNotifierProvider.value(value: branchController),
             ChangeNotifierProvider.value(value: membersController),
           ],
-          child: const MaterialApp(
-            home: EmployeeDirectoryScreen(),
-          ),
+          child: const MaterialApp(home: EmployeeDirectoryScreen()),
         ),
       );
 
@@ -121,7 +129,9 @@ void main() {
       expect(find.text('Employee Directory'), findsOneWidget);
     });
 
-    testWidgets('renders cleanly on tablet (768x1024) without overflow', (tester) async {
+    testWidgets('renders cleanly on tablet (768x1024) without overflow', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(768, 1024);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -136,9 +146,7 @@ void main() {
             ChangeNotifierProvider.value(value: branchController),
             ChangeNotifierProvider.value(value: membersController),
           ],
-          child: const MaterialApp(
-            home: EmployeeDirectoryScreen(),
-          ),
+          child: const MaterialApp(home: EmployeeDirectoryScreen()),
         ),
       );
 

@@ -1,18 +1,22 @@
 part of 'workaxis_connector.dart';
 
 class ListOrganizationsVariablesBuilder {
-  
   final FirebaseDataConnect _dataConnect;
-  ListOrganizationsVariablesBuilder(this._dataConnect, );
-  Deserializer<ListOrganizationsData> dataDeserializer = (dynamic json)  => ListOrganizationsData.fromJson(jsonDecode(json));
-  
+  ListOrganizationsVariablesBuilder(this._dataConnect);
+  Deserializer<ListOrganizationsData> dataDeserializer = (dynamic json) =>
+      ListOrganizationsData.fromJson(jsonDecode(json));
+
   Future<QueryResult<ListOrganizationsData, void>> execute() {
     return ref().execute();
   }
 
   QueryRef<ListOrganizationsData, void> ref() {
-    
-    return _dataConnect.query("ListOrganizations", dataDeserializer, emptySerializer, null);
+    return _dataConnect.query(
+      "ListOrganizations",
+      dataDeserializer,
+      emptySerializer,
+      null,
+    );
   }
 }
 
@@ -26,39 +30,53 @@ class ListOrganizationsOrganizations {
   final String status;
   final String? currency;
   final Timestamp createdAt;
-  ListOrganizationsOrganizations.fromJson(dynamic json):
-  
-  id = nativeFromJson<String>(json['id']),
-  name = nativeFromJson<String>(json['name']),
-  code = nativeFromJson<String>(json['code']),
-  category = json['category'] == null ? null : nativeFromJson<String>(json['category']),
-  country = json['country'] == null ? null : nativeFromJson<String>(json['country']),
-  status = nativeFromJson<String>(json['status']),
-  currency = json['currency'] == null ? null : nativeFromJson<String>(json['currency']),
-  createdAt = Timestamp.fromJson(json['createdAt']);
+  ListOrganizationsOrganizations.fromJson(dynamic json)
+    : id = nativeFromJson<String>(json['id']),
+      name = nativeFromJson<String>(json['name']),
+      code = nativeFromJson<String>(json['code']),
+      category = json['category'] == null
+          ? null
+          : nativeFromJson<String>(json['category']),
+      country = json['country'] == null
+          ? null
+          : nativeFromJson<String>(json['country']),
+      status = nativeFromJson<String>(json['status']),
+      currency = json['currency'] == null
+          ? null
+          : nativeFromJson<String>(json['currency']),
+      createdAt = Timestamp.fromJson(json['createdAt']);
   @override
   bool operator ==(Object other) {
-    if(identical(this, other)) {
+    if (identical(this, other)) {
       return true;
     }
-    if(other.runtimeType != runtimeType) {
+    if (other.runtimeType != runtimeType) {
       return false;
     }
 
-    final ListOrganizationsOrganizations otherTyped = other as ListOrganizationsOrganizations;
-    return id == otherTyped.id && 
-    name == otherTyped.name && 
-    code == otherTyped.code && 
-    category == otherTyped.category && 
-    country == otherTyped.country && 
-    status == otherTyped.status && 
-    currency == otherTyped.currency && 
-    createdAt == otherTyped.createdAt;
-    
+    final ListOrganizationsOrganizations otherTyped =
+        other as ListOrganizationsOrganizations;
+    return id == otherTyped.id &&
+        name == otherTyped.name &&
+        code == otherTyped.code &&
+        category == otherTyped.category &&
+        country == otherTyped.country &&
+        status == otherTyped.status &&
+        currency == otherTyped.currency &&
+        createdAt == otherTyped.createdAt;
   }
+
   @override
-  int get hashCode => Object.hashAll([id.hashCode, name.hashCode, code.hashCode, category.hashCode, country.hashCode, status.hashCode, currency.hashCode, createdAt.hashCode]);
-  
+  int get hashCode => Object.hashAll([
+    id.hashCode,
+    name.hashCode,
+    code.hashCode,
+    category.hashCode,
+    country.hashCode,
+    status.hashCode,
+    currency.hashCode,
+    createdAt.hashCode,
+  ]);
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
@@ -94,27 +112,25 @@ class ListOrganizationsOrganizations {
 @immutable
 class ListOrganizationsData {
   final List<ListOrganizationsOrganizations> organizations;
-  ListOrganizationsData.fromJson(dynamic json):
-  
-  organizations = (json['organizations'] as List<dynamic>)
-        .map((e) => ListOrganizationsOrganizations.fromJson(e))
-        .toList();
+  ListOrganizationsData.fromJson(dynamic json)
+    : organizations = (json['organizations'] as List<dynamic>)
+          .map((e) => ListOrganizationsOrganizations.fromJson(e))
+          .toList();
   @override
   bool operator ==(Object other) {
-    if(identical(this, other)) {
+    if (identical(this, other)) {
       return true;
     }
-    if(other.runtimeType != runtimeType) {
+    if (other.runtimeType != runtimeType) {
       return false;
     }
 
     final ListOrganizationsData otherTyped = other as ListOrganizationsData;
     return organizations == otherTyped.organizations;
-    
   }
+
   @override
   int get hashCode => organizations.hashCode;
-  
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
@@ -122,8 +138,5 @@ class ListOrganizationsData {
     return json;
   }
 
-  ListOrganizationsData({
-    required this.organizations,
-  });
+  ListOrganizationsData({required this.organizations});
 }
-

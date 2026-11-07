@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/organization_dashboard/data/mock_organization_dashboard_repository.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/controllers/organization_dashboard_controller.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/screens/organization_home_screen.dart';
+
+import '../../helpers/access_controller_fixture.dart';
+import '../../helpers/access_fixtures.dart';
 
 void main() {
   group('Organization Dashboard Repository & Controller', () {
     test('MockOrganizationDashboardRepository returns valid summary', () async {
       final repo = MockOrganizationDashboardRepository(delay: Duration.zero);
-      final summary = await repo.getOrganizationDashboardSummary();
+      final summary = await repo.getOrganizationDashboardSummary(
+        access: orgAdminAccess(),
+      );
 
       expect(summary.attendance.present, equals(389));
       expect(summary.attendance.totalScheduled, equals(428));
@@ -24,7 +31,7 @@ void main() {
       final controller = OrganizationDashboardController(repository: repo);
 
       expect(controller.status, equals(OrganizationDashboardStatus.initial));
-      await controller.loadDashboard();
+      await controller.loadDashboard(access: orgAdminAccess());
 
       expect(controller.status, equals(OrganizationDashboardStatus.loaded));
       expect(controller.summary?.attendance.present, equals(389));
@@ -37,12 +44,23 @@ void main() {
     ) async {
       final repo = MockOrganizationDashboardRepository(delay: Duration.zero);
       final controller = OrganizationDashboardController(repository: repo);
-      await controller.loadDashboard();
+      final accessController = await resolvedAccessController(
+        UserRole.orgAdmin,
+        'user-oa-01',
+      );
+      await controller.loadDashboard(access: orgAdminAccess());
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider<OrganizationDashboardController>.value(
-            value: controller,
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AccessController>.value(
+                value: accessController,
+              ),
+              ChangeNotifierProvider<OrganizationDashboardController>.value(
+                value: controller,
+              ),
+            ],
             child: const OrganizationHomeScreen(),
           ),
         ),
@@ -82,12 +100,23 @@ void main() {
 
       final repo = MockOrganizationDashboardRepository(delay: Duration.zero);
       final controller = OrganizationDashboardController(repository: repo);
-      await controller.loadDashboard();
+      final accessController = await resolvedAccessController(
+        UserRole.orgAdmin,
+        'user-oa-01',
+      );
+      await controller.loadDashboard(access: orgAdminAccess());
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider<OrganizationDashboardController>.value(
-            value: controller,
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AccessController>.value(
+                value: accessController,
+              ),
+              ChangeNotifierProvider<OrganizationDashboardController>.value(
+                value: controller,
+              ),
+            ],
             child: const OrganizationHomeScreen(),
           ),
         ),
@@ -110,12 +139,23 @@ void main() {
 
       final repo = MockOrganizationDashboardRepository(delay: Duration.zero);
       final controller = OrganizationDashboardController(repository: repo);
-      await controller.loadDashboard();
+      final accessController = await resolvedAccessController(
+        UserRole.orgAdmin,
+        'user-oa-01',
+      );
+      await controller.loadDashboard(access: orgAdminAccess());
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider<OrganizationDashboardController>.value(
-            value: controller,
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AccessController>.value(
+                value: accessController,
+              ),
+              ChangeNotifierProvider<OrganizationDashboardController>.value(
+                value: controller,
+              ),
+            ],
             child: const OrganizationHomeScreen(),
           ),
         ),

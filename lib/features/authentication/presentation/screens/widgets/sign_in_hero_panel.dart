@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
@@ -28,18 +29,13 @@ class SignInHeroPanel extends StatelessWidget {
         children: [
           // Ambient decorative background mesh
           Positioned.fill(
-            child: CustomPaint(
-              painter: _HeroBackgroundPainter(),
-            ),
+            child: CustomPaint(painter: _HeroBackgroundPainter()),
           ),
 
           // Foreground Content
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 48,
-                vertical: 40,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -85,22 +81,19 @@ class SignInHeroPanel extends StatelessWidget {
                               _buildFeatureCard(
                                 icon: Icons.storefront_outlined,
                                 title: 'Multi-Branch Fleet Topology',
-                                description:
-                                    'Centralized roster synchronization and geofenced terminal check-ins across all locations.',
+                                description: 'Centralized roster synchronization and geofenced terminal check-ins across all locations.',
                               ),
                               const SizedBox(height: AppSpacing.md),
                               _buildFeatureCard(
                                 icon: Icons.security_outlined,
                                 title: 'Zero-Trust Scoped Access',
-                                description:
-                                    'Role-governed isolation from platform owners down to frontline operational workers.',
+                                description: 'Role-governed isolation from platform owners down to frontline operational workers.',
                               ),
                               const SizedBox(height: AppSpacing.md),
                               _buildFeatureCard(
                                 icon: Icons.bolt_outlined,
                                 title: 'Sub-Second Roster Telemetry',
-                                description:
-                                    'Live shift tracking, absence exception approvals, and immutable compliance audit trails.',
+                                description: 'Live shift tracking, absence exception approvals, and immutable compliance audit trails.',
                               ),
                             ],
                           ),
@@ -143,11 +136,7 @@ class SignInHeroPanel extends StatelessWidget {
             ],
           ),
           child: const Center(
-            child: Icon(
-              Icons.hub_rounded,
-              color: Colors.white,
-              size: 24,
-            ),
+            child: Icon(Icons.hub_rounded, color: Colors.white, size: 24),
           ),
         ),
         const SizedBox(width: AppSpacing.md),
@@ -184,19 +173,12 @@ class SignInHeroPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF0F326D),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(
-          color: const Color(0xFF26529A),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFF26529A), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.shield_outlined,
-            size: 14,
-            color: Color(0xFF8DB6FF),
-          ),
+          const Icon(Icons.shield_outlined, size: 14, color: Color(0xFF8DB6FF)),
           const SizedBox(width: 6),
           Text(
             'OPERATIONS MANAGEMENT SYSTEM',
@@ -237,11 +219,7 @@ class SignInHeroPanel extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
             ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: const Color(0xFF8DB6FF),
-            ),
+            child: Icon(icon, size: 20, color: const Color(0xFF8DB6FF)),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -334,13 +312,21 @@ class _HeroBackgroundPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 80);
 
     // Large ambient glow in top-right
-    canvas.drawCircle(Offset(size.width * 0.9, size.height * 0.15), 180, paint1);
+    canvas.drawCircle(
+      Offset(size.width * 0.9, size.height * 0.15),
+      180,
+      paint1,
+    );
 
     // Secondary ambient glow in bottom-left
     final paint2 = Paint()
       ..color = const Color(0xFF003893).withValues(alpha: 0.18)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 100);
-    canvas.drawCircle(Offset(size.width * 0.1, size.height * 0.85), 220, paint2);
+    canvas.drawCircle(
+      Offset(size.width * 0.1, size.height * 0.85),
+      220,
+      paint2,
+    );
 
     // Subtle decorative node lines
     final linePaint = Paint()

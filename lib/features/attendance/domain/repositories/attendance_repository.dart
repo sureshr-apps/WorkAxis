@@ -3,6 +3,10 @@ import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart
 import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
 
 abstract interface class AttendanceRepository {
+  /// Entries for the business [date] (a calendar date in the business
+  /// timezone; the time of day is ignored), scoped by [access]: employees see
+  /// only their own, Branch Managers only an active assigned branch, Org
+  /// Admins their organization. Platform users have no attendance scope.
   Future<List<AttendanceEntry>> getAttendance({
     required UserAccessContext access,
     required DateTime date,
@@ -17,6 +21,8 @@ abstract interface class AttendanceRepository {
     required AttendanceReviewDecision decision,
   });
 
+  /// Records a manager group check-in. The server stamps the check-in time;
+  /// [GroupAttendanceRequest.checkInAt] is advisory only.
   Future<List<AttendanceEntry>> markGroupAttendance({
     required UserAccessContext access,
     required GroupAttendanceRequest request,

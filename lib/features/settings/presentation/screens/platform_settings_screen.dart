@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:workaxis/app/config/backend_config.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
-import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/core/responsive/responsive_layout.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
-import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
+import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
+import 'package:workaxis/features/settings/domain/models/platform_settings.dart';
+import 'package:workaxis/features/settings/domain/validators/settings_validators.dart';
+import 'package:workaxis/features/settings/presentation/controllers/settings_controller.dart';
+import 'package:workaxis/features/settings/presentation/widgets/settings_page.dart';
+import 'package:workaxis/features/settings/presentation/widgets/settings_section_card.dart';
 
 class PlatformSettingsScreen extends StatefulWidget {
   const PlatformSettingsScreen({super.key});
@@ -16,11 +19,44 @@ class PlatformSettingsScreen extends StatefulWidget {
 }
 
 class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
-  final _sessionTimeoutController = TextEditingController(text: '60');
-  final _maxAttemptsController = TextEditingController(text: '5');
-  bool _maintenanceMode = false;
-  bool _enforceStrongPasswords = true;
-  bool _isSaving = false;
+  final _sessionTimeoutController = TextEditingController();
+  final _maxAttemptsController = TextEditingController();
+  bool _maintenanceMode = PlatformSettings.defaults.maintenanceMode;
+  bool _enforceStrongPasswords =
+      PlatformSettings.defaults.enforceStrongPasswords;
+
+  /// The loaded settings the form fields were last populated from.
+  PlatformSettings? _populatedFrom;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    final access = context.read<AccessController>().accessContext;
+    if (access == null) return;
+    await context.read<SettingsController>().loadPlatform(access: access);
+  }
+
+  void _populate(PlatformSettings settings) {
+    if (identical(_populatedFrom, settings)) return;
+    _populatedFrom = settings;
+    _sessionTimeoutController.text = '${settings.sessionTimeoutMinutes}';
+    _maxAttemptsController.text = '${settings.maxLoginAttempts}';
+    _maintenanceMode = settings.maintenanceMode;
+    _enforceStrongPasswords = settings.enforceStrongPasswords;
+  }
+
+  /// Unparseable numbers become -1 so validation reports the allowed range.
+  PlatformSettings _collect() => PlatformSettings(
+    sessionTimeoutMinutes:
+        int.tryParse(_sessionTimeoutController.text.trim()) ?? -1,
+    maxLoginAttempts: int.tryParse(_maxAttemptsController.text.trim()) ?? -1,
+    maintenanceMode: _maintenanceMode,
+    enforceStrongPasswords: _enforceStrongPasswords,
+  );
 
   @override
   void dispose() {
@@ -29,373 +65,138 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
     super.dispose();
   }
 
+  void _edited() => context.read<SettingsController>().clearSaveState();
+
+  void _toast(String message, {required bool success}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success
+            ? AppColors.statusActive
+            : AppColors.statusUrgent,
+      ),
+    );
+  }
+
   Future<void> _saveSettings() async {
-    setState(() => _isSaving = true);
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (mounted) {
-      setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Platform configuration saved successfully.'),
-          backgroundColor: AppColors.statusActive,
-        ),
-      );
+    final access = context.read<AccessController>().accessContext;
+    if (access == null) {
+      _toast('Sign in again to save settings.', success: false);
+      return;
     }
+    final controller = context.read<SettingsController>();
+    final saved = await controller.savePlatform(
+      access: access,
+      settings: _collect(),
+    );
+    if (!mounted) return;
+    _toast(
+      saved
+          ? 'Platform configuration saved.'
+          : (controller.saveErrorMessage ??
+                controller.validationErrors.values.firstOrNull ??
+                'Settings could not be saved.'),
+      success: saved,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: ResponsivePageContent(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (context.isCompact) ...[
-                  AppPageHeader(
-                    eyebrow: 'Operations Hub Administration',
-                    title: 'Platform Settings',
-                    subtitle: 'Configure platform parameters, security policies, and system audit logs.',
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: AppButton(
-                      text: 'Save Changes',
-                      iconData: Icons.check,
-                      variant: AppButtonVariant.primary,
-                      isLoading: _isSaving,
-                      onPressed: _saveSettings,
-                    ),
-                  ),
-                ] else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: AppPageHeader(
-                          eyebrow: 'Operations Hub Administration',
-                          title: 'Platform Settings',
-                          subtitle: 'Configure platform parameters, security policies, and system audit logs.',
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      AppButton(
-                        text: 'Save Changes',
-                        iconData: Icons.check,
-                        variant: AppButtonVariant.primary,
-                        isLoading: _isSaving,
-                        onPressed: _saveSettings,
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: AppSpacing.lg),
+    final settings = context.watch<SettingsController>();
+    final loaded = settings.platformSettings;
+    if (loaded != null) _populate(loaded);
+    final errors = settings.validationErrors;
 
-                // Platform Information & Status
-                _buildSystemInfoCard(),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Security & Session Rules
-                _buildSecurityCard(),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Maintenance Mode
-                _buildMaintenanceCard(),
-                const SizedBox(height: AppSpacing.lg),
-
-                // System Audit Trail
-                _buildAuditTrailCard(),
-                const SizedBox(height: AppSpacing.xxl),
-              ],
-            ),
+    return SettingsPage(
+      eyebrow: 'Operations Hub Administration',
+      title: 'Platform Settings',
+      subtitle: 'Configure platform parameters, security policies, and maintenance mode.',
+      controller: settings,
+      status: settings.platformStatus,
+      hasLoaded: loaded != null,
+      loadFallbackMessage: 'Could not load platform settings.',
+      onRetry: _load,
+      onSave: _saveSettings,
+      children: [
+        SettingsSectionCard(
+          icon: Icons.dns_outlined,
+          title: 'Platform Environment & Topology',
+          subtitle: 'Active system tier, version build, and tenant isolation parameters',
+          child: Wrap(
+            spacing: AppSpacing.xl,
+            runSpacing: AppSpacing.md,
+            children: [
+              SettingsReadOnlyValue(
+                label: 'Persistence Architecture',
+                value: BackendConfig.isFirebase
+                    ? 'Firebase & SQL Connect (PostgreSQL)'
+                    : 'Mock First · Contract Ready',
+              ),
+              const SettingsReadOnlyValue(
+                label: 'Tenant Isolation',
+                value: 'Strict Scoped Authorization',
+              ),
+              const SettingsReadOnlyValue(
+                label: 'Audit System',
+                value: 'Active · Server Authoritative',
+              ),
+            ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSystemInfoCard() {
-    return Card(
-      elevation: 0,
-      color: AppColors.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        side: const BorderSide(color: AppColors.outlineSubtle),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.dns_outlined, color: AppColors.primary, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Platform Environment & Topology',
-                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Active system tier, version build, and tenant isolation parameters',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const Divider(height: 1, thickness: 1, color: AppColors.outlineSubtle),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.xl,
-              runSpacing: AppSpacing.md,
-              children: [
-                _buildInfoItem('Console Version', 'WorkAxis v2.4.0 (Build 412)'),
-                _buildInfoItem(
-                  'Persistence Architecture',
-                  BackendConfig.isFirebase
-                      ? 'Firebase & SQL Connect (PostgreSQL)'
-                      : 'Mock First · Contract Ready',
-                ),
-                _buildInfoItem('Tenant Isolation', 'Strict Scoped Authorization'),
-                _buildInfoItem('Audit System', 'Active · Server Authoritative'),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSecurityCard() {
-    final isCompact = context.isCompact;
-
-    return Card(
-      elevation: 0,
-      color: AppColors.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        side: const BorderSide(color: AppColors.outlineSubtle),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.security_outlined, color: AppColors.primary, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Authentication & Session Policies',
-                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
+        SettingsSectionCard(
+          icon: Icons.security_outlined,
+          title: 'Authentication & Session Policies',
+          subtitle:
               'Configure global session timeouts and password requirements',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            if (isCompact) ...[
-              AppTextField(
-                controller: _sessionTimeoutController,
-                label: 'Session Inactivity Timeout (Minutes)',
-                keyboardType: TextInputType.number,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingsFieldPair(
+                first: AppTextField(
+                  controller: _sessionTimeoutController,
+                  label: 'Session Inactivity Timeout (Minutes)',
+                  errorText: errors[SettingsField.sessionTimeout],
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => _edited(),
+                ),
+                second: AppTextField(
+                  controller: _maxAttemptsController,
+                  label: 'Max Failed Sign-In Attempts Before Lockout',
+                  errorText: errors[SettingsField.maxLoginAttempts],
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => _edited(),
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: _maxAttemptsController,
-                label: 'Max Failed Sign-In Attempts Before Lockout',
-                keyboardType: TextInputType.number,
+              SettingsSwitchTile(
+                value: _enforceStrongPasswords,
+                onChanged: (v) {
+                  setState(() => _enforceStrongPasswords = v);
+                  _edited();
+                },
+                title: 'Enforce Strong Password Complexity',
+                subtitle: 'Requires at least 8 characters with numbers and special symbols',
               ),
-            ] else
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: AppTextField(
-                      controller: _sessionTimeoutController,
-                      label: 'Session Inactivity Timeout (Minutes)',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: AppTextField(
-                      controller: _maxAttemptsController,
-                      label: 'Max Failed Sign-In Attempts Before Lockout',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
-            const SizedBox(height: AppSpacing.md),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _enforceStrongPasswords,
-              onChanged: (v) => setState(() => _enforceStrongPasswords = v),
-              title: const Text('Enforce Strong Password Complexity', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              subtitle: const Text('Requires at least 8 characters with numbers and special symbols', style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMaintenanceCard() {
-    return Card(
-      elevation: 0,
-      color: AppColors.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        side: const BorderSide(color: AppColors.outlineSubtle),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.build_circle_outlined, color: AppColors.primary, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Maintenance Window',
-                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Temporarily broadcast maintenance mode across customer organization workspaces',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _maintenanceMode,
-              onChanged: (v) => setState(() => _maintenanceMode = v),
-              title: Text(
-                _maintenanceMode ? 'Maintenance Mode Active' : 'Maintenance Mode Disabled',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: _maintenanceMode ? AppColors.statusUrgentText : AppColors.onSurface,
-                ),
-              ),
-              subtitle: const Text(
-                'When enabled, non-platform users see a non-blocking scheduled maintenance banner.',
-                style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAuditTrailCard() {
-    final auditLogs = [
-      {'action': 'Organization Created', 'detail': 'FreshGrocer Supermarkets (ORG-001) onboarded', 'time': 'Today, 10:14 AM', 'user': 'Alex Vance'},
-      {'action': 'User Role Updated', 'detail': 'Elena Rostova assigned platform management permissions', 'time': 'Yesterday, 4:30 PM', 'user': 'Alex Vance'},
-      {'action': 'Branch Terminal Synced', 'detail': 'Downtown Flagship terminal configuration confirmed', 'time': 'Oct 17, 2:15 PM', 'user': 'System Daemon'},
-    ];
-
-    return Card(
-      elevation: 0,
-      color: AppColors.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        side: const BorderSide(color: AppColors.outlineSubtle),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.history_outlined, color: AppColors.primary, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Recent System Audit Trail',
-                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Immutable log of privileged configuration and access changes',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            for (final log in auditLogs) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(top: 2),
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(log['action']!, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                          Text(log['detail']!, style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(log['user']!, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                        Text(log['time']!, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (log != auditLogs.last)
-                const Divider(height: 1, thickness: 1, color: AppColors.outlineSubtle),
             ],
-          ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildInfoItem(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTypography.labelSmall.copyWith(color: AppColors.textMuted)),
-        const SizedBox(height: 2),
-        Text(value, style: AppTypography.labelMedium.copyWith(fontWeight: FontWeight.w700)),
+        SettingsSectionCard(
+          icon: Icons.build_circle_outlined,
+          title: 'Maintenance Window',
+          subtitle: 'Temporarily broadcast maintenance mode across customer organization workspaces',
+          child: SettingsSwitchTile(
+            value: _maintenanceMode,
+            onChanged: (v) {
+              setState(() => _maintenanceMode = v);
+              _edited();
+            },
+            title: _maintenanceMode
+                ? 'Maintenance Mode Active'
+                : 'Maintenance Mode Disabled',
+            titleColor: _maintenanceMode ? AppColors.statusUrgentText : null,
+            subtitle: 'When enabled, non-platform users see a non-blocking scheduled maintenance banner.',
+          ),
+        ),
       ],
     );
   }

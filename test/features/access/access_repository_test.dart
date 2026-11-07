@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
+import 'package:workaxis/features/access/domain/models/app_permission.dart';
 import 'package:workaxis/features/authentication/data/mock_auth_data_source.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
@@ -24,7 +25,7 @@ void main() {
         expect(context.organization, isNull);
         expect(context.assignedBranches, isEmpty);
         expect(context.requiresBranchSelection, isFalse);
-        expect(context.permissions.contains('platform.owner'), isTrue);
+        expect(context.hasPermission(AppPermission.platformOwner), isTrue);
       },
     );
 
@@ -74,8 +75,9 @@ void main() {
 
       expect(context.user.role, UserRole.branchManager);
       expect(context.organization?.id, 'org-acme');
-      // Assigned to 3 branches total (2 active, 1 inactive)
-      expect(context.assignedBranches.length, 3);
+      // Assigned to 3 branches (2 active, 1 inactive); inactive ones are not
+      // part of the resolved scope, matching the production query.
+      expect(context.assignedBranches.length, 2);
       expect(context.activeAssignedBranches.length, 2);
       expect(context.activeBranch, isNull);
       expect(context.requiresBranchSelection, isTrue);

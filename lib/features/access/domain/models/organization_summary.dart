@@ -4,11 +4,15 @@ class OrganizationSummary {
     required this.id,
     required this.name,
     required this.code,
+    this.isActive = true,
   });
 
   final String id;
   final String name;
   final String code;
+
+  /// False when the organization is suspended; its users are denied access.
+  final bool isActive;
 
   @override
   bool operator ==(Object other) =>

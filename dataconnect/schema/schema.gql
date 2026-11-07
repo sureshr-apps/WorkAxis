@@ -1,7 +1,16 @@
 # WorkAxis Relational Core Schema (Firebase SQL Connect / PostgreSQL)
+#
+# OrganizationMember is the authoritative record for membership, role, status
+# and branch assignments. Firebase Auth custom claims and the Firestore
+# `users/{uid}` profile are projections written only by Cloud Functions.
+# Valid values (not enforceable as DB enums in Data Connect; validated in
+# connector operations and in Cloud Functions):
+#   role   : platformOwner | platformAdmin | orgAdmin | branchManager | employee
+#   status : active | suspended        (organization, branch, member)
+#   return : pending | approved | rejected
 
 type Organization @table {
-  id: String! @col(name: "id")
+  id: String! @col(name: "id") @default(expr: "uuidV4()")
   name: String!
   code: String! @unique
   category: String
@@ -9,11 +18,17 @@ type Organization @table {
   status: String! @default(value: "active")
   currency: String @default(value: "INR")
   logoUrl: String
+  taxIdentification: String
+  description: String
+  contactName: String
+  contactEmail: String
+  contactPhone: String
+  address: String
   createdAt: Timestamp! @default(expr: "request.time")
 }
 
-type Branch @table {
-  id: String! @col(name: "id")
+type Branch @table @unique(fields: ["organization", "code"]) {
+  id: String! @col(name: "id") @default(expr: "uuidV4()")
   organization: Organization!
   name: String!
   code: String!
@@ -28,26 +43,32 @@ type Branch @table {
 }
 
 type OrganizationMember @table {
-  id: String! @col(name: "id")
-  organization: Organization!
+  id: String! @col(name: "id") @default(expr: "uuidV4()")
+  # Null for platform-level roles (platformOwner, platformAdmin).
+  organization: Organization
+  # Firebase Auth uid. Nullable only so pre-provisioning seed rows can exist;
+  # every member created by the provisionUser function has it set.
+  authUid: String @unique
   fullName: String!
   username: String! @unique
+  # Login email. When the admin supplies none, provisionUser stores a
+  # synthetic `<username>@login.workaxis.invalid` address.
   email: String! @unique
-  phone: String
-  role: String! # platformOwner, platformAdmin, orgAdmin, branchManager, employee
+  phone: String @unique
+  role: String!
   status: String! @default(value: "active")
   createdAt: Timestamp! @default(expr: "request.time")
 }
 
-type UserBranchAssignment @table {
-  id: String! @col(name: "id")
+type UserBranchAssignment @table @unique(fields: ["member", "branch"]) {
+  id: String! @col(name: "id") @default(expr: "uuidV4()")
   member: OrganizationMember!
   branch: Branch!
   assignedAt: Timestamp! @default(expr: "request.time")
 }
 
 type CommercialAgreement @table {
-  id: String! @col(name: "id")
+  id: String! @col(name: "id") @default(expr: "uuidV4()")
   organization: Organization!
   agreementReference: String! @unique
   planName: String!
@@ -63,7 +84,7 @@ type CommercialAgreement @table {
 }
 
 type LicenseEvent @table {
-  id: String! @col(name: "id")
+  id: String! @col(name: "id") @default(expr: "uuidV4()")
   organization: Organization!
   eventType: String! # LICENSE_ASSIGNED, PLAN_CHANGED, TERMS_MODIFIED, RENEWED
   planName: String!
@@ -77,15 +98,30 @@ type LicenseEvent @table {
 }
 
 type ReturnRecord @table {
-  id: String! @col(name: "id")
+  id: String! @col(name: "id") @default(expr: "uuidV4()")
   organization: Organization!
   branch: Branch!
+  # Legacy member id as supplied by the client; employeeUid (server-stamped
+  # from auth.uid) is the authoritative submitter identity.
   employeeId: String!
+  employeeUid: String
   employeeName: String!
+  # Legacy columns kept for compatibility: customerName carried the product
+  # title and amount carried the quantity. New writes populate productTitle,
+  # quantity and unit as well.
   customerName: String!
-  invoiceNumber: String!
-  status: String! @default(value: "pending") # pending, verified, rejected
-  returnReason: String!
   amount: Float!
+  productTitle: String
+  quantity: Float
+  unit: String
+  invoiceNumber: String!
+  status: String! @default(value: "pending")
+  returnReason: String!
+  billImageUrl: String
+  remarks: String
+  reviewerNotes: String
+  reviewerUid: String
+  reviewerName: String
+  reviewedAt: Timestamp
   createdAt: Timestamp! @default(expr: "request.time")
 }

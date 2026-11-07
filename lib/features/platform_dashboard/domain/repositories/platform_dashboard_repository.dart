@@ -6,6 +6,6 @@ abstract interface class PlatformDashboardRepository {
   /// Fetches platform-wide summary metrics.
   Future<PlatformDashboardSummary> getPlatformDashboardSummary();
 
-  /// Fetches recently provisioned or managed customer organizations.
+  /// Fetches the most recently created customer organizations (newest first).
   Future<List<RecentOrganizationSummary>> getRecentOrganizations();
 }

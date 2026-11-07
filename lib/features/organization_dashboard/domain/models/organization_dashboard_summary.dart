@@ -9,6 +9,9 @@ class BranchAdherenceSnapshot {
   final double adherenceRate;
   final String adherencePercentage;
 
+  /// Adherence at or above this ratio is shown as on target.
+  static const double onTargetThreshold = 0.90;
+
   const BranchAdherenceSnapshot({
     required this.code,
     required this.name,
@@ -16,6 +19,8 @@ class BranchAdherenceSnapshot {
     required this.adherenceRate,
     required this.adherencePercentage,
   });
+
+  bool get isOnTarget => adherenceRate >= onTargetThreshold;
 }
 
 /// Typed dashboard metrics for Organization Admin Overview.

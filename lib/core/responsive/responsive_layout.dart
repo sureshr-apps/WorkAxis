@@ -40,13 +40,13 @@ extension ResponsiveContext on BuildContext {
   /// - Medium (600 - 839): 24dp (AppSpacing.xl)
   /// - Expanded (>= 840): 32dp (AppSpacing.xxl)
   EdgeInsets get responsivePagePadding => EdgeInsets.symmetric(
-        horizontal: isCompact
-            ? AppSpacing.lg
-            : (isMedium ? AppSpacing.xl : AppSpacing.xxl),
-        vertical: isCompact
-            ? AppSpacing.lg
-            : (isMedium ? AppSpacing.xl : AppSpacing.xxl),
-      );
+    horizontal: isCompact
+        ? AppSpacing.lg
+        : (isMedium ? AppSpacing.xl : AppSpacing.xxl),
+    vertical: isCompact
+        ? AppSpacing.lg
+        : (isMedium ? AppSpacing.xl : AppSpacing.xxl),
+  );
 }
 
 /// A widget that conditionally builds layouts based on available viewport width.

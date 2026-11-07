@@ -1,14 +1,31 @@
+import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
-import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/returns/data/mock_returns_data_source.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
+import 'package:workaxis/features/returns/domain/services/returns_scope.dart';
 
+/// In-memory [ReturnsRepository] enforcing the same scoping as production
+/// (via [ReturnsScope]) so tests exercise the real access rules.
 class MockReturnsRepository implements ReturnsRepository {
-  final MockReturnsDataSource _dataSource;
+  MockReturnsRepository({
+    MockReturnsDataSource? dataSource,
+    this._scope = const ReturnsScope(),
+    Now? now,
+    this.delay = const Duration(milliseconds: 50),
+  }) : _now = now ?? systemNow,
+       _dataSource = dataSource ?? MockReturnsDataSource(now: now);
 
-  MockReturnsRepository({MockReturnsDataSource? dataSource})
-      : _dataSource = dataSource ?? MockReturnsDataSource();
+  final MockReturnsDataSource _dataSource;
+  final ReturnsScope _scope;
+  final Now _now;
+  final Duration delay;
+  int _created = 0;
+
+  Future<void> _latency() async {
+    if (delay > Duration.zero) await Future<void>.delayed(delay);
+  }
 
   @override
   Future<List<ReturnItem>> getReturns({
@@ -16,35 +33,19 @@ class MockReturnsRepository implements ReturnsRepository {
     String? activeBranchId,
     ReturnStatus? statusFilter,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 50));
-    final all = _dataSource.returns;
-    final role = access.user.role;
+    final scope = _scope.forRead(access, activeBranchId);
+    await _latency();
+    final orgId = access.organization!.id;
+    final branchIds = scope.branches.map((b) => b.id).toSet();
 
-    Iterable<ReturnItem> filtered = all;
-
-    if (role == UserRole.employee) {
-      filtered = filtered.where(
-        (r) =>
-            r.employeeId == access.user.id ||
-            r.employeeName == access.user.name ||
-            r.employeeId == 'emp-101' ||
-            r.employeeName == 'Marcus Vance',
-      );
-    } else if (role == UserRole.branchManager) {
-      if (activeBranchId != null) {
-        filtered = filtered.where((r) => r.branchId == activeBranchId);
-      }
-    } else if (role == UserRole.orgAdmin) {
-      filtered = filtered.where(
-        (r) => r.organizationId == access.organization?.id || r.organizationId == 'org-freshgrocer',
-      );
-    }
-
-    if (statusFilter != null) {
-      filtered = filtered.where((r) => r.status == statusFilter);
-    }
-
-    return filtered.toList();
+    return _dataSource.returns
+        .where((r) {
+          if (r.organizationId != orgId) return false;
+          if (scope.ownOnly) return r.employeeId == access.user.id;
+          return branchIds.contains(r.branchId);
+        })
+        .where((r) => statusFilter == null || r.status == statusFilter)
+        .toList();
   }
 
   @override
@@ -53,48 +54,62 @@ class MockReturnsRepository implements ReturnsRepository {
     String? branchId,
     required CreateReturnInput input,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 80));
-    final newId = 'RET-00${_dataSource.returns.length + 1}';
-    final branchName = access.assignedBranches.firstWhere(
-      (b) => b.id == (branchId ?? access.assignedBranches.firstOrNull?.id),
-      orElse: () => access.assignedBranches.isNotEmpty ? access.assignedBranches.first : access.assignedBranches.first,
-    ).name;
-
+    final branch = _scope.forSubmit(access, branchId);
+    await _latency();
+    final remarks = input.remarks?.trim();
     final item = ReturnItem(
-      id: newId,
-      organizationId: access.organization?.id ?? 'org-freshgrocer',
-      branchId: branchId ?? access.assignedBranches.firstOrNull?.id ?? 'branch-dt-01',
-      branchName: branchName,
+      id: 'RET-NEW-${++_created}',
+      organizationId: access.organization!.id,
+      branchId: branch.id,
+      branchName: branch.name,
       employeeId: access.user.id,
-      employeeName: access.user.name.isNotEmpty ? access.user.name : 'Marcus Vance',
+      employeeName: access.user.name,
       productTitle: input.productTitle,
       reason: input.reason,
       quantity: input.quantity,
       unit: input.unit,
       invoiceNumber: input.invoiceNumber,
-      returnDate: DateTime.now(),
+      returnDate: _now(),
       status: ReturnStatus.pending,
       billImageUrl: input.billImageUrl,
-      remarks: input.remarks,
+      remarks: remarks == null || remarks.isEmpty ? null : remarks,
     );
-
     _dataSource.addReturn(item);
     return item;
   }
 
   @override
   Future<ReturnItem> reviewReturn({
-    required String returnId,
+    required UserAccessContext access,
+    String? activeBranchId,
+    required ReturnItem returnItem,
     required ReturnStatus decision,
-    required String reviewerNotes,
-    required String reviewerName,
+    String? reviewerNotes,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 80));
+    _scope.forReview(access, activeBranchId, returnItem);
+    if (decision == ReturnStatus.pending) {
+      throw const DatabaseException(
+        'Review decision must be approved or rejected.',
+      );
+    }
+    await _latency();
+    final stored = _dataSource.returns
+        .where((r) => r.id == returnItem.id)
+        .firstOrNull;
+    if (stored == null || stored.organizationId != access.organization!.id) {
+      throw const NotFoundException('Return not found.');
+    }
+    if (stored.status != ReturnStatus.pending) {
+      throw const DatabaseException(
+        'Return already reviewed.',
+        userMessage: 'This return has already been reviewed.',
+      );
+    }
     return _dataSource.updateStatus(
-      returnId: returnId,
+      returnId: stored.id,
       status: decision,
-      reviewerNotes: reviewerNotes,
-      reviewerName: reviewerName,
+      reviewerNotes: reviewerNotes?.trim(),
+      reviewerName: access.user.name,
     );
   }
 }

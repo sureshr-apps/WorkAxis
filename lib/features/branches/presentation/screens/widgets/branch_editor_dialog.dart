@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/errors/validation_exception.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
+import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
+import 'package:workaxis/features/branches/domain/branch_geofence_validator.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 
+/// Create/edit dialog for a branch. Coordinates start empty for new branches;
+/// geofence rules (including rejecting 0, 0) live in [BranchGeofenceValidator].
 class BranchEditorDialog extends StatefulWidget {
   const BranchEditorDialog({
     super.key,
@@ -14,6 +20,7 @@ class BranchEditorDialog extends StatefulWidget {
     required this.managerOptions,
     required this.isSaving,
     required this.onSave,
+    this.readActionError,
     this.branch,
   });
 
@@ -22,6 +29,9 @@ class BranchEditorDialog extends StatefulWidget {
   final List<BranchManagerOption> managerOptions;
   final bool isSaving;
   final Future<BranchRecord?> Function(BranchRecord branch) onSave;
+
+  /// Latest action error from the owning controller, shown when saving fails.
+  final String? Function()? readActionError;
 
   @override
   State<BranchEditorDialog> createState() => _BranchEditorDialogState();
@@ -49,13 +59,14 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
     _codeController = TextEditingController(text: branch?.code ?? '');
     _locationController = TextEditingController(text: branch?.location ?? '');
     _radiusController = TextEditingController(
-      text: '${branch?.geofenceRadiusMeters ?? 150}',
+      text:
+          '${branch?.geofenceRadiusMeters ?? BranchGeofenceValidator.defaultRadiusMeters}',
     );
     _latitudeController = TextEditingController(
-      text: '${branch?.latitude ?? 0.0}',
+      text: branch?.latitude?.toString() ?? '',
     );
     _longitudeController = TextEditingController(
-      text: '${branch?.longitude ?? 0.0}',
+      text: branch?.longitude?.toString() ?? '',
     );
     _selectedManagers = {...?branch?.managerIds};
     _isActive = branch?.isActive ?? true;
@@ -72,11 +83,9 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final content = ListView(
-      shrinkWrap: true,
-      padding: const EdgeInsets.all(AppSpacing.md),
+  Widget _buildForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AppTextField(
           controller: _nameController,
@@ -108,9 +117,11 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
         ),
         if (widget.managerOptions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),
-          const Text(
+          Text(
             'Branch managers',
-            style: TextStyle(fontWeight: FontWeight.w600),
+            style: AppTypography.bodyMedium.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
           for (final manager in widget.managerOptions)
@@ -136,34 +147,45 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
         ),
         if (_error != null) ...[
           const SizedBox(height: AppSpacing.sm),
-          Text(_error!, style: const TextStyle(color: AppColors.error)),
+          ErrorBanner(message: _error!),
         ],
       ],
     );
-    final actions = [
-      AppButton.outlined(
-        text: 'Cancel',
-        onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-      ),
-      AppButton.primary(
-        text: _editing ? 'Save changes' : 'Create branch',
-        isLoading: _saving || widget.isSaving,
-        onPressed: _save,
-      ),
-    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _editing ? 'Edit branch' : 'Add branch';
+    final cancel = AppButton.outlined(
+      text: 'Cancel',
+      isFullWidth: context.isCompact,
+      onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+    );
+    final save = AppButton.primary(
+      text: _editing ? 'Save changes' : 'Create branch',
+      isFullWidth: context.isCompact,
+      isLoading: _saving || widget.isSaving,
+      onPressed: _save,
+    );
+
     if (context.isCompact) {
       return Dialog.fullscreen(
         child: Scaffold(
-          appBar: AppBar(title: Text(_editing ? 'Edit branch' : 'Add branch')),
-          body: SafeArea(child: content),
+          appBar: AppBar(title: Text(title)),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: _buildForm(),
+            ),
+          ),
           bottomNavigationBar: SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Row(
                 children: [
-                  Expanded(child: actions.first),
+                  Expanded(child: cancel),
                   const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: actions.last),
+                  Expanded(child: save),
                 ],
               ),
             ),
@@ -172,48 +194,48 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
       );
     }
     return Dialog(
-      child: SizedBox(
-        width: 680,
-        height: 680,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 680,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
                 AppSpacing.lg,
-                AppSpacing.md,
+                AppSpacing.lg,
                 AppSpacing.sm,
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _editing ? 'Edit branch' : 'Add branch',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  title,
+                  style: AppTypography.headlineMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onSurface,
                   ),
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.of(context).pop(false),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+                ),
               ),
             ),
             const Divider(height: 1),
-            Expanded(child: content),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: _buildForm(),
+              ),
+            ),
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  actions.first,
+                  cancel,
                   const SizedBox(width: AppSpacing.sm),
-                  actions.last,
+                  save,
                 ],
               ),
             ),
@@ -226,24 +248,35 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
   Future<void> _save() async {
     final name = _nameController.text.trim();
     final location = _locationController.text.trim();
-    final radius = int.tryParse(_radiusController.text.trim());
-    final latitude = double.tryParse(_latitudeController.text.trim());
-    final longitude = double.tryParse(_longitudeController.text.trim());
-    if (name.isEmpty ||
-        location.isEmpty ||
-        radius == null ||
-        radius < 25 ||
-        latitude == null ||
-        longitude == null ||
-        latitude < -90 ||
-        latitude > 90 ||
-        longitude < -180 ||
-        longitude > 180) {
-      setState(
-        () => _error = 'Enter a name, location, radius of at least 25 metres, and valid coordinates.',
-      );
+    if (name.isEmpty || location.isEmpty) {
+      setState(() => _error = 'Enter a branch name and location.');
       return;
     }
+    final radius = int.tryParse(_radiusController.text.trim());
+    if (radius == null) {
+      setState(() => _error = 'Enter the geofence radius in whole metres.');
+      return;
+    }
+    final latText = _latitudeController.text.trim();
+    final lngText = _longitudeController.text.trim();
+    final latitude = latText.isEmpty ? null : double.tryParse(latText);
+    final longitude = lngText.isEmpty ? null : double.tryParse(lngText);
+    if ((latText.isNotEmpty && latitude == null) ||
+        (lngText.isNotEmpty && longitude == null)) {
+      setState(() => _error = 'Enter valid geofence coordinates.');
+      return;
+    }
+    try {
+      BranchGeofenceValidator.validate(
+        latitude: latitude,
+        longitude: longitude,
+        radiusMeters: radius,
+      );
+    } on ValidationException catch (e) {
+      setState(() => _error = e.userMessage);
+      return;
+    }
+
     final previous = widget.branch;
     final draft = BranchRecord(
       summary: BranchSummary(
@@ -258,6 +291,7 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
       geofenceRadiusMeters: radius,
       latitude: latitude,
       longitude: longitude,
+      isMainBranch: previous?.isMainBranch ?? false,
       managerIds: _selectedManagers.toList(growable: false),
       kioskStatus: previous?.kioskStatus ?? KioskPairingStatus.notPaired,
     );
@@ -270,7 +304,9 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
     if (saved == null) {
       setState(() {
         _saving = false;
-        _error = 'Could not save this branch. Try again.';
+        _error =
+            widget.readActionError?.call() ??
+            'Could not save this branch. Try again.';
       });
     } else {
       Navigator.of(context).pop(true);
@@ -284,17 +320,20 @@ class _CoordinatesRow extends StatelessWidget {
   final TextEditingController latitude;
   final TextEditingController longitude;
 
+  static const _keyboard = TextInputType.numberWithOptions(
+    decimal: true,
+    signed: true,
+  );
+
   @override
   Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(
         child: AppTextField(
           controller: latitude,
           label: 'Latitude',
-          keyboardType: const TextInputType.numberWithOptions(
-            decimal: true,
-            signed: true,
-          ),
+          keyboardType: _keyboard,
         ),
       ),
       const SizedBox(width: AppSpacing.sm),
@@ -302,10 +341,7 @@ class _CoordinatesRow extends StatelessWidget {
         child: AppTextField(
           controller: longitude,
           label: 'Longitude',
-          keyboardType: const TextInputType.numberWithOptions(
-            decimal: true,
-            signed: true,
-          ),
+          keyboardType: _keyboard,
         ),
       ),
     ],

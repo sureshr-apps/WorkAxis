@@ -13,6 +13,9 @@ import 'package:workaxis/features/returns/presentation/controllers/returns_contr
 import 'package:workaxis/features/returns/presentation/screens/employee_returns_screen.dart';
 import 'package:workaxis/features/returns/presentation/screens/returns_operations_screen.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/return_card_item.dart';
+import 'package:workaxis/features/returns/presentation/screens/widgets/returns_table.dart';
+
+import '../../helpers/fixed_clock.dart';
 
 void main() {
   late MockAccessDataSource accessDataSource;
@@ -28,7 +31,10 @@ void main() {
       dataSource: accessDataSource,
       delay: Duration.zero,
     );
-    returnsRepository = MockReturnsRepository();
+    returnsRepository = MockReturnsRepository(
+      now: fixedNow,
+      delay: Duration.zero,
+    );
     accessController = AccessController(accessRepository: accessRepository);
     branchContextController = BranchContextController();
     returnsController = ReturnsController(repository: returnsRepository);
@@ -55,18 +61,29 @@ void main() {
 
     await accessController.resolveAccess(
       AppUser(
-        id: 'user-oa-01',
+        id: role == UserRole.branchManager ? 'user-bm-multi-01' : 'user-oa-01',
         name: 'Jordan Lee',
         username: 'jordan.lee',
         role: role,
         organizationId: 'org-acme',
       ),
     );
+    final resolved = accessController.accessContext;
+    if (resolved != null) {
+      branchContextController.initFromAccessContext(resolved);
+      if (role == UserRole.branchManager) {
+        branchContextController.selectBranch(
+          resolved.assignedBranches.firstWhere((b) => b.id == 'br-01'),
+        );
+      }
+    }
 
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<AccessController>.value(value: accessController),
+          ChangeNotifierProvider<AccessController>.value(
+            value: accessController,
+          ),
           ChangeNotifierProvider<BranchContextController>.value(
             value: branchContextController,
           ),
@@ -110,7 +127,9 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<AccessController>.value(value: accessController),
+          ChangeNotifierProvider<AccessController>.value(
+            value: accessController,
+          ),
           ChangeNotifierProvider<ReturnsController>.value(
             value: returnsController,
           ),
@@ -127,41 +146,66 @@ void main() {
   }
 
   group('Returns Operations Screen Tests', () {
-    testWidgets('renders Organization Returns on desktop with table', (tester) async {
-      await pumpReturnsOperationsScreen(tester, role: UserRole.orgAdmin, width: 1200);
+    testWidgets('renders Organization Returns on desktop with table', (
+      tester,
+    ) async {
+      await pumpReturnsOperationsScreen(
+        tester,
+        role: UserRole.orgAdmin,
+        width: 1200,
+      );
 
       expect(find.text('Organization Returns'), findsOneWidget);
       expect(find.text('Pending review'), findsOneWidget);
       expect(find.text('Total returns'), findsOneWidget);
-      expect(find.byType(Table), findsOneWidget);
+      expect(find.byType(SliverReturnsTable), findsOneWidget);
     });
 
-    testWidgets('renders cleanly on smartphone (390x844) with ReturnCardItem list and zero overflow', (tester) async {
-      await pumpReturnsOperationsScreen(tester, role: UserRole.orgAdmin, width: 390, height: 844);
+    testWidgets(
+      'renders cleanly on smartphone (390x844) with ReturnCardItem list and zero overflow',
+      (tester) async {
+        await pumpReturnsOperationsScreen(
+          tester,
+          role: UserRole.orgAdmin,
+          width: 390,
+          height: 844,
+        );
 
-      expect(find.text('Organization Returns'), findsOneWidget);
-      expect(find.byType(ReturnCardItem), findsWidgets);
-      expect(tester.takeException(), isNull);
-    });
+        expect(find.text('Organization Returns'), findsOneWidget);
+        expect(find.byType(ReturnCardItem), findsWidgets);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-    testWidgets('renders cleanly on tablet (768x1024) with 2-column grid and zero overflow', (tester) async {
-      await pumpReturnsOperationsScreen(tester, role: UserRole.branchManager, width: 768, height: 1024);
+    testWidgets(
+      'renders cleanly on tablet (768x1024) with 2-column grid and zero overflow',
+      (tester) async {
+        await pumpReturnsOperationsScreen(
+          tester,
+          role: UserRole.branchManager,
+          width: 768,
+          height: 1024,
+        );
 
-      expect(find.text('Branch Returns'), findsOneWidget);
-      expect(find.byType(ReturnCardItem), findsWidgets);
-      expect(tester.takeException(), isNull);
-    });
+        expect(find.text('Branch Returns'), findsOneWidget);
+        expect(find.byType(ReturnCardItem), findsWidgets);
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 
   group('Employee Returns Screen Tests', () {
-    testWidgets('renders My Returns and Submit Return button on smartphone (390x844)', (tester) async {
-      await pumpEmployeeReturnsScreen(tester, width: 390, height: 844);
+    testWidgets(
+      'renders My Returns and Submit Return button on smartphone (390x844)',
+      (tester) async {
+        await pumpEmployeeReturnsScreen(tester, width: 390, height: 844);
 
-      expect(find.text('My Returns'), findsOneWidget);
-      expect(find.text('Submit Return'), findsOneWidget);
-      expect(find.byType(ReturnCardItem), findsWidgets);
-      expect(tester.takeException(), isNull);
-    });
+        expect(find.text('My Returns'), findsOneWidget);
+        expect(find.text('Submit Return'), findsOneWidget);
+        expect(find.byType(ReturnCardItem), findsWidgets);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('renders cleanly on tablet (768x1024)', (tester) async {
       await pumpEmployeeReturnsScreen(tester, width: 768, height: 1024);

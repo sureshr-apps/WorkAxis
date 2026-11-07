@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
+import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 
-/// Card representation of a customer organization designed for smartphone and tablet portrait.
+/// Card for a customer organization on smartphone and tablet widths.
+///
+/// Tapping the card (or "Details") opens the organization; the pencil button
+/// opens the edit form.
 class OrganizationCardItem extends StatelessWidget {
-  final CustomerOrganization organization;
-  final VoidCallback onTap;
-  final VoidCallback onEdit;
-
   const OrganizationCardItem({
     super.key,
     required this.organization,
@@ -19,206 +19,224 @@ class OrganizationCardItem extends StatelessWidget {
     required this.onEdit,
   });
 
+  final CustomerOrganization organization;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('MMM dd, yyyy');
-
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.outlineSubtle, width: 1),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x06000000),
-            offset: Offset(0, 2),
-            blurRadius: 6,
-          ),
-        ],
+        borderRadius: AppSpacing.roundedMd,
+        border: Border.all(color: AppColors.outlineSubtle),
+        boxShadow: AppShadows.card,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: AppSpacing.roundedMd,
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top Row: Name + Code Badge on left, StatusChip on right
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          organization.name,
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.onSurface,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceContainerLow,
-                            borderRadius:
-                                BorderRadius.circular(AppSpacing.radiusXs),
-                            border: Border.all(
-                              color: AppColors.outlineSubtle,
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            organization.code,
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  StatusChip.fromStatus(
-                    organization.status.displayName,
-                    width: 96,
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-
-              // Metrics Row
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                  border: Border.all(
-                    color: AppColors.outlineSubtle.withValues(alpha: 0.6),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildMetric(
-                      count: '${organization.branchCount}',
-                      label: 'hubs',
-                      icon: Icons.storefront_outlined,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            organization.name,
+                            style: AppTypography.titleMedium.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          _CodeBadge(code: organization.code),
+                        ],
+                      ),
                     ),
-                    Container(
-                      width: 1,
-                      height: 20,
-                      color: AppColors.outlineSubtle,
-                    ),
-                    _buildMetric(
-                      count: '${organization.employeeCount}',
-                      label: 'staff',
-                      icon: Icons.people_outline,
-                    ),
-                    Container(
-                      width: 1,
-                      height: 20,
-                      color: AppColors.outlineSubtle,
-                    ),
-                    _buildMetric(
-                      count: dateFormat.format(organization.createdAt),
-                      label: 'onboarded',
-                      icon: Icons.calendar_today_outlined,
-                      isDate: true,
+                    const SizedBox(width: AppSpacing.sm),
+                    StatusChip.fromStatus(
+                      organization.status.displayName,
+                      width: 96,
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-
-              // Bottom Actions Row: Details >
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.xs,
+                const SizedBox(height: AppSpacing.md),
+                _MetricsRow(organization: organization),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      tooltip: 'Edit ${organization.name}',
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: AppColors.secondary,
+                      ),
+                      onPressed: onEdit,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Details',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                          ),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minHeight: AppSpacing.minTouchTarget,
+                      ),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Details',
+                              style: AppTypography.labelMedium.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              size: 16,
+                              color: AppColors.primary,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 2),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          size: 16,
-                          color: AppColors.primary,
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
-  Widget _buildMetric({
-    required String count,
-    required String label,
-    required IconData icon,
-    bool isDate = false,
-  }) {
+class _CodeBadge extends StatelessWidget {
+  const _CodeBadge({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: AppSpacing.roundedXs,
+        border: Border.all(color: AppColors.outlineSubtle),
+      ),
+      child: Text(
+        code,
+        style: AppTypography.labelMono.copyWith(
+          fontWeight: FontWeight.w700,
+          color: AppColors.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricsRow extends StatelessWidget {
+  const _MetricsRow({required this.organization});
+
+  final CustomerOrganization organization;
+
+  @override
+  Widget build(BuildContext context) {
+    const divider = SizedBox(
+      height: 20,
+      child: VerticalDivider(width: 1, color: AppColors.outlineSubtle),
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: AppSpacing.roundedSm,
+        border: Border.all(
+          color: AppColors.outlineSubtle.withValues(alpha: 0.6),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _Metric(
+            value: '${organization.branchCount}',
+            label: 'hubs',
+            icon: Icons.storefront_outlined,
+          ),
+          divider,
+          _Metric(
+            value: '${organization.employeeCount}',
+            label: 'staff',
+            icon: Icons.people_outline,
+          ),
+          divider,
+          _Metric(
+            value: AppFormatters.formatDate(organization.createdAt),
+            label: 'onboarded',
+            icon: Icons.calendar_today_outlined,
+            isDate: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({
+    required this.value,
+    required this.label,
+    required this.icon,
+    this.isDate = false,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+  final bool isDate;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: AppColors.secondary),
-            const SizedBox(width: 4),
+            Icon(icon, size: 14, color: AppColors.secondary),
+            const SizedBox(width: AppSpacing.xs),
             Text(
-              count,
+              value,
               style: isDate
-                  ? GoogleFonts.inter(
-                      fontSize: 11,
+                  ? AppTypography.labelSmall.copyWith(
                       fontWeight: FontWeight.w600,
                       color: AppColors.onSurface,
                     )
-                  : GoogleFonts.jetBrainsMono(
+                  : AppTypography.labelMono.copyWith(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.onSurface,
                     ),
             ),
           ],
         ),
-        const SizedBox(height: 1),
         Text(
           label,
-          style: GoogleFonts.inter(fontSize: 10, color: AppColors.secondary),
+          style: AppTypography.labelSmall.copyWith(color: AppColors.secondary),
         ),
       ],
     );

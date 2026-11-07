@@ -13,6 +13,8 @@ import 'package:workaxis/features/authentication/domain/models/account_status.da
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
+import '../../helpers/fixed_clock.dart';
+
 void main() {
   group('FirestoreAttendanceRepository Tests', () {
     late FakeFirebaseFirestore fakeFirestore;
@@ -80,35 +82,38 @@ void main() {
 
     setUp(() {
       fakeFirestore = FakeFirebaseFirestore();
-      repository = FirestoreAttendanceRepository(firestore: fakeFirestore);
+      repository = FirestoreAttendanceRepository(
+        firestore: fakeFirestore,
+        now: fixedNow,
+      );
     });
 
-    test('getAttendance: platform operator can query across all branches', () async {
-      await fakeFirestore.collection('attendance_entries').doc('entry-1').set({
-        'organizationId': 'org-test-1',
-        'branchId': 'branch-101',
-        'employeeId': 'emp-1',
-        'employeeName': 'John',
-        'workDate': Timestamp.fromDate(testDate),
-        'workDateString': dateStr,
-        'status': 'present',
-        'reviewStatus': 'none',
-      });
+    test(
+      'getAttendance: platform operators have no attendance scope',
+      () async {
+        await fakeFirestore.collection('attendance_entries').doc('entry-1').set(
+          {
+            'organizationId': 'org-test-1',
+            'branchId': 'branch-101',
+            'employeeId': 'emp-1',
+            'workDate': Timestamp.fromDate(testDate),
+            'workDateString': dateStr,
+            'status': 'present',
+          },
+        );
 
-      const context = UserAccessContext(
-        user: platformUser,
-        organization: null,
-        assignedBranches: [],
-      );
+        const context = UserAccessContext(
+          user: platformUser,
+          organization: null,
+          assignedBranches: [],
+        );
 
-      final entries = await repository.getAttendance(
-        access: context,
-        date: testDate,
-      );
-
-      expect(entries.length, equals(1));
-      expect(entries.first.id, equals('entry-1'));
-    });
+        expect(
+          () => repository.getAttendance(access: context, date: testDate),
+          throwsA(isA<AccessDeniedException>()),
+        );
+      },
+    );
 
     test('getAttendance: non-platform user without org context throws AccessDeniedException', () async {
       const context = UserAccessContext(
@@ -124,22 +129,28 @@ void main() {
     });
 
     test('getAttendance: orgAdmin queries records scoped to org', () async {
-      await fakeFirestore.collection('attendance_entries').doc('entry-org1').set({
-        'organizationId': 'org-test-1',
-        'branchId': 'branch-101',
-        'employeeId': 'emp-1',
-        'workDate': Timestamp.fromDate(testDate),
-        'workDateString': dateStr,
-        'status': 'present',
-      });
-      await fakeFirestore.collection('attendance_entries').doc('entry-org2').set({
-        'organizationId': 'org-other-2',
-        'branchId': 'branch-201',
-        'employeeId': 'emp-other',
-        'workDate': Timestamp.fromDate(testDate),
-        'workDateString': dateStr,
-        'status': 'present',
-      });
+      await fakeFirestore
+          .collection('attendance_entries')
+          .doc('entry-org1')
+          .set({
+            'organizationId': 'org-test-1',
+            'branchId': 'branch-101',
+            'employeeId': 'emp-1',
+            'workDate': Timestamp.fromDate(testDate),
+            'workDateString': dateStr,
+            'status': 'present',
+          });
+      await fakeFirestore
+          .collection('attendance_entries')
+          .doc('entry-org2')
+          .set({
+            'organizationId': 'org-other-2',
+            'branchId': 'branch-201',
+            'employeeId': 'emp-other',
+            'workDate': Timestamp.fromDate(testDate),
+            'workDateString': dateStr,
+            'status': 'present',
+          });
 
       const context = UserAccessContext(
         user: orgAdminUser,
@@ -173,66 +184,81 @@ void main() {
       );
     });
 
-    test('getAttendance: branchManager with assigned branch succeeds', () async {
-      await fakeFirestore.collection('attendance_entries').doc('entry-b1').set({
-        'organizationId': 'org-test-1',
-        'branchId': 'branch-101',
-        'employeeId': 'emp-1',
-        'workDate': Timestamp.fromDate(testDate),
-        'workDateString': dateStr,
-        'status': 'late',
-      });
+    test(
+      'getAttendance: branchManager with assigned branch succeeds',
+      () async {
+        await fakeFirestore
+            .collection('attendance_entries')
+            .doc('entry-b1')
+            .set({
+              'organizationId': 'org-test-1',
+              'branchId': 'branch-101',
+              'employeeId': 'emp-1',
+              'workDate': Timestamp.fromDate(testDate),
+              'workDateString': dateStr,
+              'status': 'late',
+            });
 
-      final context = UserAccessContext(
-        user: branchManagerUser,
-        organization: testOrg,
-        assignedBranches: const [branch1],
-        activeBranch: ActiveBranchContext.fromBranch(branch1),
-      );
+        final context = UserAccessContext(
+          user: branchManagerUser,
+          organization: testOrg,
+          assignedBranches: const [branch1],
+          activeBranch: ActiveBranchContext.fromBranch(branch1),
+        );
 
-      final entries = await repository.getAttendance(
-        access: context,
-        date: testDate,
-        activeBranchId: 'branch-101',
-      );
+        final entries = await repository.getAttendance(
+          access: context,
+          date: testDate,
+          activeBranchId: 'branch-101',
+        );
 
-      expect(entries.length, equals(1));
-      expect(entries.first.status, equals(AttendanceStatus.late));
-    });
+        expect(entries.length, equals(1));
+        expect(entries.first.status, equals(AttendanceStatus.late));
+      },
+    );
 
-    test('getAttendance: employee is strictly restricted to self entries', () async {
-      await fakeFirestore.collection('attendance_entries').doc('entry-self').set({
-        'organizationId': 'org-test-1',
-        'branchId': 'branch-101',
-        'employeeId': 'emp-1',
-        'workDate': Timestamp.fromDate(testDate),
-        'workDateString': dateStr,
-        'status': 'present',
-      });
-      await fakeFirestore.collection('attendance_entries').doc('entry-peer').set({
-        'organizationId': 'org-test-1',
-        'branchId': 'branch-101',
-        'employeeId': 'emp-peer-2',
-        'workDate': Timestamp.fromDate(testDate),
-        'workDateString': dateStr,
-        'status': 'present',
-      });
+    test(
+      'getAttendance: employee is strictly restricted to self entries',
+      () async {
+        await fakeFirestore
+            .collection('attendance_entries')
+            .doc('entry-self')
+            .set({
+              'organizationId': 'org-test-1',
+              'branchId': 'branch-101',
+              'employeeId': 'emp-1',
+              'workDate': Timestamp.fromDate(testDate),
+              'workDateString': dateStr,
+              'status': 'present',
+            });
+        await fakeFirestore
+            .collection('attendance_entries')
+            .doc('entry-peer')
+            .set({
+              'organizationId': 'org-test-1',
+              'branchId': 'branch-101',
+              'employeeId': 'emp-peer-2',
+              'workDate': Timestamp.fromDate(testDate),
+              'workDateString': dateStr,
+              'status': 'present',
+            });
 
-      const context = UserAccessContext(
-        user: employeeUser,
-        organization: testOrg,
-        assignedBranches: [branch1],
-      );
+        const context = UserAccessContext(
+          user: employeeUser,
+          organization: testOrg,
+          assignedBranches: [branch1],
+        );
 
-      final entries = await repository.getAttendance(
-        access: context,
-        date: testDate,
-      );
+        final entries = await repository.getAttendance(
+          access: context,
+          date: testDate,
+        );
 
-      expect(entries.length, equals(1));
-      expect(entries.first.id, equals('entry-self'));
-      expect(entries.first.employeeId, equals('emp-1'));
-    });
+        expect(entries.length, equals(1));
+        expect(entries.first.id, equals('entry-self'));
+        expect(entries.first.employeeId, equals('emp-1'));
+      },
+    );
 
     test('reviewException: unauthorized branchManager throws AccessDeniedException', () async {
       const context = UserAccessContext(
@@ -270,35 +296,41 @@ void main() {
       );
     });
 
-    test('reviewException: nonexistent record throws NotFoundException', () async {
-      const context = UserAccessContext(
-        user: orgAdminUser,
-        organization: testOrg,
-        assignedBranches: [branch1],
-      );
+    test(
+      'reviewException: nonexistent record throws NotFoundException',
+      () async {
+        const context = UserAccessContext(
+          user: orgAdminUser,
+          organization: testOrg,
+          assignedBranches: [branch1],
+        );
 
-      expect(
-        () => repository.reviewException(
-          access: context,
-          entryId: 'nonexistent-doc',
-          activeBranchId: 'branch-101',
-          decision: AttendanceReviewDecision.verify,
-        ),
-        throwsA(isA<NotFoundException>()),
-      );
-    });
+        expect(
+          () => repository.reviewException(
+            access: context,
+            entryId: 'nonexistent-doc',
+            activeBranchId: 'branch-101',
+            decision: AttendanceReviewDecision.verify,
+          ),
+          throwsA(isA<NotFoundException>()),
+        );
+      },
+    );
 
     test('reviewException: successfully verifies and updates record', () async {
-      await fakeFirestore.collection('attendance_entries').doc('entry-exc-1').set({
-        'organizationId': 'org-test-1',
-        'branchId': 'branch-101',
-        'employeeId': 'emp-1',
-        'employeeName': 'John Regular',
-        'workDate': Timestamp.fromDate(testDate),
-        'workDateString': dateStr,
-        'status': 'late',
-        'reviewStatus': 'pending',
-      });
+      await fakeFirestore
+          .collection('attendance_entries')
+          .doc('entry-exc-1')
+          .set({
+            'organizationId': 'org-test-1',
+            'branchId': 'branch-101',
+            'employeeId': 'emp-1',
+            'employeeName': 'John Regular',
+            'workDate': Timestamp.fromDate(testDate),
+            'workDateString': dateStr,
+            'status': 'late',
+            'reviewStatus': 'pending',
+          });
 
       const context = UserAccessContext(
         user: branchManagerUser,
@@ -315,8 +347,10 @@ void main() {
 
       expect(updated.reviewStatus, equals(AttendanceReviewStatus.verified));
 
-      final persisted =
-          await fakeFirestore.collection('attendance_entries').doc('entry-exc-1').get();
+      final persisted = await fakeFirestore
+          .collection('attendance_entries')
+          .doc('entry-exc-1')
+          .get();
       expect(persisted.data()?['reviewStatus'], equals('verified'));
       expect(persisted.data()?['reviewedBy'], equals('Branch Lead'));
       expect(persisted.data()?['reviewedById'], equals('manager-1'));
@@ -358,15 +392,20 @@ void main() {
       expect(results[1].employeeName, equals('Bob Builder'));
 
       // Verify batch record in group_attendance_batches
-      final batchesSnapshot =
-          await fakeFirestore.collection('group_attendance_batches').get();
+      final batchesSnapshot = await fakeFirestore
+          .collection('group_attendance_batches')
+          .get();
       expect(batchesSnapshot.docs.length, equals(1));
       expect(batchesSnapshot.docs.first.data()['attendeeCount'], equals(2));
-      expect(batchesSnapshot.docs.first.data()['shiftName'], equals('Morning Shift'));
+      expect(
+        batchesSnapshot.docs.first.data()['shiftName'],
+        equals('Morning Shift'),
+      );
 
       // Verify individual entries created in attendance_entries
-      final entriesSnapshot =
-          await fakeFirestore.collection('attendance_entries').get();
+      final entriesSnapshot = await fakeFirestore
+          .collection('attendance_entries')
+          .get();
       expect(entriesSnapshot.docs.length, equals(2));
     });
   });

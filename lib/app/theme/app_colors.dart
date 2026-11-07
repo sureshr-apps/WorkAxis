@@ -68,4 +68,22 @@ abstract final class AppColors {
   static const Color statusPending = statusPendingText;
   static const Color statusUrgent = statusUrgentText;
   static const Color statusNeutral = statusNeutralText;
+
+  // Console badge (top bar role badge).
+  static const Color consoleBadgeBackground = Color(0xFFDBE1FF);
+  static const Color consoleBadgeForeground = Color(0xFF003EA8);
+
+  // KPI semantic triplets (foreground / background) used on metric cards.
+  static const Color kpiPositive = Color(0xFF15803D);
+  static const Color kpiPositiveAccent = Color(0xFF16A34A);
+  static const Color kpiPositiveBackground = Color(0xFFDCFCE7);
+  static const Color kpiCritical = Color(0xFFDC2626);
+  static const Color kpiCriticalBackground = Color(0xFFFEE2E2);
+
+  // KPI slate neutrals.
+  static const Color kpiBorder = Color(0xFFE2E8F0);
+  static const Color kpiValue = Color(0xFF0F172A);
+  static const Color kpiLabel = Color(0xFF475569);
+  static const Color kpiMuted = Color(0xFF64748B);
+  static const Color kpiNeutralBackground = Color(0xFFF1F5F9);
 }

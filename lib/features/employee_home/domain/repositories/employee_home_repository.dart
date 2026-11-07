@@ -1,14 +1,19 @@
+import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 
-/// Stable repository contract for Employee Home operations.
+/// Stable repository contract for Employee Home operations. Everything is
+/// scoped to the signed-in employee in [UserAccessContext].
 abstract interface class EmployeeHomeRepository {
-  /// Fetches daily operational summary for the signed-in employee.
-  Future<EmployeeHomeSummary> getEmployeeHomeSummary();
+  /// Today's summary for the employee in [access].
+  Future<EmployeeHomeSummary> getEmployeeHomeSummary({
+    required UserAccessContext access,
+  });
 
-  /// Records an attendance action (e.g., check in, start break, check out) and returns updated summary.
-  Future<EmployeeHomeSummary> recordAttendanceAction(AttendanceAction action);
-
-  /// Sets simulated attendance status for frontline demo / verification.
-  Future<EmployeeHomeSummary> setSimulatedStatus(AttendanceStatus status);
+  /// Records an attendance action and returns the refreshed summary. The
+  /// server stamps the time and validates the geofence.
+  Future<EmployeeHomeSummary> recordAttendanceAction({
+    required UserAccessContext access,
+    required AttendanceAction action,
+  });
 }

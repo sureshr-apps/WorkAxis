@@ -1,21 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/app/app.dart';
-import 'package:workaxis/features/access/data/mock_access_repository.dart';
-import 'package:workaxis/features/authentication/data/mock_auth_repository.dart';
+
+import 'helpers/test_backend.dart';
 
 void main() {
   testWidgets('WorkAxisApp smoke test launches on SignInScreen', (
     tester,
   ) async {
-    final authRepository = MockAuthenticationRepository(delay: Duration.zero);
-    final accessRepository = MockAccessRepository(delay: Duration.zero);
+    final repos = buildTestBackend();
 
-    await tester.pumpWidget(
-      WorkAxisApp(
-        authRepository: authRepository,
-        accessRepository: accessRepository,
-      ),
-    );
+    await tester.pumpWidget(WorkAxisApp(repositories: repos));
     await tester.pumpAndSettle();
 
     expect(find.text('WorkAxis'), findsOneWidget);
@@ -23,6 +17,6 @@ void main() {
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
 
-    authRepository.dispose();
+    mockAuthOf(repos).dispose();
   });
 }

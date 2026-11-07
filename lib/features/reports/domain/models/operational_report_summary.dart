@@ -1,3 +1,5 @@
+import 'package:workaxis/features/reports/domain/models/report_period.dart';
+
 class DailyAttendanceMetric {
   final String dayName;
   final double onTimePercent;
@@ -12,20 +14,23 @@ class DailyAttendanceMetric {
   });
 }
 
+/// Per-branch figures. Attendance-derived fields are null when the backend
+/// does not provide them (there is no shift schedule or exception tracking
+/// yet); they are never estimated.
 class BranchPerformanceMetric {
   final String branchId;
   final String branchName;
-  final double attendanceRate;
-  final int activeEmployees;
-  final int pendingExceptions;
+  final double? attendanceRate;
+  final int? activeEmployees;
+  final int? pendingExceptions;
   final int returnCount;
 
   const BranchPerformanceMetric({
     required this.branchId,
     required this.branchName,
-    required this.attendanceRate,
-    required this.activeEmployees,
-    required this.pendingExceptions,
+    this.attendanceRate,
+    this.activeEmployees,
+    this.pendingExceptions,
     required this.returnCount,
   });
 }
@@ -42,28 +47,35 @@ class CategoryReturnMetric {
   });
 }
 
+/// Operational report. Nullable metrics are unavailable from the backend and
+/// must be rendered as "not available", never as zero.
 class OperationalReportSummary {
-  final String period;
-  final double attendanceRate;
-  final double onTimeRate;
-  final double totalHoursLogged;
-  final int exceptionCount;
+  final ReportPeriod period;
+  final double? attendanceRate;
+  final double? onTimeRate;
+  final double? totalHoursLogged;
+  final int? exceptionCount;
   final int returnVolume;
-  final double returnRate;
+  final double? returnRate;
+
+  /// Whether [returnVolume] and branch return counts only cover [period].
+  /// False when the backend can only count all returns to date.
+  final bool returnCountsCoverPeriod;
   final List<DailyAttendanceMetric> dailyTrends;
   final List<BranchPerformanceMetric> branchMetrics;
   final List<CategoryReturnMetric> returnCategories;
 
   const OperationalReportSummary({
     required this.period,
-    required this.attendanceRate,
-    required this.onTimeRate,
-    required this.totalHoursLogged,
-    required this.exceptionCount,
+    this.attendanceRate,
+    this.onTimeRate,
+    this.totalHoursLogged,
+    this.exceptionCount,
     required this.returnVolume,
-    required this.returnRate,
-    required this.dailyTrends,
+    this.returnRate,
+    this.returnCountsCoverPeriod = true,
+    this.dailyTrends = const [],
     required this.branchMetrics,
-    required this.returnCategories,
+    this.returnCategories = const [],
   });
 }

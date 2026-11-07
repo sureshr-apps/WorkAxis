@@ -3,14 +3,14 @@
 ```dart
 WorkaxisConnectorConnector.instance.CreateOrganization(createOrganizationVariables).execute();
 WorkaxisConnectorConnector.instance.UpdateOrganization(updateOrganizationVariables).execute();
+WorkaxisConnectorConnector.instance.CreateCommercialAgreement(createCommercialAgreementVariables).execute();
+WorkaxisConnectorConnector.instance.UpdateCommercialAgreement(updateCommercialAgreementVariables).execute();
+WorkaxisConnectorConnector.instance.CreateLicenseEvent(createLicenseEventVariables).execute();
 WorkaxisConnectorConnector.instance.CreateBranch(createBranchVariables).execute();
+WorkaxisConnectorConnector.instance.AddBranch(addBranchVariables).execute();
+WorkaxisConnectorConnector.instance.UpdateBranch(updateBranchVariables).execute();
 WorkaxisConnectorConnector.instance.CreateOrganizationMember(createOrganizationMemberVariables).execute();
 WorkaxisConnectorConnector.instance.CreateReturnRecord(createReturnRecordVariables).execute();
-WorkaxisConnectorConnector.instance.UpdateReturnRecordStatus(updateReturnRecordStatusVariables).execute();
-WorkaxisConnectorConnector.instance.ListOrganizations().execute();
-WorkaxisConnectorConnector.instance.GetOrganizationById(getOrganizationByIdVariables).execute();
-WorkaxisConnectorConnector.instance.ListBranchesByOrg(listBranchesByOrgVariables).execute();
-WorkaxisConnectorConnector.instance.ListMembersByOrg(listMembersByOrgVariables).execute();
 
 ```
 
@@ -23,8 +23,8 @@ Optional fields can be discovered based on classes that have `Optional` object t
 This is an example of a mutation with an optional field:
 
 ```dart
-await WorkaxisConnectorConnector.instance.CreateOrganizationMember({ ... })
-.phone(...)
+await WorkaxisConnectorConnector.instance.ListPlatformMembersPaged({ ... })
+.nameContains(...)
 .execute();
 ```
 

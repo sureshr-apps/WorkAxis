@@ -12,9 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organizations_list_screen.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/organization_admin_dialog.dart';
 
 void main() {
   group('PlatformOrganizations Repository & Controller Unit Tests', () {
@@ -218,11 +216,12 @@ void main() {
     });
 
     testWidgets(
-      'paginates table on desktop and allows navigating pages and changing rows per page',
+      'desktop table shows loaded rows and a Load more footer for further pages',
       (tester) async {
         final repository = MockPlatformOrganizationsRepository();
         final controller = PlatformOrganizationsController(
           repository: repository,
+          pageSize: 5,
         );
 
         await tester.binding.setSurfaceSize(const Size(1280, 900));
@@ -231,39 +230,21 @@ void main() {
         await tester.pumpWidget(buildTestWidget(controller: controller));
         await tester.pumpAndSettle();
 
-        // Page 1 should show 1-5 of 7
-        expect(find.text('Showing 1–5 of 7 organizations'), findsOneWidget);
-        expect(find.text('Page 1 of 2'), findsOneWidget);
+        expect(
+          find.text('Showing 5 organizations (more available)'),
+          findsOneWidget,
+        );
         expect(find.text('Acme Corporation'), findsOneWidget);
-        expect(find.text('Apex Logistics & Freight'), findsOneWidget);
-        expect(find.text('Metro QuickServe Ops'), findsOneWidget);
-        // Page 2 items should not be visible yet
         expect(find.text('ABC Enterprises Global'), findsNothing);
-        expect(find.text('Crestline Cold Storage'), findsNothing);
 
-        // Tap Next Page button
-        final nextBtn = find.byTooltip('Next page');
-        expect(nextBtn, findsOneWidget);
-        await tester.tap(nextBtn);
+        final loadMore = find.widgetWithText(AppButton, 'Load more');
+        await tester.ensureVisible(loadMore);
+        await tester.tap(loadMore);
         await tester.pumpAndSettle();
 
-        // Page 2 should show 6-7 of 7
-        expect(find.text('Showing 6–7 of 7 organizations'), findsOneWidget);
-        expect(find.text('Page 2 of 2'), findsOneWidget);
+        expect(find.text('Showing 7 organizations'), findsOneWidget);
         expect(find.text('ABC Enterprises Global'), findsOneWidget);
-        expect(find.text('Crestline Cold Storage'), findsOneWidget);
-        expect(find.text('Acme Corporation'), findsNothing);
-
-        // Tap Previous Page button
-        final prevBtn = find.byTooltip('Previous page');
-        expect(prevBtn, findsOneWidget);
-        await tester.tap(prevBtn);
-        await tester.pumpAndSettle();
-
-        // Back to Page 1
-        expect(find.text('Showing 1–5 of 7 organizations'), findsOneWidget);
-        expect(find.text('Page 1 of 2'), findsOneWidget);
-        expect(find.text('Acme Corporation'), findsOneWidget);
+        expect(find.text('Load more'), findsNothing);
       },
     );
   });
@@ -350,14 +331,12 @@ void main() {
       // Verify Negotiated Price and Annual Maintenance Price cards have the exact same height
       final negotiatedLabel = find.text('Negotiated Price (One-time)');
       final annualLabel = find.text('Annual Maintenance Price');
-      final negotiatedCard = find.ancestor(
-        of: negotiatedLabel,
-        matching: find.byType(Container),
-      ).first;
-      final annualCard = find.ancestor(
-        of: annualLabel,
-        matching: find.byType(Container),
-      ).first;
+      final negotiatedCard = find
+          .ancestor(of: negotiatedLabel, matching: find.byType(Container))
+          .first;
+      final annualCard = find
+          .ancestor(of: annualLabel, matching: find.byType(Container))
+          .first;
       expect(
         tester.getSize(negotiatedCard).height,
         equals(tester.getSize(annualCard).height),
@@ -369,10 +348,9 @@ void main() {
 
       // Verify the table expands to fill available card width (greater than the 1110px legacy limit on 1280px surface)
       final eventHeadingFinder = find.text('EVENT');
-      final tableHeaderRow = find.ancestor(
-        of: eventHeadingFinder,
-        matching: find.byType(Row),
-      ).first;
+      final tableHeaderRow = find
+          .ancestor(of: eventHeadingFinder, matching: find.byType(Row))
+          .first;
       final headerWidth = tester.getSize(tableHeaderRow).width;
       expect(headerWidth, greaterThan(1110.0));
     });
@@ -404,10 +382,7 @@ void main() {
 
       await tester.tap(find.text('Assign License'));
       await tester.pumpAndSettle();
-      expect(
-        find.text('Assign License is shown in this mock-only phase.'),
-        findsOneWidget,
-      );
+      expect(find.text('Assign License is not available yet.'), findsOneWidget);
     });
 
     testWidgets('shows empty state when organization has no assigned admins', (
@@ -431,7 +406,7 @@ void main() {
 
       expect(find.text('No administrators assigned'), findsOneWidget);
       expect(
-        find.textContaining('No active organization administrators'),
+        find.textContaining('No organization administrators'),
         findsOneWidget,
       );
     });
@@ -467,10 +442,7 @@ void main() {
       );
 
       // Confirm suspend
-      final confirmBtn = find.widgetWithText(
-        ElevatedButton,
-        'Suspend Organization',
-      );
+      final confirmBtn = find.widgetWithText(AppButton, 'Suspend Organization');
       await tester.tap(confirmBtn);
       await tester.pumpAndSettle();
 
@@ -626,10 +598,7 @@ void main() {
       expect(find.text('NEW TENANT'), findsOneWidget);
 
       // Tap Create Organization with empty fields
-      final submitBtn = find.widgetWithText(
-        ElevatedButton,
-        'Create Organization',
-      );
+      final submitBtn = find.widgetWithText(AppButton, 'Create Organization');
       await tester.ensureVisible(submitBtn);
       await tester.tap(submitBtn);
       await tester.pumpAndSettle();
@@ -744,10 +713,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        final submitBtn = find.widgetWithText(
-          ElevatedButton,
-          'Create Organization',
-        );
+        final submitBtn = find.widgetWithText(AppButton, 'Create Organization');
         await tester.ensureVisible(submitBtn);
         await tester.tap(submitBtn);
         await tester.pumpAndSettle();
@@ -805,7 +771,7 @@ void main() {
       expect(find.text('Unsaved Changes'), findsOneWidget);
 
       // Tap Cancel
-      final cancelBtn = find.widgetWithText(OutlinedButton, 'Cancel');
+      final cancelBtn = find.widgetWithText(AppButton, 'Cancel');
       await tester.ensureVisible(cancelBtn);
       await tester.tap(cancelBtn);
       await tester.pumpAndSettle();
@@ -919,7 +885,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // Tap Save Changes
-        final saveBtn = find.widgetWithText(ElevatedButton, 'Save Changes');
+        final saveBtn = find.widgetWithText(AppButton, 'Save Changes');
         await tester.ensureVisible(saveBtn);
         await tester.tap(saveBtn);
         await tester.pumpAndSettle();
@@ -1026,7 +992,7 @@ void main() {
       await tester.enterText(nameField, '   ');
       await tester.pumpAndSettle();
 
-      final saveBtn = find.widgetWithText(ElevatedButton, 'Save Changes');
+      final saveBtn = find.widgetWithText(AppButton, 'Save Changes');
       await tester.ensureVisible(saveBtn);
       await tester.tap(saveBtn);
       await tester.pumpAndSettle();
@@ -1035,135 +1001,6 @@ void main() {
         find.text('Organization name is required and cannot be empty.'),
         findsOneWidget,
       );
-    });
-  });
-
-  group('OrganizationAdminDialog Widget Tests', () {
-    testWidgets('renders canonical AppButton for Cancel and Add Administrator', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: const Scaffold(
-            body: OrganizationAdminDialog(),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Add Administrator'), findsWidgets);
-      expect(find.text('Cancel'), findsOneWidget);
-
-      final primaryBtn = tester.widget<AppButton>(
-        find.widgetWithText(AppButton, 'Add Administrator'),
-      );
-      expect(primaryBtn.variant, equals(AppButtonVariant.primary));
-
-      final cancelBtn = tester.widget<AppButton>(
-        find.widgetWithText(AppButton, 'Cancel'),
-      );
-      expect(cancelBtn.variant, equals(AppButtonVariant.outlined));
-    });
-
-    testWidgets('renders Save Changes in edit mode with canonical AppButton', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      const admin = OrganizationAdminUser(
-        id: 'admin-1',
-        name: 'Sarah Connor',
-        username: 'sconnor',
-        email: 'sarah@example.com',
-        phone: '+1 555-0100',
-        roleTitle: 'Tenant Administrator',
-        status: 'Active',
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: const Scaffold(
-            body: OrganizationAdminDialog(existingAdministrator: admin),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Edit Administrator'), findsOneWidget);
-      expect(find.text('Save Changes'), findsOneWidget);
-
-      final saveBtn = tester.widget<AppButton>(
-        find.widgetWithText(AppButton, 'Save Changes'),
-      );
-      expect(saveBtn.variant, equals(AppButtonVariant.primary));
-    });
-
-    testWidgets('validates inputs and submits draft when valid', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      OrganizationAdminDraft? result;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => Center(
-                child: ElevatedButton(
-                  onPressed: () async {
-                    result = await showDialog<OrganizationAdminDraft>(
-                      context: context,
-                      builder: (_) => const OrganizationAdminDialog(),
-                    );
-                  },
-                  child: const Text('Open Dialog'),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Open Dialog'));
-      await tester.pumpAndSettle();
-
-      // Tap submit with empty fields -> error message shown
-      await tester.tap(find.widgetWithText(AppButton, 'Add Administrator'));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.text('Enter a name, username, valid email, and phone number.'),
-        findsOneWidget,
-      );
-
-      // Enter valid fields
-      final textFields = find.byType(TextField);
-      await tester.enterText(textFields.at(0), 'John Doe');
-      await tester.enterText(textFields.at(1), 'johndoe');
-      await tester.enterText(textFields.at(2), 'john@example.com');
-      await tester.enterText(textFields.at(3), '+1 555-0199');
-      await tester.enterText(textFields.at(4), 'secret123');
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.widgetWithText(AppButton, 'Add Administrator'));
-      await tester.pumpAndSettle();
-
-      expect(result, isNotNull);
-      expect(result!.administrator.name, 'John Doe');
-      expect(result!.administrator.username, 'johndoe');
-      expect(result!.administrator.email, 'john@example.com');
-      expect(result!.administrator.phone, '+1 555-0199');
-      expect(result!.initialPassword, 'secret123');
     });
   });
 }

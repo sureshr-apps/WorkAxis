@@ -1,86 +1,102 @@
-import 'package:flutter/material.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
-import 'package:workaxis/core/widgets/status_chip.dart';
+import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/features/access/domain/models/branch_summary.dart';
+import 'package:workaxis/features/access/domain/models/user_access_context.dart';
+import 'package:workaxis/features/attendance/data/attendance_day_counter.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/branch_dashboard/data/branch_dashboard_remote.dart';
 import 'package:workaxis/features/branch_dashboard/domain/models/branch_dashboard_summary.dart';
 import 'package:workaxis/features/branch_dashboard/domain/repositories/branch_dashboard_repository.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attendance_summary.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attention_item.dart';
 
-/// Production implementation of [BranchDashboardRepository] using Firebase SQL Connect.
+/// Production [BranchDashboardRepository].
+///
+/// Branch identity comes from the authorized branch in [UserAccessContext]
+/// (never another branch), counts from `GetBranchStats`, and today's
+/// attendance from Firestore count queries scoped to organization + branch.
 class SqlConnectBranchDashboardRepository implements BranchDashboardRepository {
   SqlConnectBranchDashboardRepository({
     WorkaxisConnectorConnector? connector,
-    String organizationId = 'org-acme',
-  })  : _customConnector = connector,
-        _orgId = organizationId;
+    BranchDashboardRemote? remote,
+    AttendanceDayCounter? attendanceCounter,
+  }) : _remote =
+           remote ?? DataConnectBranchDashboardRemote(connector: connector),
+       _attendance = attendanceCounter ?? AttendanceDayCounter();
 
-  final WorkaxisConnectorConnector? _customConnector;
-  final String _orgId;
-
-  WorkaxisConnectorConnector get _connector =>
-      _customConnector ?? WorkaxisConnectorConnector.instance;
+  final BranchDashboardRemote _remote;
+  final AttendanceDayCounter _attendance;
 
   @override
-  Future<BranchDashboardSummary> getBranchDashboardSummary(String branchId) async {
+  Future<BranchDashboardSummary> getBranchDashboardSummary({
+    required UserAccessContext access,
+    required String branchId,
+  }) async {
     try {
-      final returnsResult = await _connector
-          .listReturnsByBranch(branchId: branchId)
-          .execute();
-      final pendingCount = returnsResult.data.returnRecords
-          .where((r) => r.status.toLowerCase() == 'pending')
-          .length;
+      final role = access.user.role;
+      final orgId = access.organization?.id;
+      if ((role != UserRole.branchManager && role != UserRole.orgAdmin) ||
+          orgId == null ||
+          orgId.isEmpty) {
+        throw const AccessDeniedException(
+          'Branch dashboard requires a Branch Manager or Organization Admin.',
+        );
+      }
+      final BranchSummary? branch = access.assignedBranches
+          .where((b) => b.id == branchId)
+          .firstOrNull;
+      if (branch == null) {
+        throw const NotFoundException('Branch not found.');
+      }
 
-      final branchesResult = await _connector.listBranchesByOrg(orgId: _orgId).execute();
-      final branch = branchesResult.data.branches.firstWhere(
-        (b) => b.id == branchId,
-        orElse: () => branchesResult.data.branches.isNotEmpty
-            ? branchesResult.data.branches.first
-            : throw NotFoundException('Branch "$branchId" not found.'),
-      );
-
-      final attendance = await getBranchAttendanceSummary(branchId);
-      final attentionItems = await getBranchAttentionItems(branchId);
+      final results = await Future.wait<Object>([
+        _remote.loadCounts(branch.id),
+        _attendance.forBranch(organizationId: orgId, branchId: branch.id),
+      ]);
+      final counts = results[0] as BranchCounts;
+      final checkIns = results[1] as DailyCheckInCounts;
+      final pending = counts.returns('pending');
 
       return BranchDashboardSummary(
         branchId: branch.id,
         branchName: branch.name,
         branchCode: branch.code,
-        attendance: attendance,
-        pendingReturns: pendingCount,
-        totalEmployees: 6,
-        attentionItems: attentionItems,
+        attendance: AttendanceSummary.fromCheckIns(
+          checkedIn: checkIns.checkedIn,
+          late: checkIns.late,
+          expectedHeadcount: counts.memberCount,
+        ),
+        pendingReturns: pending,
+        totalEmployees: counts.memberCount,
+        attentionItems: [
+          if (pending > 0)
+            AttentionItem(
+              id: 'pending-returns-${branch.id}',
+              kind: AttentionKind.pendingReturns,
+              severity: AttentionSeverity.pending,
+              title: 'Return requests awaiting review',
+              subtitle: branch.name,
+              details: '$pending return request(s) are waiting for a decision.',
+              statusLabel: '$pending Pending',
+              timestamp: 'Now',
+              actionLabel: 'Review Returns',
+            ),
+          if (checkIns.late > 0)
+            AttentionItem(
+              id: 'late-arrivals-${branch.id}',
+              kind: AttentionKind.lateArrivals,
+              severity: AttentionSeverity.urgent,
+              title: 'Late arrivals today',
+              subtitle: branch.name,
+              details: '${checkIns.late} employee(s) checked in late today.',
+              statusLabel: '${checkIns.late} Late',
+              timestamp: 'Today',
+            ),
+        ],
       );
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to load branch dashboard summary: ${e.toString()}');
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
-  }
-
-  @override
-  Future<AttendanceSummary> getBranchAttendanceSummary(String branchId) async {
-    return const AttendanceSummary(
-      present: 5,
-      late: 1,
-      absent: 0,
-      onLeave: 0,
-      totalScheduled: 6,
-    );
-  }
-
-  @override
-  Future<List<AttentionItem>> getBranchAttentionItems(String branchId) async {
-    return const [
-      AttentionItem(
-        id: 'br-att-01',
-        title: 'Pending Return',
-        subtitle: 'Invoice INV-2026-0042',
-        details: 'Alex Rivera recorded return for defect • ₹3,499.00',
-        statusType: StatusType.pending,
-        statusLabel: 'Pending Approval',
-        timestamp: '11:15 AM',
-        itemIcon: Icons.assignment_return_outlined,
-      ),
-    ];
   }
 }

@@ -18,6 +18,24 @@ class BranchSummary {
   final int activeEmployeeCount;
   final bool isActive;
 
+  BranchSummary copyWith({
+    String? id,
+    String? organizationId,
+    String? name,
+    String? code,
+    String? location,
+    int? activeEmployeeCount,
+    bool? isActive,
+  }) => BranchSummary(
+    id: id ?? this.id,
+    organizationId: organizationId ?? this.organizationId,
+    name: name ?? this.name,
+    code: code ?? this.code,
+    location: location ?? this.location,
+    activeEmployeeCount: activeEmployeeCount ?? this.activeEmployeeCount,
+    isActive: isActive ?? this.isActive,
+  );
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

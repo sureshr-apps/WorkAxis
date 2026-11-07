@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
+import 'package:workaxis/app/session/session_controller.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -101,13 +102,7 @@ class _AccessVerificationScreenState extends State<AccessVerificationScreen> {
   }
 
   Future<void> _handleSignOut() async {
-    final authController = context.read<AuthController>();
-    final accessController = context.read<AccessController>();
-    final branchController = context.read<BranchContextController>();
-
-    await authController.signOut();
-    accessController.clear();
-    branchController.clear();
+    await context.read<SessionController>().signOut();
 
     if (mounted) {
       context.go(AppRoutes.signIn);

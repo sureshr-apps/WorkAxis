@@ -21,7 +21,7 @@ import 'package:workaxis/features/platform_dashboard/data/mock_platform_dashboar
 import 'package:workaxis/features/platform_dashboard/data/sql_connect_platform_dashboard_repository.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_organizations/data/sql_connect_platform_organizations_repository.dart';
-import 'package:workaxis/features/platform_users/data/firestore_platform_users_repository.dart';
+import 'package:workaxis/features/platform_users/data/sql_connect_platform_users_repository.dart';
 import 'package:workaxis/features/platform_users/data/mock_platform_users_repository.dart';
 import 'package:workaxis/features/reports/data/mock_reports_repository.dart';
 import 'package:workaxis/features/reports/data/sql_connect_reports_repository.dart';
@@ -48,13 +48,22 @@ void main() {
       expect(repos.accessRepository, isA<MockAccessRepository>());
       expect(repos.attendanceRepository, isA<MockAttendanceRepository>());
       expect(repos.platformRepository, isA<MockPlatformDashboardRepository>());
-      expect(repos.platformOrganizationsRepository, isA<MockPlatformOrganizationsRepository>());
+      expect(
+        repos.platformOrganizationsRepository,
+        isA<MockPlatformOrganizationsRepository>(),
+      );
       expect(repos.platformUsersRepository, isA<MockPlatformUsersRepository>());
       expect(repos.orgRepository, isA<MockOrganizationDashboardRepository>());
       expect(repos.branchRepository, isA<MockBranchDashboardRepository>());
       expect(repos.employeeRepository, isA<MockEmployeeHomeRepository>());
-      expect(repos.branchManagementRepository, isA<MockBranchManagementRepository>());
-      expect(repos.organizationMembersRepository, isA<MockOrganizationMembersRepository>());
+      expect(
+        repos.branchManagementRepository,
+        isA<MockBranchManagementRepository>(),
+      );
+      expect(
+        repos.organizationMembersRepository,
+        isA<MockOrganizationMembersRepository>(),
+      );
       expect(repos.returnsRepository, isA<MockReturnsRepository>());
       expect(repos.reportsRepository, isA<MockReportsRepository>());
     });
@@ -67,14 +76,35 @@ void main() {
       expect(repos.authRepository, isA<FirebaseAuthRepository>());
       expect(repos.accessRepository, isA<SqlConnectAccessRepository>());
       expect(repos.attendanceRepository, isA<FirestoreAttendanceRepository>());
-      expect(repos.platformRepository, isA<SqlConnectPlatformDashboardRepository>());
-      expect(repos.platformOrganizationsRepository, isA<SqlConnectPlatformOrganizationsRepository>());
-      expect(repos.platformUsersRepository, isA<FirestorePlatformUsersRepository>());
-      expect(repos.orgRepository, isA<SqlConnectOrganizationDashboardRepository>());
-      expect(repos.branchRepository, isA<SqlConnectBranchDashboardRepository>());
+      expect(
+        repos.platformRepository,
+        isA<SqlConnectPlatformDashboardRepository>(),
+      );
+      expect(
+        repos.platformOrganizationsRepository,
+        isA<SqlConnectPlatformOrganizationsRepository>(),
+      );
+      expect(
+        repos.platformUsersRepository,
+        isA<SqlConnectPlatformUsersRepository>(),
+      );
+      expect(
+        repos.orgRepository,
+        isA<SqlConnectOrganizationDashboardRepository>(),
+      );
+      expect(
+        repos.branchRepository,
+        isA<SqlConnectBranchDashboardRepository>(),
+      );
       expect(repos.employeeRepository, isA<FirestoreEmployeeHomeRepository>());
-      expect(repos.branchManagementRepository, isA<SqlConnectBranchManagementRepository>());
-      expect(repos.organizationMembersRepository, isA<SqlConnectOrganizationMembersRepository>());
+      expect(
+        repos.branchManagementRepository,
+        isA<SqlConnectBranchManagementRepository>(),
+      );
+      expect(
+        repos.organizationMembersRepository,
+        isA<SqlConnectOrganizationMembersRepository>(),
+      );
       expect(repos.returnsRepository, isA<SqlConnectReturnsRepository>());
       expect(repos.reportsRepository, isA<SqlConnectReportsRepository>());
     });

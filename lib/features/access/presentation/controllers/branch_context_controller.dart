@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:workaxis/core/session/session_scoped.dart';
+import 'package:workaxis/core/state/safe_notifier.dart';
 import 'package:workaxis/features/access/domain/models/active_branch_context.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
@@ -6,7 +8,9 @@ import 'package:workaxis/features/access/domain/models/user_access_context.dart'
 /// Application-level controller managing the currently selected active branch context.
 ///
 /// Prevents downstream features from inventing their own branch-selection state.
-class BranchContextController extends ChangeNotifier {
+class BranchContextController extends ChangeNotifier
+    with SafeNotifier
+    implements SessionScoped {
   ActiveBranchContext? _activeBranch;
   List<BranchSummary> _assignedBranches = const [];
 
@@ -44,4 +48,7 @@ class BranchContextController extends ChangeNotifier {
     _assignedBranches = const [];
     notifyListeners();
   }
+
+  @override
+  void reset() => clear();
 }

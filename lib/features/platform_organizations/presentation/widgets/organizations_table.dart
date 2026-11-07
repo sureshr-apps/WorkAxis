@@ -1,612 +1,324 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
+import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/formatting/date_time_formatters.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
+import 'package:workaxis/core/widgets/table_header_cell.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 
-/// Renders the Stitch-approved structured table for customer organizations on Web and Tablet Landscape.
-/// Includes client-side pagination with configurable page size and navigation controls.
-class OrganizationsTable extends StatefulWidget {
-  final List<CustomerOrganization> organizations;
-  final ValueChanged<CustomerOrganization> onSelect;
-  final ValueChanged<CustomerOrganization> onEdit;
-  final int initialPageSize;
-  final List<int> availablePageSizes;
+const double _rowHorizontalPadding = AppSpacing.lg;
 
+/// Sliver table of customer organizations for wide layouts.
+///
+/// Rows are built lazily. The footer reports how many rows are loaded and
+/// offers "Load more" when the server has further pages. Must be placed in a
+/// `CustomScrollView`.
+class OrganizationsTable extends StatelessWidget {
   const OrganizationsTable({
     super.key,
     required this.organizations,
     required this.onSelect,
     required this.onEdit,
-    this.initialPageSize = 5,
-    this.availablePageSizes = const [5, 10, 25],
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.onLoadMore,
   });
 
-  @override
-  State<OrganizationsTable> createState() => _OrganizationsTableState();
-}
-
-class _OrganizationsTableState extends State<OrganizationsTable> {
-  int _currentPage = 0;
-  late int _pageSize;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageSize = widget.initialPageSize;
-  }
-
-  @override
-  void didUpdateWidget(OrganizationsTable oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.organizations != widget.organizations) {
-      final totalPages = widget.organizations.isEmpty
-          ? 1
-          : (widget.organizations.length / _pageSize).ceil();
-      if (_currentPage >= totalPages) {
-        _currentPage = 0;
-      }
-    }
-  }
+  final List<CustomerOrganization> organizations;
+  final ValueChanged<CustomerOrganization> onSelect;
+  final ValueChanged<CustomerOrganization> onEdit;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback onLoadMore;
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('MMM dd, yyyy');
-    const minimumTableWidth = 920.0;
-
-    final totalItems = widget.organizations.length;
-    final totalPages = totalItems == 0 ? 1 : (totalItems / _pageSize).ceil();
-    final safePage = _currentPage.clamp(0, totalPages - 1);
-    final startIndex = totalItems == 0 ? 0 : safePage * _pageSize;
-    final endIndex = (startIndex + _pageSize).clamp(0, totalItems);
-    final pagedOrganizations = totalItems == 0
-        ? const <CustomerOrganization>[]
-        : widget.organizations.sublist(startIndex, endIndex);
-
-    return Container(
+    return DecoratedSliver(
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.outlineSubtle, width: 1),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x06000000),
-            offset: Offset(0, 2),
-            blurRadius: 8,
+        borderRadius: AppSpacing.roundedMd,
+        boxShadow: AppShadows.card,
+      ),
+      sliver: SliverMainAxisGroup(
+        slivers: [
+          const SliverToBoxAdapter(child: _TableHeader()),
+          SliverList.builder(
+            itemCount: organizations.length,
+            itemBuilder: (context, index) => _OrganizationRow(
+              organization: organizations[index],
+              onSelect: () => onSelect(organizations[index]),
+              onEdit: () => onEdit(organizations[index]),
+            ),
           ),
-          BoxShadow(
-            color: Color(0x04000000),
-            offset: Offset(0, 1),
-            blurRadius: 2,
+          SliverToBoxAdapter(
+            child: _TableFooter(
+              loadedCount: organizations.length,
+              hasMore: hasMore,
+              isLoadingMore: isLoadingMore,
+              onLoadMore: onLoadMore,
+            ),
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final tableWidth = constraints.maxWidth < minimumTableWidth
-              ? minimumTableWidth
-              : constraints.maxWidth;
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: tableWidth,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Table Header
-                  Container(
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                    ),
-                    decoration: const BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
-                      border: Border(
-                        bottom: BorderSide(
-                          color: AppColors.outlineSubtle,
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            'ORGANIZATION',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            'CODE',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            'STATUS',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            'BRANCHES',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            'EMPLOYEES',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            'ONBOARDED',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 80,
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                'ACTIONS',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.8,
-                                  color: AppColors.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+    );
+  }
+}
 
-                  // Table Rows
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: pagedOrganizations.length,
-                    separatorBuilder: (context, index) => const Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: AppColors.outlineSubtle,
-                    ),
-                    itemBuilder: (context, index) {
-                      final org = pagedOrganizations[index];
-                      return _buildTableRow(context, org, dateFormat);
-                    },
-                  ),
+class _TableHeader extends StatelessWidget {
+  const _TableHeader();
 
-                  // Table Footer with Pagination Controls
-                  _buildFooter(
-                    context,
-                    totalItems: totalItems,
-                    startIndex: startIndex,
-                    endIndex: endIndex,
-                    safePage: safePage,
-                    totalPages: totalPages,
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: _rowHorizontalPadding),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(AppSpacing.radiusMd),
+          topRight: Radius.circular(AppSpacing.radiusMd),
+        ),
+        border: Border.fromBorderSide(
+          BorderSide(color: AppColors.outlineSubtle),
+        ),
+      ),
+      child: const Row(
+        children: [
+          TableHeaderCell('ORGANIZATION', flex: 3),
+          TableHeaderCell('CODE', flex: 2),
+          TableHeaderCell('STATUS', flex: 2),
+          TableHeaderCell('BRANCHES', flex: 2),
+          TableHeaderCell('EMPLOYEES', flex: 2),
+          TableHeaderCell('ONBOARDED', flex: 2),
+          TableHeaderCell('ACTIONS', flex: 3, alignment: Alignment.centerRight),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildFooter(
-    BuildContext context, {
-    required int totalItems,
-    required int startIndex,
-    required int endIndex,
-    required int safePage,
-    required int totalPages,
-  }) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+class _OrganizationRow extends StatelessWidget {
+  const _OrganizationRow({
+    required this.organization,
+    required this.onSelect,
+    required this.onEdit,
+  });
+
+  final CustomerOrganization organization;
+  final VoidCallback onSelect;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final org = organization;
+    return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.surfaceContainerLowest,
         border: Border(
-          top: BorderSide(color: AppColors.outlineSubtle, width: 1),
+          left: BorderSide(color: AppColors.outlineSubtle),
+          right: BorderSide(color: AppColors.outlineSubtle),
+          bottom: BorderSide(color: AppColors.outlineSubtle),
         ),
       ),
-      alignment: Alignment.center,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: InkWell(
+        onTap: onSelect,
+        hoverColor: AppColors.surfaceContainerLow,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: _rowHorizontalPadding,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: Text(
+                  org.name,
+                  style: AppTypography.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _CodeBadge(code: org.code),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: StatusChip.fromStatus(
+                    org.status.displayName,
+                    width: 96,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: _CountCell(count: org.branchCount, unit: 'hubs'),
+              ),
+              Expanded(
+                flex: 2,
+                child: _CountCell(count: org.employeeCount, unit: 'staff'),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  AppFormatters.formatDate(org.createdAt),
+                  style: AppTypography.bodySmall,
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      tooltip: 'Edit ${org.name}',
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: AppColors.secondary,
+                      ),
+                      onPressed: onEdit,
+                    ),
+                    Text(
+                      'Details',
+                      style: AppTypography.labelMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CodeBadge extends StatelessWidget {
+  const _CodeBadge({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: AppSpacing.roundedSm,
+        border: Border.all(color: AppColors.outlineSubtle),
+      ),
+      child: Text(
+        code,
+        style: AppTypography.labelMono.copyWith(
+          fontWeight: FontWeight.w600,
+          color: AppColors.onSurfaceVariant,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+class _CountCell extends StatelessWidget {
+  const _CountCell({required this.count, required this.unit});
+
+  final int count;
+  final String unit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(
+        style: AppTypography.bodyMedium,
         children: [
-          // Left: Item range summary (Expanded so it adapts cleanly)
+          TextSpan(
+            text: AppFormatters.formatNumber(count),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          TextSpan(
+            text: ' $unit',
+            style: AppTypography.labelSmall.copyWith(
+              color: AppColors.secondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TableFooter extends StatelessWidget {
+  const _TableFooter({
+    required this.loadedCount,
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.onLoadMore,
+  });
+
+  final int loadedCount;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback onLoadMore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: _rowHorizontalPadding,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(AppSpacing.radiusMd),
+          bottomRight: Radius.circular(AppSpacing.radiusMd),
+        ),
+        border: Border(
+          left: BorderSide(color: AppColors.outlineSubtle),
+          right: BorderSide(color: AppColors.outlineSubtle),
+          bottom: BorderSide(color: AppColors.outlineSubtle),
+        ),
+      ),
+      child: Row(
+        children: [
           Expanded(
             child: Text(
-              totalItems == 0
-                  ? 'Showing 0 organizations'
-                  : 'Showing ${startIndex + 1}–$endIndex of $totalItems organizations',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+              'Showing $loadedCount organizations${hasMore ? ' (more available)' : ''}',
+              style: AppTypography.labelMedium.copyWith(
                 color: AppColors.secondary,
               ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-
-          // Right: Rows per page + Page Navigation + Platform Fleet
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Rows: ',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: AppColors.secondary,
-                ),
-              ),
-              Container(
-                height: 28,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                  border: Border.all(color: AppColors.outlineSubtle),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    value: _pageSize,
-                    isDense: true,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.onSurface,
-                    ),
-                    items: widget.availablePageSizes.map((size) {
-                      return DropdownMenuItem<int>(
-                        value: size,
-                        child: Text('$size'),
-                      );
-                    }).toList(),
-                    onChanged: (newSize) {
-                      if (newSize != null && newSize != _pageSize) {
-                        setState(() {
-                          _pageSize = newSize;
-                          _currentPage = 0;
-                        });
-                      }
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-
-              Text(
-                'Page ${safePage + 1} of $totalPages',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.onSurface,
-                ),
-              ),
-              const SizedBox(width: 4),
-
-              IconButton(
-                icon: const Icon(Icons.first_page, size: 18),
-                tooltip: 'First page',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                color: AppColors.onSurfaceVariant,
-                disabledColor: AppColors.outlineSubtle,
-                onPressed: safePage > 0
-                    ? () => setState(() => _currentPage = 0)
-                    : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_left, size: 18),
-                tooltip: 'Previous page',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                color: AppColors.onSurfaceVariant,
-                disabledColor: AppColors.outlineSubtle,
-                onPressed: safePage > 0
-                    ? () => setState(() => _currentPage = safePage - 1)
-                    : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, size: 18),
-                tooltip: 'Next page',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                color: AppColors.onSurfaceVariant,
-                disabledColor: AppColors.outlineSubtle,
-                onPressed: safePage < totalPages - 1
-                    ? () => setState(() => _currentPage = safePage + 1)
-                    : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.last_page, size: 18),
-                tooltip: 'Last page',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                color: AppColors.onSurfaceVariant,
-                disabledColor: AppColors.outlineSubtle,
-                onPressed: safePage < totalPages - 1
-                    ? () => setState(() => _currentPage = totalPages - 1)
-                    : null,
-              ),
-
-              Container(
-                height: 18,
-                width: 1,
-                color: AppColors.outlineSubtle,
-                margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-              ),
-
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Fleet: ',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: AppColors.secondary,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: AppColors.outlineSubtle),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            color: AppColors.statusActive,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'INDIA',
-                          style: GoogleFonts.robotoMono(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          if (hasMore)
+            AppButton.outlined(
+              text: 'Load more',
+              isFullWidth: false,
+              isLoading: isLoadingMore,
+              onPressed: onLoadMore,
+            ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTableRow(
-    BuildContext context,
-    CustomerOrganization org,
-    DateFormat dateFormat,
-  ) {
-    return InkWell(
-      onTap: () => widget.onSelect(org),
-      hoverColor: AppColors.surfaceContainerLow,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
-        ),
-        child: Row(
-          children: [
-            // Organization Name
-            Expanded(
-              flex: 3,
-              child: Text(
-                org.name,
-                style: GoogleFonts.inter(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.onSurface,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-
-            // Code
-            Expanded(
-              flex: 2,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 2.5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: AppColors.outlineSubtle,
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    org.code,
-                    style: GoogleFonts.robotoMono(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // Status
-            Expanded(
-              flex: 2,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: StatusChip.fromStatus(org.status.displayName, width: 96),
-              ),
-            ),
-
-            // Branches
-            Expanded(
-              flex: 2,
-              child: RichText(
-                text: TextSpan(
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: AppColors.onSurface,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: '${org.branchCount}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    TextSpan(
-                      text: ' hubs',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: AppColors.secondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Employees
-            Expanded(
-              flex: 2,
-              child: RichText(
-                text: TextSpan(
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: AppColors.onSurface,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: '${org.employeeCount}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    TextSpan(
-                      text: ' staff',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: AppColors.secondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Onboarded Date
-            Expanded(
-              flex: 2,
-              child: Text(
-                dateFormat.format(org.createdAt),
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: AppColors.onSurfaceVariant,
-                ),
-              ),
-            ),
-
-            // Actions
-            SizedBox(
-              width: 80,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Details',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        size: 16,
-                        color: AppColors.primary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

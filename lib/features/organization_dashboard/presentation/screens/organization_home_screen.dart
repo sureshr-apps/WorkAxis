@@ -7,10 +7,12 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
+import 'package:workaxis/features/organization_dashboard/domain/models/organization_dashboard_summary.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/controllers/organization_dashboard_controller.dart';
-import 'package:workaxis/features/organization_dashboard/presentation/screens/widgets/attendance_summary_card.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/screens/widgets/attention_items_section.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/screens/widgets/org_kpi_carousel.dart';
+import 'package:workaxis/shared/widgets/attendance_summary_card.dart';
 
 /// Home dashboard for Organization Admin role.
 class OrganizationHomeScreen extends StatefulWidget {
@@ -25,107 +27,99 @@ class _OrganizationHomeScreenState extends State<OrganizationHomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final controller = context.read<OrganizationDashboardController>();
-      if (controller.status == OrganizationDashboardStatus.initial) {
-        controller.loadDashboard();
-      }
+      // Always load on entry: a previous user's data must never be shown.
+      _load();
     });
+  }
+
+  Future<void> _load() async {
+    final access = context.read<AccessController>().accessContext;
+    if (access == null) return;
+    await context.read<OrganizationDashboardController>().loadDashboard(
+      access: access,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<OrganizationDashboardController>();
-    final isCompact = context.isCompact;
+    final summary = controller.summary;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
-      body: RefreshIndicator(
-        onRefresh: () => controller.loadDashboard(),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: ResponsivePageContent(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              // Page Title (Stitch specification: Clean Display-LG Headline)
-              const AppPageHeader(title: 'Organization Overview'),
-              const SizedBox(height: AppSpacing.lg),
-
-              if (controller.isLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 64.0),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (controller.hasError) ...[
-                ErrorBanner(
-                  message:
-                      controller.errorMessage ??
-                      'An error occurred loading the dashboard.',
-                  onRetry: () => controller.loadDashboard(),
-                ),
-              ] else if (controller.summary != null) ...[
-                // Operational Metric Row (5 KPI Cards)
-                OrgKpiCarousel(summary: controller.summary!),
-                const SizedBox(height: AppSpacing.xl),
-
-                // Primary Operations Two-Column Split (7-5 grid on desktop/tablet)
-                if (isCompact) ...[
-                  // Phone: Stacked vertically
-                  AttendanceSummaryCard(
-                    attendance: controller.summary!.attendance,
-                    branchSnapshots: controller.summary!.branchSnapshots,
-                    onViewDetails: () =>
-                        context.go(AppRoutes.orgAdminAttendance),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  const EveningShiftTransitionCard(),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ResponsivePageContent(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const AppPageHeader(title: 'Organization Overview'),
                   const SizedBox(height: AppSpacing.lg),
-                  AttentionItemsSection(
-                    items: controller.summary!.attentionItems,
-                    onViewAll: () => context.go(AppRoutes.orgAdminAttendance),
-                  ),
-                ] else ...[
-                  // Tablet & Web: Two-column layout (7 cols left, 5 cols right)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Column 1: Today's Attendance + Evening Shift Transition
-                      Expanded(
-                        flex: 7,
-                        child: Column(
-                          children: [
-                            AttendanceSummaryCard(
-                              attendance: controller.summary!.attendance,
-                              branchSnapshots:
-                                  controller.summary!.branchSnapshots,
-                              onViewDetails: () =>
-                                  context.go(AppRoutes.orgAdminAttendance),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            const EveningShiftTransitionCard(),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.xl),
-
-                      // Column 2: Needs Attention
-                      Expanded(
-                        flex: 5,
-                        child: AttentionItemsSection(
-                          items: controller.summary!.attentionItems,
-                          onViewAll: () =>
-                              context.go(AppRoutes.orgAdminAttendance),
-                        ),
-                      ),
-                    ],
-                  ),
+                  if (controller.isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 64.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (controller.hasError)
+                    ErrorBanner(
+                      message:
+                          controller.errorMessage ??
+                          'An error occurred loading the dashboard.',
+                      onRetry: _load,
+                    )
+                  else if (summary != null)
+                    _DashboardBody(summary: summary),
                 ],
-              ],
-            ],
+              ),
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
+
+class _DashboardBody extends StatelessWidget {
+  const _DashboardBody({required this.summary});
+
+  final OrganizationDashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final attendanceCard = AttendanceSummaryCard(
+      attendance: summary.attendance,
+      branchSnapshots: summary.branchSnapshots,
+      onViewDetails: () => context.go(AppRoutes.orgAdminAttendance),
+    );
+    final attentionSection = AttentionItemsSection(
+      items: summary.attentionItems,
+      branchScope: false,
+      onViewAll: () => context.go(AppRoutes.orgAdminAttendance),
+      onItemAction: (_, route) => context.go(route),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OrgKpiCarousel(summary: summary),
+        const SizedBox(height: AppSpacing.xl),
+        if (context.isCompact) ...[
+          attendanceCard,
+          const SizedBox(height: AppSpacing.lg),
+          attentionSection,
+        ] else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 7, child: attendanceCard),
+              const SizedBox(width: AppSpacing.xl),
+              Expanded(flex: 5, child: attentionSection),
+            ],
+          ),
+      ],
+    );
+  }
 }

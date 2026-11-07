@@ -1,6 +1,6 @@
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/data/mock_auth_data_source.dart';
-import 'package:workaxis/features/platform_users/domain/errors/platform_users_failure.dart';
+import 'package:workaxis/core/errors/validation_exception.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 
 /// In-memory fixtures for Platform Administrator management.
@@ -38,6 +38,9 @@ class MockPlatformUsersDataSource {
         .toList(growable: false);
   }
 
+  int count({AccountStatus? status}) =>
+      _administrators.where((a) => status == null || a.status == status).length;
+
   PlatformAdministrator? getById(String id) {
     for (final administrator in _administrators) {
       if (administrator.id == id) return administrator;
@@ -47,8 +50,10 @@ class MockPlatformUsersDataSource {
 
   PlatformAdministrator create(PlatformAdministrator administrator) {
     _ensureUniqueIdentifiers(administrator);
+    final id = 'platform-admin-${_nextId++}';
     final created = PlatformAdministrator(
-      id: 'platform-admin-${_nextId++}',
+      id: id,
+      authUid: id,
       fullName: administrator.fullName.trim(),
       username: administrator.username.trim(),
       email: administrator.email.trim().toLowerCase(),
@@ -64,13 +69,17 @@ class MockPlatformUsersDataSource {
   PlatformAdministrator update(PlatformAdministrator updated) {
     final index = _administrators.indexWhere((item) => item.id == updated.id);
     if (index == -1) {
-      throw const PlatformUsersFailure('Administrator not found.');
+      throw ValidationException('Administrator not found.');
     }
-    _ensureUniqueIdentifiers(updated, exceptId: updated.id);
     final current = _administrators[index];
+    // The username is the login handle and cannot change after creation.
+    _ensureUniqueIdentifiers(
+      updated.copyWith(username: current.username),
+      exceptId: updated.id,
+    );
     final saved = updated.copyWith(
       fullName: updated.fullName.trim(),
-      username: updated.username.trim(),
+      username: current.username,
       email: updated.email.trim().toLowerCase(),
       phone: _normalizePhone(updated.phone),
       status: current.status,
@@ -84,7 +93,7 @@ class MockPlatformUsersDataSource {
   PlatformAdministrator updateStatus(String id, AccountStatus status) {
     final index = _administrators.indexWhere((item) => item.id == id);
     if (index == -1) {
-      throw const PlatformUsersFailure('Administrator not found.');
+      throw ValidationException('Administrator not found.');
     }
     final updated = _administrators[index].copyWith(status: status);
     _administrators[index] = updated;
@@ -98,7 +107,8 @@ class MockPlatformUsersDataSource {
     final duplicatePlatformUser = _administrators.any((item) {
       if (item.id == exceptId) return false;
       return item.username.toLowerCase() == candidate.username.toLowerCase() ||
-          item.email.toLowerCase() == candidate.email.toLowerCase() ||
+          (candidate.email.isNotEmpty &&
+              item.email.toLowerCase() == candidate.email.toLowerCase()) ||
           (candidate.phone?.trim().isNotEmpty ?? false) &&
               item.phone?.trim() == candidate.phone?.trim();
     });
@@ -111,7 +121,7 @@ class MockPlatformUsersDataSource {
       (identifier) => _authDataSource.findByIdentifier(identifier) != null,
     );
     if (duplicatePlatformUser || duplicateExistingAccount) {
-      throw const PlatformUsersFailure(
+      throw ValidationException(
         'That username, email, or phone number is already used by another user.',
       );
     }

@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/formatting/date_time_formatters.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
+import 'package:workaxis/features/returns/presentation/return_presentation.dart';
 
+/// Compact card for one return request, used on phone and tablet widths.
 class ReturnCardItem extends StatelessWidget {
   final ReturnItem item;
   final VoidCallback onTap;
@@ -21,121 +25,33 @@ class ReturnCardItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canReview = showReviewAction && item.status == ReturnStatus.pending;
     return Card(
       elevation: 0,
+      margin: EdgeInsets.zero,
       color: AppColors.surfaceContainerLowest,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        borderRadius: AppSpacing.roundedMd,
         side: const BorderSide(color: AppColors.outlineSubtle),
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        borderRadius: AppSpacing.roundedMd,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Row: Product Title & Status Chip
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.productTitle,
-                          style: AppTypography.titleMedium.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              item.reason.icon,
-                              size: 14,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                item.reason.label,
-                                style: AppTypography.bodySmall.copyWith(
-                                  color: AppColors.onSurfaceVariant,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  StatusChip(
-                    label: item.status.label,
-                    type: item.status.chipType,
-                    width: 96,
-                  ),
-                ],
-              ),
+              _TopRow(item: item),
               const SizedBox(height: AppSpacing.md),
-              const Divider(height: 1, thickness: 1, color: AppColors.outlineSubtle),
-              const SizedBox(height: AppSpacing.sm),
-
-              // Middle Row: Quantity, Invoice Number, Date
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
-                    ),
-                    child: Text(
-                      '${item.quantity % 1 == 0 ? item.quantity.toInt() : item.quantity} ${item.unit}',
-                      style: AppTypography.labelMono.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'Bill #${item.invoiceNumber}',
-                      style: AppTypography.labelMono.copyWith(
-                        fontSize: 12,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
-                    '${item.returnDate.month}/${item.returnDate.day}/${item.returnDate.year}',
-                    style: AppTypography.bodySmall.copyWith(
-                      fontSize: 11,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color: AppColors.outlineSubtle,
               ),
               const SizedBox(height: AppSpacing.sm),
-
-              // Bottom Row: Branch & Requester info + Action
+              _MiddleRow(item: item),
+              const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
                   const Icon(
@@ -143,12 +59,11 @@ class ReturnCardItem extends StatelessWidget {
                     size: 14,
                     color: AppColors.textMuted,
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: AppSpacing.xs),
                   Expanded(
                     child: Text(
                       '${item.branchName} · ${item.employeeName}',
                       style: AppTypography.bodySmall.copyWith(
-                        fontSize: 12,
                         color: AppColors.onSurfaceVariant,
                       ),
                       maxLines: 1,
@@ -156,43 +71,117 @@ class ReturnCardItem extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  if (showReviewAction && item.status == ReturnStatus.pending)
-                    TextButton(
-                      onPressed: onReview ?? onTap,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        minimumSize: const Size(0, 32),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        foregroundColor: AppColors.primary,
-                        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                      ),
-                      child: const Text('Review'),
-                    )
-                  else
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Details',
-                          style: AppTypography.labelSmall.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        const Icon(
-                          Icons.chevron_right,
-                          size: 14,
-                          color: AppColors.primary,
-                        ),
-                      ],
-                    ),
+                  AppButton.outlined(
+                    text: canReview ? 'Review' : 'Details',
+                    isFullWidth: false,
+                    onPressed: canReview ? (onReview ?? onTap) : onTap,
+                  ),
                 ],
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _TopRow extends StatelessWidget {
+  const _TopRow({required this.item});
+
+  final ReturnItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.productTitle,
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                children: [
+                  Icon(
+                    item.reason.icon,
+                    size: 14,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      item.reason.label,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        StatusChip(label: item.status.label, type: item.status.chipType),
+      ],
+    );
+  }
+}
+
+class _MiddleRow extends StatelessWidget {
+  const _MiddleRow({required this.item});
+
+  final ReturnItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xxs,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLow,
+            borderRadius: AppSpacing.roundedXs,
+          ),
+          child: Text(
+            item.quantityLabel,
+            style: AppTypography.labelMono.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            'Bill #${item.invoiceNumber}',
+            style: AppTypography.labelMono.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Text(
+          AppFormatters.formatDate(item.returnDate),
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+      ],
     );
   }
 }

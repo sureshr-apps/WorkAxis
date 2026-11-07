@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
-import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/constants/app_breakpoints.dart';
+import 'package:workaxis/core/responsive/content_width_scope.dart';
 
 /// Canonical, responsive Page Header template.
 ///
@@ -31,8 +32,12 @@ class AppPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCompact = context.isCompact;
+    // Decide from the content width (after the sidebar), not the screen.
+    final width = ContentWidthScope.of(context);
+    return _buildHeader(isCompact: width < AppBreakpoints.mediumMin);
+  }
 
+  Widget _buildHeader({required bool isCompact}) {
     final effectiveActions = <Widget>[?action, ...?actions];
 
     return Column(

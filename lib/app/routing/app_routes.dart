@@ -3,6 +3,8 @@ abstract final class AppRoutes {
   static const String signIn = '/signin';
   static const String verifyAccess = '/verify-access';
   static const String selectBranch = '/select-branch';
+  static const String noBranchAssigned = '/no-branch-assigned';
+  static const String splash = '/initializing';
 
   // Platform destinations
   static const String platformWorkspace = '/platform';

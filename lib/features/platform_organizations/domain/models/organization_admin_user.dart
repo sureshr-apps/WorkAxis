@@ -1,3 +1,5 @@
+import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
+
 /// Read-only model representing an assigned Organization Administrator.
 class OrganizationAdminUser {
   final String id;
@@ -6,8 +8,11 @@ class OrganizationAdminUser {
   final String phone;
   final String? username;
   final String roleTitle;
-  final String status;
+  final OrganizationAdminStatus status;
   final String? lastLogin;
+
+  /// Firebase Auth uid; the target of account callables. Null for mock data.
+  final String? authUid;
 
   const OrganizationAdminUser({
     required this.id,
@@ -16,11 +21,16 @@ class OrganizationAdminUser {
     required this.phone,
     this.username,
     this.roleTitle = 'Organization Admin',
-    this.status = 'Active',
+    this.status = OrganizationAdminStatus.active,
     this.lastLogin,
+    this.authUid,
   });
 
-  String get displayUsername => '@${username ?? email.split('@').first}';
+  String get displayUsername {
+    final handle =
+        username ?? (email.contains('@') ? email.split('@').first : name);
+    return '@$handle';
+  }
 
   OrganizationAdminUser copyWith({
     String? id,
@@ -29,8 +39,9 @@ class OrganizationAdminUser {
     String? phone,
     String? username,
     String? roleTitle,
-    String? status,
+    OrganizationAdminStatus? status,
     String? lastLogin,
+    String? authUid,
   }) {
     return OrganizationAdminUser(
       id: id ?? this.id,
@@ -41,6 +52,7 @@ class OrganizationAdminUser {
       roleTitle: roleTitle ?? this.roleTitle,
       status: status ?? this.status,
       lastLogin: lastLogin ?? this.lastLogin,
+      authUid: authUid ?? this.authUid,
     );
   }
 

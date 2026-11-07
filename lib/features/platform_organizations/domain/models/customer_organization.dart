@@ -11,6 +11,7 @@ class CustomerOrganization {
   final int employeeCount;
   final DateTime createdAt;
   final String? description;
+  final String? category;
   final String? contactName;
   final String? contactEmail;
   final String? contactPhone;
@@ -27,6 +28,7 @@ class CustomerOrganization {
     required this.employeeCount,
     required this.createdAt,
     this.description,
+    this.category,
     this.contactName,
     this.contactEmail,
     this.contactPhone,
@@ -58,6 +60,7 @@ class CustomerOrganization {
     int? employeeCount,
     DateTime? createdAt,
     String? description,
+    String? category,
     String? contactName,
     String? contactEmail,
     String? contactPhone,
@@ -74,6 +77,7 @@ class CustomerOrganization {
       employeeCount: employeeCount ?? this.employeeCount,
       createdAt: createdAt ?? this.createdAt,
       description: description ?? this.description,
+      category: category ?? this.category,
       contactName: contactName ?? this.contactName,
       contactEmail: contactEmail ?? this.contactEmail,
       contactPhone: contactPhone ?? this.contactPhone,

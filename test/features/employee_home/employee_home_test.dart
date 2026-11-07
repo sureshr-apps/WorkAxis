@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
+import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employee_home/data/mock_employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/presentation/controllers/employee_home_controller.dart';
@@ -10,39 +12,37 @@ import 'package:workaxis/features/employee_home/presentation/screens/widgets/act
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/attendance_summary_card.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/employee_returns_card.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/hero_attendance_card.dart';
-import 'package:workaxis/features/employee_home/presentation/screens/widgets/safety_notices_card.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/today_assignment_card.dart';
+
+import '../../helpers/access_controller_fixture.dart';
+import '../../helpers/access_fixtures.dart';
 
 void main() {
   group('Employee Home Repository & Controller', () {
-    test(
-      'MockEmployeeHomeRepository returns initial checked in summary matching Stitch',
-      () async {
-        final repo = MockEmployeeHomeRepository(delay: Duration.zero);
-        final summary = await repo.getEmployeeHomeSummary();
+    test('MockEmployeeHomeRepository returns initial checked in summary matching Stitch', () async {
+      final repo = MockEmployeeHomeRepository(delay: Duration.zero);
+      final summary = await repo.getEmployeeHomeSummary(
+        access: employeeAccess(),
+      );
 
-        expect(summary.employeeName, equals('Marcus Vance'));
-        expect(summary.branchName, equals('Central Distribution Hub'));
-        expect(summary.currentStatus, equals(AttendanceStatus.checkedIn));
-        expect(summary.checkInTime, equals('07:54 AM'));
-        expect(summary.pendingReturnsCount, equals(1));
-        expect(summary.approvedReturnsCount, equals(4));
-        expect(
-          summary.recentReturnTitle,
-          equals('Safety Helmet & High-Vis Vest Replacement'),
-        );
-        expect(
-          summary.recentReturnStatus,
-          equals('Pending Approval'),
-        );
-      },
-    );
+      expect(summary.employeeName, equals('Sarah Connor'));
+      expect(summary.branchName, equals('Downtown Flagship'));
+      expect(summary.currentStatus, equals(AttendanceStatus.checkedIn));
+      expect(summary.checkInTime, equals('07:54 AM'));
+      expect(summary.pendingReturnsCount, equals(1));
+      expect(summary.approvedReturnsCount, equals(4));
+      expect(
+        summary.recentReturnTitle,
+        equals('Safety Helmet & High-Vis Vest Replacement'),
+      );
+      expect(summary.recentReturnStatus, equals('Pending Approval'));
+    });
 
     test('EmployeeHomeController records attendance action', () async {
       final repo = MockEmployeeHomeRepository(delay: Duration.zero);
       final controller = EmployeeHomeController(repository: repo);
 
-      await controller.loadHomeSummary();
+      await controller.loadHomeSummary(access: employeeAccess());
       expect(
         controller.summary?.currentStatus,
         equals(AttendanceStatus.checkedIn),
@@ -60,7 +60,7 @@ void main() {
       final repo = MockEmployeeHomeRepository(delay: Duration.zero);
       final controller = EmployeeHomeController(repository: repo);
 
-      await controller.loadHomeSummary();
+      await controller.loadHomeSummary(access: employeeAccess());
       await controller.setSimulatedStatus(AttendanceStatus.notCheckedIn);
       expect(
         controller.summary?.currentStatus,
@@ -72,7 +72,7 @@ void main() {
 
   group('EmployeeHomeScreen Widget Tests', () {
     testWidgets(
-      'renders Employee Home matching Stitch design with telemetry, assignment, returns, and safety notices',
+      'renders Employee Home with telemetry, assignment and returns from the summary only',
       (tester) async {
         tester.view.physicalSize = const Size(1400, 1600);
         tester.view.devicePixelRatio = 1.0;
@@ -83,13 +83,25 @@ void main() {
 
         final repo = MockEmployeeHomeRepository(delay: Duration.zero);
         final controller = EmployeeHomeController(repository: repo);
-        await controller.loadHomeSummary();
+        final accessController = await resolvedAccessController(
+          UserRole.employee,
+          'user-emp-01',
+          name: 'Sarah Connor',
+        );
+        await controller.loadHomeSummary(access: employeeAccess());
 
         await tester.pumpWidget(
           MaterialApp(
             theme: AppTheme.light,
-            home: ChangeNotifierProvider<EmployeeHomeController>.value(
-              value: controller,
+            home: MultiProvider(
+              providers: [
+                ChangeNotifierProvider<AccessController>.value(
+                  value: accessController,
+                ),
+                ChangeNotifierProvider<EmployeeHomeController>.value(
+                  value: controller,
+                ),
+              ],
               child: const EmployeeHomeScreen(),
             ),
           ),
@@ -105,7 +117,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.textContaining('Marcus Vance • Apex Logistics & Freight'),
+          find.textContaining('Sarah Connor • Apex Logistics & Freight'),
           findsOneWidget,
         );
 
@@ -126,20 +138,20 @@ void main() {
         expect(find.text('5h 42m'), findsWidgets);
         expect(find.text('71.2%'), findsOneWidget);
         expect(find.text('Start Break'), findsOneWidget);
-        expect(
-          find.textContaining('Terminal Verified #CH-TERM-09'),
-          findsOneWidget,
-        );
+        expect(find.textContaining('Terminal CH-TERM-09'), findsOneWidget);
+        expect(find.textContaining('Terminal Verified'), findsNothing);
+        expect(find.textContaining('±3.2m'), findsNothing);
 
         // 4. Verify Active Geofence Telemetry Card
         expect(find.byType(ActiveGeofenceCard), findsOneWidget);
         expect(find.text('Active Geofence Telemetry'), findsOneWidget);
-        expect(find.text('Signal Strong (5G Mesh)'), findsOneWidget);
+        expect(find.text('Inside geofence'), findsOneWidget);
+        expect(find.textContaining('5G Mesh'), findsNothing);
         expect(
           find.text('Zone B • Outbound Logistics Corridor'),
           findsOneWidget,
         );
-        expect(find.text('Active Anchor'), findsOneWidget);
+        expect(find.text('Active Anchor'), findsNothing);
         expect(find.text('B4:F2:79:A1:09'), findsOneWidget);
         expect(find.text('1000ms'), findsOneWidget);
         expect(find.text('NFC Verified'), findsOneWidget);
@@ -147,15 +159,16 @@ void main() {
         // 5. Verify Today's Assignment Card
         expect(find.byType(TodayAssignmentCard), findsOneWidget);
         expect(find.text("Today's Assignment"), findsOneWidget);
-        expect(find.text('Tier 1 Priority'), findsOneWidget);
+        expect(find.text('Tier 1 Priority'), findsNothing);
         expect(find.text('BAY-SORT-04'), findsOneWidget);
         expect(find.text('Rajesh Kumar'), findsOneWidget);
 
         // 6. Verify Attendance Summary Card
         expect(find.byType(AttendanceSummaryCard), findsOneWidget);
         expect(find.text('Attendance Summary'), findsOneWidget);
-        expect(find.text('98.2%'), findsOneWidget);
-        expect(find.text('Target > 95% (Achieved)'), findsOneWidget);
+        expect(find.text('98%'), findsOneWidget);
+        expect(find.textContaining('Target'), findsNothing);
+        expect(find.textContaining('October 2024'), findsNothing);
         expect(find.text('View attendance history'), findsOneWidget);
 
         // 7. Verify My Returns Card
@@ -170,14 +183,9 @@ void main() {
         expect(find.text('Submit return'), findsOneWidget);
         expect(find.text('View returns'), findsOneWidget);
 
-        // 8. Verify Reminders & Safety Notices Card
-        expect(find.byType(SafetyNoticesCard), findsOneWidget);
-        expect(find.text('Reminders & Safety Notices'), findsOneWidget);
-        expect(
-          find.text('Shift Check-Out Reminder (05:00 PM Today)'),
-          findsOneWidget,
-        );
-        expect(find.text('Forklift Zone Active'), findsOneWidget);
+        // 8. Fabricated safety notices are gone.
+        expect(find.text('Forklift Zone Active'), findsNothing);
+        expect(find.text('Reminders & Safety Notices'), findsNothing);
 
         // 9. Interactive Action: Tap 'Start Break' button in Hero Card
         await tester.tap(find.text('Start Break'));
@@ -188,7 +196,9 @@ void main() {
       },
     );
 
-    testWidgets('renders cleanly on smartphone (390x844) without overflow', (tester) async {
+    testWidgets('renders cleanly on smartphone (390x844) without overflow', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -198,13 +208,25 @@ void main() {
 
       final repo = MockEmployeeHomeRepository(delay: Duration.zero);
       final controller = EmployeeHomeController(repository: repo);
-      await controller.loadHomeSummary();
+      final accessController = await resolvedAccessController(
+        UserRole.employee,
+        'user-emp-01',
+        name: 'Sarah Connor',
+      );
+      await controller.loadHomeSummary(access: employeeAccess());
 
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.light,
-          home: ChangeNotifierProvider<EmployeeHomeController>.value(
-            value: controller,
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AccessController>.value(
+                value: accessController,
+              ),
+              ChangeNotifierProvider<EmployeeHomeController>.value(
+                value: controller,
+              ),
+            ],
             child: const EmployeeHomeScreen(),
           ),
         ),
@@ -215,7 +237,9 @@ void main() {
       expect(find.byType(HeroAttendanceCard), findsOneWidget);
     });
 
-    testWidgets('renders cleanly on tablet (768x1024) without overflow', (tester) async {
+    testWidgets('renders cleanly on tablet (768x1024) without overflow', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(768, 1024);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -225,13 +249,25 @@ void main() {
 
       final repo = MockEmployeeHomeRepository(delay: Duration.zero);
       final controller = EmployeeHomeController(repository: repo);
-      await controller.loadHomeSummary();
+      final accessController = await resolvedAccessController(
+        UserRole.employee,
+        'user-emp-01',
+        name: 'Sarah Connor',
+      );
+      await controller.loadHomeSummary(access: employeeAccess());
 
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.light,
-          home: ChangeNotifierProvider<EmployeeHomeController>.value(
-            value: controller,
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AccessController>.value(
+                value: accessController,
+              ),
+              ChangeNotifierProvider<EmployeeHomeController>.value(
+                value: controller,
+              ),
+            ],
             child: const EmployeeHomeScreen(),
           ),
         ),

@@ -1,81 +1,48 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/features/platform_dashboard/data/platform_dashboard_remote.dart';
 import 'package:workaxis/features/platform_dashboard/domain/models/platform_dashboard_summary.dart';
 import 'package:workaxis/features/platform_dashboard/domain/models/recent_organization_summary.dart';
 import 'package:workaxis/features/platform_dashboard/domain/repositories/platform_dashboard_repository.dart';
 
-/// Production implementation of [PlatformDashboardRepository] using Firebase SQL Connect
-/// and Cloud Firestore.
-class SqlConnectPlatformDashboardRepository implements PlatformDashboardRepository {
+/// Production [PlatformDashboardRepository] using SQL Connect aggregates
+/// (`GetPlatformStats`, `ListOrganizationsPaged`, `GetOrganizationStats`).
+class SqlConnectPlatformDashboardRepository
+    implements PlatformDashboardRepository {
   SqlConnectPlatformDashboardRepository({
     WorkaxisConnectorConnector? connector,
-    FirebaseFirestore? firestore,
-  })  : _customConnector = connector,
-        _customFirestore = firestore;
+    PlatformDashboardRemote? remote,
+    this.recentLimit = 5,
+  }) : _remote =
+           remote ?? DataConnectPlatformDashboardRemote(connector: connector);
 
-  final WorkaxisConnectorConnector? _customConnector;
-  final FirebaseFirestore? _customFirestore;
+  final PlatformDashboardRemote _remote;
 
-  WorkaxisConnectorConnector get _connector =>
-      _customConnector ?? WorkaxisConnectorConnector.instance;
-  FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
+  /// How many organizations the "recent" list shows.
+  final int recentLimit;
 
   @override
   Future<PlatformDashboardSummary> getPlatformDashboardSummary() async {
     try {
-      final result = await _connector.listOrganizations().execute();
-      final orgs = result.data.organizations;
-
-      final total = orgs.length;
-      final active = orgs.where((o) => o.status.toLowerCase() == 'active').length;
-      final suspended = orgs.where((o) => o.status.toLowerCase() == 'suspended').length;
-
-      var adminCount = 2;
-      try {
-        final adminSnapshot = await _firestore
-            .collection('users')
-            .where('role', isEqualTo: 'platformAdmin')
-            .count()
-            .get();
-        adminCount = adminSnapshot.count ?? 2;
-      } catch (_) {
-        // Fallback default
-      }
-
+      final stats = await _remote.loadStats();
+      final byStatus = stats.organizationsByStatus;
       return PlatformDashboardSummary(
-        totalOrganizations: total,
-        activeOrganizations: active,
-        suspendedOrganizations: suspended,
-        platformAdminsCount: adminCount,
+        totalOrganizations: byStatus.values.fold(0, (a, b) => a + b),
+        activeOrganizations: byStatus['active'] ?? 0,
+        suspendedOrganizations: byStatus['suspended'] ?? 0,
+        platformAdminsCount: stats.platformAdminCount,
       );
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to load platform dashboard summary: ${e.toString()}');
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
   }
 
   @override
   Future<List<RecentOrganizationSummary>> getRecentOrganizations() async {
     try {
-      final result = await _connector.listOrganizations().execute();
-      final orgs = result.data.organizations;
-
-      return orgs.map((o) {
-        return RecentOrganizationSummary(
-          id: o.id,
-          name: o.name,
-          code: o.code,
-          adminEmail: 'admin@${o.code.toLowerCase().replaceAll('-', '')}.com',
-          status: o.status,
-          branchCount: 0,
-          employeeCount: 0,
-          createdAt: o.createdAt.toDateTime(),
-        );
-      }).toList();
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to load recent organizations: ${e.toString()}');
+      return await _remote.loadRecentOrganizations(limit: recentLimit);
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
   }
 }

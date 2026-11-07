@@ -9,6 +9,7 @@ import 'package:workaxis/features/access/presentation/controllers/branch_context
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/reports/data/mock_reports_repository.dart';
+import 'package:workaxis/features/reports/domain/models/report_period.dart';
 import 'package:workaxis/features/reports/presentation/controllers/reports_controller.dart';
 import 'package:workaxis/features/reports/presentation/screens/operational_reports_screen.dart';
 
@@ -53,7 +54,7 @@ void main() {
 
     final user = role == UserRole.branchManager
         ? const AppUser(
-            id: 'user-bm-01',
+            id: 'user-bm-multi-01',
             name: 'Marcus Vance',
             username: 'marcus.vance',
             role: UserRole.branchManager,
@@ -71,12 +72,19 @@ void main() {
     final access = accessController.accessContext;
     if (access != null) {
       branchContextController.initFromAccessContext(access);
+      if (role == UserRole.branchManager) {
+        branchContextController.selectBranch(
+          access.assignedBranches.firstWhere((b) => b.id == 'br-01'),
+        );
+      }
     }
 
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<AccessController>.value(value: accessController),
+          ChangeNotifierProvider<AccessController>.value(
+            value: accessController,
+          ),
           ChangeNotifierProvider<BranchContextController>.value(
             value: branchContextController,
           ),
@@ -96,8 +104,14 @@ void main() {
   }
 
   group('Operational Reports Screen Widget Tests', () {
-    testWidgets('renders Operational Reports on desktop for Org Admin', (tester) async {
-      await pumpOperationalReportsScreen(tester, role: UserRole.orgAdmin, width: 1200);
+    testWidgets('renders Operational Reports on desktop for Org Admin', (
+      tester,
+    ) async {
+      await pumpOperationalReportsScreen(
+        tester,
+        role: UserRole.orgAdmin,
+        width: 1200,
+      );
 
       expect(find.text('Operational Reports'), findsOneWidget);
       expect(find.text('Attendance rate'), findsOneWidget);
@@ -109,20 +123,26 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('renders cleanly on smartphone (390x844) for Branch Manager with zero overflow', (tester) async {
-      await pumpOperationalReportsScreen(
-        tester,
-        role: UserRole.branchManager,
-        width: 390,
-        height: 844,
-      );
+    testWidgets(
+      'renders cleanly on smartphone (390x844) for Branch Manager with zero overflow',
+      (tester) async {
+        await pumpOperationalReportsScreen(
+          tester,
+          role: UserRole.branchManager,
+          width: 390,
+          height: 844,
+        );
 
-      expect(find.text('Branch Operational Reports'), findsOneWidget);
-      expect(find.text('Export Report'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        expect(find.text('Branch Operational Reports'), findsOneWidget);
+        expect(find.text('Export (coming soon)'), findsOneWidget);
+        expect(find.textContaining('null'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-    testWidgets('renders cleanly on tablet (768x1024) with zero overflow', (tester) async {
+    testWidgets('renders cleanly on tablet (768x1024) with zero overflow', (
+      tester,
+    ) async {
       await pumpOperationalReportsScreen(
         tester,
         role: UserRole.branchManager,
@@ -134,8 +154,14 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('switching period chips triggers report reload', (tester) async {
-      await pumpOperationalReportsScreen(tester, role: UserRole.orgAdmin, width: 1200);
+    testWidgets('switching period chips triggers report reload', (
+      tester,
+    ) async {
+      await pumpOperationalReportsScreen(
+        tester,
+        role: UserRole.orgAdmin,
+        width: 1200,
+      );
 
       final thisMonthChip = find.text('This Month');
       expect(thisMonthChip, findsOneWidget);
@@ -144,19 +170,23 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      expect(reportsController.selectedPeriod, equals('This Month'));
+      expect(reportsController.selectedPeriod, equals(ReportPeriod.thisMonth));
     });
 
-    testWidgets('tapping Export Report triggers confirmation snackbar', (tester) async {
-      await pumpOperationalReportsScreen(tester, role: UserRole.orgAdmin, width: 1200);
+    testWidgets('export is disabled and never fakes a generated report', (
+      tester,
+    ) async {
+      await pumpOperationalReportsScreen(
+        tester,
+        role: UserRole.orgAdmin,
+        width: 1200,
+      );
 
-      final exportButton = find.text('Export Report');
-      expect(exportButton, findsOneWidget);
-
-      await tester.tap(exportButton);
+      expect(find.text('Export (coming soon)'), findsOneWidget);
+      await tester.tap(find.text('Export (coming soon)'));
       await tester.pump();
 
-      expect(find.text('Operational report export generated (PDF & CSV).'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
     });
   });
 }

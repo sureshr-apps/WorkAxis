@@ -13,9 +13,14 @@ class PlatformAdministrator {
     required this.createdAt,
     this.phone,
     this.lastActiveAt,
+    this.authUid,
   });
 
+  /// SQL member id (assigned by the server; a placeholder for a draft).
   final String id;
+
+  /// Firebase Auth uid; the target of account callables.
+  final String? authUid;
   final String fullName;
   final String username;
   final String email;
@@ -35,6 +40,8 @@ class PlatformAdministrator {
   }
 
   PlatformAdministrator copyWith({
+    String? id,
+    String? authUid,
     String? fullName,
     String? username,
     String? email,
@@ -45,7 +52,8 @@ class PlatformAdministrator {
     DateTime? lastActiveAt,
   }) {
     return PlatformAdministrator(
-      id: id,
+      id: id ?? this.id,
+      authUid: authUid ?? this.authUid,
       fullName: fullName ?? this.fullName,
       username: username ?? this.username,
       email: email ?? this.email,

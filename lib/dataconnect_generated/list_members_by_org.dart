@@ -4,16 +4,25 @@ class ListMembersByOrgVariablesBuilder {
   String orgId;
 
   final FirebaseDataConnect _dataConnect;
-  ListMembersByOrgVariablesBuilder(this._dataConnect, {required  this.orgId,});
-  Deserializer<ListMembersByOrgData> dataDeserializer = (dynamic json)  => ListMembersByOrgData.fromJson(jsonDecode(json));
-  Serializer<ListMembersByOrgVariables> varsSerializer = (ListMembersByOrgVariables vars) => jsonEncode(vars.toJson());
-  Future<QueryResult<ListMembersByOrgData, ListMembersByOrgVariables>> execute() {
+  ListMembersByOrgVariablesBuilder(this._dataConnect, {required this.orgId});
+  Deserializer<ListMembersByOrgData> dataDeserializer = (dynamic json) =>
+      ListMembersByOrgData.fromJson(jsonDecode(json));
+  Serializer<ListMembersByOrgVariables> varsSerializer = (
+    ListMembersByOrgVariables vars,
+  ) => jsonEncode(vars.toJson());
+  Future<QueryResult<ListMembersByOrgData, ListMembersByOrgVariables>>
+  execute() {
     return ref().execute();
   }
 
   QueryRef<ListMembersByOrgData, ListMembersByOrgVariables> ref() {
-    ListMembersByOrgVariables vars= ListMembersByOrgVariables(orgId: orgId,);
-    return _dataConnect.query("ListMembersByOrg", dataDeserializer, varsSerializer, vars);
+    ListMembersByOrgVariables vars = ListMembersByOrgVariables(orgId: orgId);
+    return _dataConnect.query(
+      "ListMembersByOrg",
+      dataDeserializer,
+      varsSerializer,
+      vars,
+    );
   }
 }
 
@@ -26,37 +35,46 @@ class ListMembersByOrgOrganizationMembers {
   final String? phone;
   final String role;
   final String status;
-  ListMembersByOrgOrganizationMembers.fromJson(dynamic json):
-  
-  id = nativeFromJson<String>(json['id']),
-  fullName = nativeFromJson<String>(json['fullName']),
-  username = nativeFromJson<String>(json['username']),
-  email = nativeFromJson<String>(json['email']),
-  phone = json['phone'] == null ? null : nativeFromJson<String>(json['phone']),
-  role = nativeFromJson<String>(json['role']),
-  status = nativeFromJson<String>(json['status']);
+  ListMembersByOrgOrganizationMembers.fromJson(dynamic json)
+    : id = nativeFromJson<String>(json['id']),
+      fullName = nativeFromJson<String>(json['fullName']),
+      username = nativeFromJson<String>(json['username']),
+      email = nativeFromJson<String>(json['email']),
+      phone = json['phone'] == null
+          ? null
+          : nativeFromJson<String>(json['phone']),
+      role = nativeFromJson<String>(json['role']),
+      status = nativeFromJson<String>(json['status']);
   @override
   bool operator ==(Object other) {
-    if(identical(this, other)) {
+    if (identical(this, other)) {
       return true;
     }
-    if(other.runtimeType != runtimeType) {
+    if (other.runtimeType != runtimeType) {
       return false;
     }
 
-    final ListMembersByOrgOrganizationMembers otherTyped = other as ListMembersByOrgOrganizationMembers;
-    return id == otherTyped.id && 
-    fullName == otherTyped.fullName && 
-    username == otherTyped.username && 
-    email == otherTyped.email && 
-    phone == otherTyped.phone && 
-    role == otherTyped.role && 
-    status == otherTyped.status;
-    
+    final ListMembersByOrgOrganizationMembers otherTyped =
+        other as ListMembersByOrgOrganizationMembers;
+    return id == otherTyped.id &&
+        fullName == otherTyped.fullName &&
+        username == otherTyped.username &&
+        email == otherTyped.email &&
+        phone == otherTyped.phone &&
+        role == otherTyped.role &&
+        status == otherTyped.status;
   }
+
   @override
-  int get hashCode => Object.hashAll([id.hashCode, fullName.hashCode, username.hashCode, email.hashCode, phone.hashCode, role.hashCode, status.hashCode]);
-  
+  int get hashCode => Object.hashAll([
+    id.hashCode,
+    fullName.hashCode,
+    username.hashCode,
+    email.hashCode,
+    phone.hashCode,
+    role.hashCode,
+    status.hashCode,
+  ]);
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
@@ -86,62 +104,61 @@ class ListMembersByOrgOrganizationMembers {
 @immutable
 class ListMembersByOrgData {
   final List<ListMembersByOrgOrganizationMembers> organizationMembers;
-  ListMembersByOrgData.fromJson(dynamic json):
-  
-  organizationMembers = (json['organizationMembers'] as List<dynamic>)
-        .map((e) => ListMembersByOrgOrganizationMembers.fromJson(e))
-        .toList();
+  ListMembersByOrgData.fromJson(dynamic json)
+    : organizationMembers = (json['organizationMembers'] as List<dynamic>)
+          .map((e) => ListMembersByOrgOrganizationMembers.fromJson(e))
+          .toList();
   @override
   bool operator ==(Object other) {
-    if(identical(this, other)) {
+    if (identical(this, other)) {
       return true;
     }
-    if(other.runtimeType != runtimeType) {
+    if (other.runtimeType != runtimeType) {
       return false;
     }
 
     final ListMembersByOrgData otherTyped = other as ListMembersByOrgData;
     return organizationMembers == otherTyped.organizationMembers;
-    
   }
+
   @override
   int get hashCode => organizationMembers.hashCode;
-  
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
-    json['organizationMembers'] = organizationMembers.map((e) => e.toJson()).toList();
+    json['organizationMembers'] = organizationMembers
+        .map((e) => e.toJson())
+        .toList();
     return json;
   }
 
-  ListMembersByOrgData({
-    required this.organizationMembers,
-  });
+  ListMembersByOrgData({required this.organizationMembers});
 }
 
 @immutable
 class ListMembersByOrgVariables {
   final String orgId;
-  @Deprecated('fromJson is deprecated for Variable classes as they are no longer required for deserialization.')
-  ListMembersByOrgVariables.fromJson(Map<String, dynamic> json):
-  
-  orgId = nativeFromJson<String>(json['orgId']);
+  @Deprecated(
+    'fromJson is deprecated for Variable classes as they are no longer required for deserialization.',
+  )
+  ListMembersByOrgVariables.fromJson(Map<String, dynamic> json)
+    : orgId = nativeFromJson<String>(json['orgId']);
   @override
   bool operator ==(Object other) {
-    if(identical(this, other)) {
+    if (identical(this, other)) {
       return true;
     }
-    if(other.runtimeType != runtimeType) {
+    if (other.runtimeType != runtimeType) {
       return false;
     }
 
-    final ListMembersByOrgVariables otherTyped = other as ListMembersByOrgVariables;
+    final ListMembersByOrgVariables otherTyped =
+        other as ListMembersByOrgVariables;
     return orgId == otherTyped.orgId;
-    
   }
+
   @override
   int get hashCode => orgId.hashCode;
-  
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
@@ -149,8 +166,5 @@ class ListMembersByOrgVariables {
     return json;
   }
 
-  ListMembersByOrgVariables({
-    required this.orgId,
-  });
+  ListMembersByOrgVariables({required this.orgId});
 }
-
