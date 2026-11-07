@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "workaxis-cloud"
+    "default": "omniretail-60c71",
+    "workaxis-cloud": "workaxis-cloud"
   }
 }
