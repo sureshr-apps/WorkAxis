@@ -345,6 +345,17 @@ void main() {
       expect(find.text('PLAN ENTITLEMENTS'), findsOneWidget);
       expect(find.text('COMMERCIAL AGREEMENT'), findsOneWidget);
       expect(find.text('LICENSE HISTORY'), findsOneWidget);
+      expect(find.text('EVENT'), findsOneWidget);
+      expect(find.text('ANNUAL MAINTENANCE'), findsOneWidget);
+
+      // Verify the table expands to fill available card width (greater than the 1110px legacy limit on 1280px surface)
+      final eventHeadingFinder = find.text('EVENT');
+      final tableHeaderRow = find.ancestor(
+        of: eventHeadingFinder,
+        matching: find.byType(Row),
+      ).first;
+      final headerWidth = tester.getSize(tableHeaderRow).width;
+      expect(headerWidth, greaterThan(1110.0));
     });
 
     testWidgets('shows the no-license state for an unlicensed organization', (

@@ -676,7 +676,10 @@ class _LicenseHistoryPanel extends StatelessWidget {
                   const Expanded(
                     child: _SectionHeading(title: 'LICENSE HISTORY'),
                   ),
-                  _SmallBadge(label: '${license.history.length} Record'),
+                  _SmallBadge(
+                    label:
+                        '${license.history.length} ${license.history.length == 1 ? 'Record' : 'Records'}',
+                  ),
                 ],
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -693,7 +696,11 @@ class _LicenseHistoryPanel extends StatelessWidget {
         LayoutBuilder(
           builder: (context, constraints) {
             if (constraints.maxWidth >= 1000) {
-              return _HistoryTable(license: license, dateFormat: dateFormat);
+              return _HistoryTable(
+                license: license,
+                dateFormat: dateFormat,
+                availableWidth: constraints.maxWidth,
+              );
             }
             return Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -717,10 +724,15 @@ class _LicenseHistoryPanel extends StatelessWidget {
 }
 
 class _HistoryTable extends StatelessWidget {
-  const _HistoryTable({required this.license, required this.dateFormat});
+  const _HistoryTable({
+    required this.license,
+    required this.dateFormat,
+    required this.availableWidth,
+  });
 
   final OrganizationLicenseDetails license;
   final DateFormat dateFormat;
+  final double availableWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -729,15 +741,23 @@ class _HistoryTable extends StatelessWidget {
       symbol: '₹',
       decimalDigits: 2,
     );
-    const minTableWidth = 1110.0;
+    const minTableWidth = 1000.0;
+    final tableWidth =
+        availableWidth < minTableWidth ? minTableWidth : availableWidth;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SizedBox(
-        width: minTableWidth,
+        width: tableWidth,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              color: AppColors.surfaceContainerLow,
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceContainerLow,
+                border: Border(
+                  bottom: BorderSide(color: AppColors.outlineSubtle, width: 1),
+                ),
+              ),
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.md,
                 vertical: AppSpacing.sm,
@@ -748,14 +768,20 @@ class _HistoryTable extends StatelessWidget {
                   _HistoryHeading('DATE & TIME', flex: 16),
                   _HistoryHeading('PLAN', flex: 10),
                   _HistoryHeading('LICENSE PERIOD', flex: 18),
-                  _HistoryHeading('STORES', flex: 7),
-                  _HistoryHeading('USERS', flex: 7),
-                  _HistoryHeading('ONE-TIME PRICE', flex: 14),
-                  _HistoryHeading('ANNUAL MAINTENANCE', flex: 15),
+                  _HistoryHeading('STORES', flex: 7, textAlign: TextAlign.center),
+                  _HistoryHeading('USERS', flex: 7, textAlign: TextAlign.center),
+                  _HistoryHeading('ONE-TIME PRICE', flex: 14, textAlign: TextAlign.right),
+                  _HistoryHeading('ANNUAL MAINTENANCE', flex: 15, textAlign: TextAlign.right),
                 ],
               ),
             ),
-            for (final entry in license.history)
+            for (var i = 0; i < license.history.length; i++) ...[
+              if (i > 0)
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: AppColors.outlineSubtle,
+                ),
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md,
@@ -765,13 +791,13 @@ class _HistoryTable extends StatelessWidget {
                   children: [
                     Expanded(
                       flex: 13,
-                      child: _HistoryEventBadge(label: entry.event),
+                      child: _HistoryEventBadge(label: license.history[i].event),
                     ),
                     Expanded(
                       flex: 16,
                       child: Text(
                         DateFormat('dd MMM yyyy, hh:mm a')
-                            .format(entry.occurredAt),
+                            .format(license.history[i].occurredAt),
                         style: GoogleFonts.robotoMono(
                           fontSize: 10,
                           color: AppColors.onSurface,
@@ -781,7 +807,7 @@ class _HistoryTable extends StatelessWidget {
                     Expanded(
                       flex: 10,
                       child: Text(
-                        '${entry.planName}\nLevel ${entry.level}',
+                        '${license.history[i].planName}\nLevel ${license.history[i].level}',
                         style: GoogleFonts.inter(
                           fontSize: 11,
                           color: AppColors.onSurface,
@@ -791,7 +817,7 @@ class _HistoryTable extends StatelessWidget {
                     Expanded(
                       flex: 18,
                       child: Text(
-                        '${dateFormat.format(entry.periodStart)} to ${dateFormat.format(entry.periodEnd)}',
+                        '${dateFormat.format(license.history[i].periodStart)} to ${dateFormat.format(license.history[i].periodEnd)}',
                         style: GoogleFonts.robotoMono(
                           fontSize: 10,
                           color: AppColors.onSurface,
@@ -801,7 +827,7 @@ class _HistoryTable extends StatelessWidget {
                     Expanded(
                       flex: 7,
                       child: Text(
-                        '${entry.stores}',
+                        '${license.history[i].stores}',
                         textAlign: TextAlign.center,
                         style: _historyValueStyle,
                       ),
@@ -809,7 +835,7 @@ class _HistoryTable extends StatelessWidget {
                     Expanded(
                       flex: 7,
                       child: Text(
-                        '${entry.users}',
+                        '${license.history[i].users}',
                         textAlign: TextAlign.center,
                         style: _historyValueStyle,
                       ),
@@ -817,7 +843,7 @@ class _HistoryTable extends StatelessWidget {
                     Expanded(
                       flex: 14,
                       child: Text(
-                        money.format(entry.negotiatedPrice),
+                        money.format(license.history[i].negotiatedPrice),
                         textAlign: TextAlign.right,
                         style: _historyValueStyle,
                       ),
@@ -825,7 +851,7 @@ class _HistoryTable extends StatelessWidget {
                     Expanded(
                       flex: 15,
                       child: Text(
-                        money.format(entry.annualMaintenancePrice),
+                        money.format(license.history[i].annualMaintenancePrice),
                         textAlign: TextAlign.right,
                         style: _historyValueStyle,
                       ),
@@ -833,6 +859,7 @@ class _HistoryTable extends StatelessWidget {
                   ],
                 ),
               ),
+            ],
           ],
         ),
       ),
@@ -884,16 +911,22 @@ class _HistoryCard extends StatelessWidget {
 }
 
 class _HistoryHeading extends StatelessWidget {
-  const _HistoryHeading(this.label, {required this.flex});
+  const _HistoryHeading(
+    this.label, {
+    required this.flex,
+    this.textAlign = TextAlign.start,
+  });
 
   final String label;
   final int flex;
+  final TextAlign textAlign;
 
   @override
   Widget build(BuildContext context) => Expanded(
     flex: flex,
     child: Text(
       label,
+      textAlign: textAlign,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: GoogleFonts.inter(
@@ -1045,6 +1078,7 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
+    clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
       color: AppColors.surfaceContainerLowest,
       border: Border.all(color: AppColors.outlineSubtle),
