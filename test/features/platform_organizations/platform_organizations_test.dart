@@ -213,6 +213,56 @@ void main() {
       expect(find.text('Apex Logistics & Freight'), findsOneWidget);
       expect(find.text('Acme Corporation'), findsNothing);
     });
+
+    testWidgets(
+      'paginates table on desktop and allows navigating pages and changing rows per page',
+      (tester) async {
+        final repository = MockPlatformOrganizationsRepository();
+        final controller = PlatformOrganizationsController(
+          repository: repository,
+        );
+
+        await tester.binding.setSurfaceSize(const Size(1280, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(buildTestWidget(controller: controller));
+        await tester.pumpAndSettle();
+
+        // Page 1 should show 1-5 of 7
+        expect(find.text('Showing 1–5 of 7 organizations'), findsOneWidget);
+        expect(find.text('Page 1 of 2'), findsOneWidget);
+        expect(find.text('Acme Corporation'), findsOneWidget);
+        expect(find.text('Apex Logistics & Freight'), findsOneWidget);
+        expect(find.text('Metro QuickServe Ops'), findsOneWidget);
+        // Page 2 items should not be visible yet
+        expect(find.text('ABC Enterprises Global'), findsNothing);
+        expect(find.text('Crestline Cold Storage'), findsNothing);
+
+        // Tap Next Page button
+        final nextBtn = find.byTooltip('Next page');
+        expect(nextBtn, findsOneWidget);
+        await tester.tap(nextBtn);
+        await tester.pumpAndSettle();
+
+        // Page 2 should show 6-7 of 7
+        expect(find.text('Showing 6–7 of 7 organizations'), findsOneWidget);
+        expect(find.text('Page 2 of 2'), findsOneWidget);
+        expect(find.text('ABC Enterprises Global'), findsOneWidget);
+        expect(find.text('Crestline Cold Storage'), findsOneWidget);
+        expect(find.text('Acme Corporation'), findsNothing);
+
+        // Tap Previous Page button
+        final prevBtn = find.byTooltip('Previous page');
+        expect(prevBtn, findsOneWidget);
+        await tester.tap(prevBtn);
+        await tester.pumpAndSettle();
+
+        // Back to Page 1
+        expect(find.text('Showing 1–5 of 7 organizations'), findsOneWidget);
+        expect(find.text('Page 1 of 2'), findsOneWidget);
+        expect(find.text('Acme Corporation'), findsOneWidget);
+      },
+    );
   });
 
   group('OrganizationDetailsScreen Widget Tests', () {
