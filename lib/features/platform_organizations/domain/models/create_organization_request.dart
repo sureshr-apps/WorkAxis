@@ -6,6 +6,7 @@ class CreateOrganizationRequest {
   final String name;
   final String? taxIdentification;
   final String? description;
+  final String? category;
   final String? contactName;
   final String? contactEmail;
   final String? contactPhone;
@@ -15,6 +16,7 @@ class CreateOrganizationRequest {
     required this.name,
     this.taxIdentification,
     this.description,
+    this.category,
     this.contactName,
     this.contactEmail,
     this.contactPhone,

@@ -2,17 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
-import 'package:workaxis/core/widgets/status_chip.dart';
+import 'package:workaxis/core/widgets/empty_state.dart';
+import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
+import 'package:workaxis/features/employees/domain/policies/organization_member_policy.dart';
 import 'package:workaxis/features/employees/presentation/controllers/organization_members_controller.dart';
+import 'package:workaxis/features/employees/presentation/screens/widgets/member_details_dialog.dart';
+import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_card.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_editor_dialog.dart';
 
 class EmployeeDirectoryScreen extends StatefulWidget {
@@ -24,7 +31,7 @@ class EmployeeDirectoryScreen extends StatefulWidget {
 }
 
 class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
-  final TextEditingController _searchController = TextEditingController();
+  late final TextEditingController _searchController;
 
   UserAccessContext? get _access =>
       context.read<AccessController>().accessContext;
@@ -34,7 +41,14 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    // Seed from the controller so the visible text always matches the filter
+    // that is actually applied.
+    _searchController = TextEditingController(
+      text: context.read<OrganizationMembersController>().searchQuery,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   @override
@@ -53,6 +67,25 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     }
   }
 
+  void _search(String query) {
+    final access = _access;
+    if (access == null) return;
+    context.read<OrganizationMembersController>().setQuery(
+      access: access,
+      query: query,
+      activeBranchId: _activeBranchId,
+    );
+  }
+
+  void _loadMore() {
+    final access = _access;
+    if (access == null) return;
+    context.read<OrganizationMembersController>().loadMore(
+      access: access,
+      activeBranchId: _activeBranchId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<OrganizationMembersController>();
@@ -61,158 +94,225 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         .watch<BranchContextController>()
         .activeBranch
         ?.branchId;
-    final isAdmin = access?.user.role == UserRole.orgAdmin;
-    final canCreate = isAdmin || access?.user.role == UserRole.branchManager;
-    final title = access?.user.role == UserRole.branchManager
+    final role = access?.user.role;
+    final isAdmin = role == UserRole.orgAdmin;
+    final canCreate = isAdmin || role == UserRole.branchManager;
+    final needsBranch = role == UserRole.branchManager && branchId == null;
+    final title = role == UserRole.branchManager
         ? 'Branch Employees'
         : 'Employee Directory';
+    final padding = context.responsivePagePadding;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _load,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: ResponsivePageContent(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                    AppPageHeader(
-                      eyebrow: isAdmin
-                          ? 'Organization Operations'
-                          : 'Branch Operations',
-                      title: title,
-                      subtitle: isAdmin
-                          ? 'Review account profiles and branch assignments.'
-                          : 'Manage employees assigned to the active branch.',
-                      action: canCreate
-                          ? AppButton.responsive(
-                              text: 'Add Employee',
-                              iconData: Icons.person_add_alt_1,
-                              onPressed: access == null
-                                  ? null
-                                  : () =>
-                                        _openEditor(access, branchId: branchId),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.radiusMd,
-                        ),
-                        border: Border.all(color: AppColors.outlineSubtle),
-                      ),
-                      child: AppTextField.search(
-                        controller: _searchController,
-                        hintText: 'Search name, username, email, or role',
-                        onChanged: (query) {
-                          if (access != null) {
-                            context
-                                .read<OrganizationMembersController>()
-                                .setQuery(
-                                  access: access,
-                                  query: query,
-                                  activeBranchId: branchId,
-                                );
-                          }
-                        },
-                        onClear: () {
-                          _searchController.clear();
-                          if (access != null) {
-                            context
-                                .read<OrganizationMembersController>()
-                                .setQuery(
-                                  access: access,
-                                  query: '',
-                                  activeBranchId: branchId,
-                                );
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    if (access?.user.role == UserRole.branchManager &&
-                        branchId == null)
-                      const _DirectoryMessage(
-                        icon: Icons.store_outlined,
-                        title: 'Select an active branch',
-                        detail: 'Choose one of your assigned branches before managing employees.',
-                      )
-                    else if (controller.isLoading)
-                      const Padding(
-                        padding: EdgeInsets.all(AppSpacing.xxl),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (controller.errorMessage != null)
-                      _DirectoryMessage(
-                        icon: Icons.cloud_off_outlined,
-                        title: 'Accounts are unavailable',
-                        detail: controller.errorMessage!,
-                        action: AppButton.outlined(
-                          text: 'Retry',
-                          isFullWidth: false,
-                          onPressed: _load,
-                        ),
-                      )
-                    else if (controller.members.isEmpty)
-                      _DirectoryMessage(
-                        icon: Icons.badge_outlined,
-                        title: 'No accounts found',
-                        detail: controller.query.isEmpty
-                            ? 'Accounts assigned to this scope will appear here.'
-                            : 'Try a different name, username, email, or role.',
-                      )
-                    else
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final columns = context.isCompact
-                              ? 1
-                              : context.isMedium
-                              ? 2
-                              : 3;
-                          final gap = AppSpacing.md;
-                          final width =
-                              (constraints.maxWidth - gap * (columns - 1)) /
-                              columns;
-                          return Wrap(
-                            spacing: gap,
-                            runSpacing: gap,
-                            children: [
-                              for (final member in controller.members)
-                                SizedBox(
-                                  width: width,
-                                  child: _OrganizationMemberCard(
-                                    member: member,
-                                    branchNames: _branchNames(member, access),
-                                    onView: () =>
-                                        _showDetails(member, access, branchId),
-                                    onEdit: canCreate
-                                        ? () => _openEditor(
-                                            access!,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: AppBreakpoints.maxPageWidth,
+              ),
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: padding.copyWith(bottom: 0),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          AppPageHeader(
+                            eyebrow: isAdmin
+                                ? 'Organization Operations'
+                                : 'Branch Operations',
+                            title: title,
+                            subtitle: isAdmin
+                                ? 'Review account profiles and branch assignments.'
+                                : 'Manage employees assigned to the active branch.',
+                            action: canCreate
+                                ? AppButton.responsive(
+                                    text: 'Add Employee',
+                                    iconData: Icons.person_add_alt_1,
+                                    onPressed: access == null
+                                        ? null
+                                        : () => _openEditor(
+                                            access,
                                             branchId: branchId,
-                                            member: member,
-                                          )
-                                        : null,
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
+                                          ),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          AppTextField.search(
+                            controller: _searchController,
+                            hintText: 'Search name, username, email, or role',
+                            onChanged: _search,
+                            onClear: () {
+                              _searchController.clear();
+                              _search('');
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          if (controller.actionErrorMessage != null) ...[
+                            ErrorBanner(
+                              message: controller.actionErrorMessage!,
+                              onDismiss: controller.clearActionError,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+                        ],
                       ),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
-                ),
+                    ),
+                  ),
+                  ..._bodySlivers(
+                    controller: controller,
+                    access: access,
+                    branchId: branchId,
+                    needsBranch: needsBranch,
+                    canCreate: canCreate,
+                    padding: padding,
+                  ),
+                ],
               ),
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
+
+  List<Widget> _bodySlivers({
+    required OrganizationMembersController controller,
+    required UserAccessContext? access,
+    required String? branchId,
+    required bool needsBranch,
+    required bool canCreate,
+    required EdgeInsets padding,
+  }) {
+    final sidePadding = EdgeInsets.symmetric(
+      horizontal: padding.horizontal / 2,
+    );
+    Widget message(Widget child) => SliverPadding(
+      padding: sidePadding,
+      sliver: SliverToBoxAdapter(child: child),
+    );
+
+    if (needsBranch) {
+      return [
+        message(
+          const EmptyState(
+            icon: Icons.store_outlined,
+            title: 'Select an active branch',
+            message: 'Choose one of your assigned branches before managing employees.',
+          ),
+        ),
+      ];
     }
+    if (controller.isLoading) {
+      return [
+        message(
+          const Padding(
+            padding: EdgeInsets.all(AppSpacing.xxl),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      ];
+    }
+    if (controller.errorMessage != null) {
+      return [
+        message(ErrorState(message: controller.errorMessage!, onRetry: _load)),
+      ];
+    }
+    if (controller.members.isEmpty) {
+      return [
+        message(
+          EmptyState(
+            icon: Icons.badge_outlined,
+            title: 'No accounts found',
+            message: controller.searchQuery.isEmpty
+                ? 'Accounts assigned to this scope will appear here.'
+                : 'Try a different name, username, email, or role.',
+          ),
+        ),
+      ];
+    }
+    final members = controller.members;
+    return [
+      SliverPadding(
+        padding: sidePadding,
+        sliver: SliverLayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.crossAxisExtent;
+            final columns = width < AppBreakpoints.mediumMin
+                ? 1
+                : width < AppBreakpoints.expandedMin
+                ? 2
+                : 3;
+            // Card content is fixed-structure; scale the row height with the
+            // user's text scale so large text does not overflow.
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            return SliverGrid.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                mainAxisSpacing: AppSpacing.md,
+                crossAxisSpacing: AppSpacing.md,
+                mainAxisExtent: 212 * (scale < 1 ? 1 : scale),
+              ),
+              itemCount: members.length,
+              itemBuilder: (context, index) =>
+                  _cardFor(members[index], access, branchId),
+            );
+          },
+        ),
+      ),
+      SliverPadding(
+        padding: sidePadding.copyWith(bottom: AppSpacing.xxl),
+        sliver: SliverToBoxAdapter(child: _footer(controller)),
+      ),
+    ];
+  }
+
+  Widget _cardFor(
+    OrganizationMember member,
+    UserAccessContext? access,
+    String? branchId,
+  ) {
+    final canEdit =
+        access != null &&
+        OrganizationMemberPolicy.canManage(access, member, branchId);
+    return OrganizationMemberCard(
+      member: member,
+      branchNames: _branchNames(member, access),
+      onView: () => _showDetails(member, access, branchId),
+      onEdit: canEdit
+          ? () => _openEditor(access, branchId: branchId, member: member)
+          : null,
+    );
+  }
+
+  Widget _footer(OrganizationMembersController controller) {
+    return Column(
+      children: [
+        Text(
+          'Showing ${controller.members.length} of ${controller.totalCount}',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.onSurfaceVariant,
+          ),
+        ),
+        if (controller.hasMore) ...[
+          const SizedBox(height: AppSpacing.sm),
+          AppButton.outlined(
+            text: 'Load more',
+            isFullWidth: false,
+            isLoading: controller.isLoadingMore,
+            onPressed: _loadMore,
+          ),
+        ],
+      ],
+    );
+  }
 
   List<String> _branchNames(
     OrganizationMember member,
@@ -230,6 +330,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     OrganizationMember? member,
   }) async {
     final controller = context.read<OrganizationMembersController>();
+    controller.clearActionError();
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => OrganizationMemberEditorDialog(
@@ -237,6 +338,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         activeBranchId: branchId,
         member: member,
         isSaving: controller.isSaving,
+        saveErrorMessage: () => controller.actionErrorMessage,
         onSave: (draft, password) => controller.saveMember(
           access: access,
           member: draft,
@@ -264,299 +366,10 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     if (scopedMember == null || !mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (context) => _MemberDetailsDialog(
+      builder: (context) => MemberDetailsDialog(
         member: scopedMember,
         branchNames: _branchNames(scopedMember, access),
       ),
     );
   }
-}
-
-class _OrganizationMemberCard extends StatelessWidget {
-  const _OrganizationMemberCard({
-    required this.member,
-    required this.branchNames,
-    required this.onView,
-    required this.onEdit,
-  });
-  final OrganizationMember member;
-  final List<String> branchNames;
-  final VoidCallback onView;
-  final VoidCallback? onEdit;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: AppColors.surfaceContainerLowest,
-    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-    child: InkWell(
-      onTap: onView,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.outlineSubtle),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 21,
-                  backgroundColor: AppColors.primaryContainer,
-                  child: Text(
-                    member.initials,
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        member.fullName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        member.role.displayName,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                StatusChip.fromStatus(
-                  member.status.name == 'active' ? 'Active' : 'Suspended',
-                  width: 96,
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _MemberLine(icon: Icons.alternate_email, value: member.username),
-            const SizedBox(height: AppSpacing.xs),
-            _MemberLine(icon: Icons.mail_outline, value: member.email),
-            const SizedBox(height: AppSpacing.sm),
-            _MemberLine(
-              icon: Icons.store_outlined,
-              value: branchNames.isEmpty
-                  ? 'No branch assigned'
-                  : branchNames.join(', '),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: AppButton.outlined(
-                    text: 'View details',
-                    iconData: Icons.visibility_outlined,
-                    onPressed: onView,
-                  ),
-                ),
-                if (onEdit != null) ...[
-                  const SizedBox(width: AppSpacing.sm),
-                  Tooltip(
-                    message: 'Edit account',
-                    child: FilledButton(
-                      onPressed: onEdit,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: AppColors.onPrimary,
-                        minimumSize: const Size(
-                          AppSpacing.minTouchTarget,
-                          AppSpacing.minTouchTarget,
-                        ),
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.radiusSm,
-                          ),
-                        ),
-                      ),
-                      child: const Icon(Icons.edit_outlined, size: 18),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _MemberLine extends StatelessWidget {
-  const _MemberLine({required this.icon, required this.value});
-  final IconData icon;
-  final String value;
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Icon(icon, size: 16, color: AppColors.onSurfaceVariant),
-      const SizedBox(width: AppSpacing.xs),
-      Expanded(
-        child: Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.onSurfaceVariant,
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-class _DirectoryMessage extends StatelessWidget {
-  const _DirectoryMessage({
-    required this.icon,
-    required this.title,
-    required this.detail,
-    this.action,
-  });
-  final IconData icon;
-  final String title;
-  final String detail;
-  final Widget? action;
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(AppSpacing.xl),
-    decoration: BoxDecoration(
-      color: AppColors.surfaceContainerLowest,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      border: Border.all(color: AppColors.outlineSubtle),
-    ),
-    child: Column(
-      children: [
-        Icon(icon, size: 32, color: AppColors.secondary),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          detail,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.onSurfaceVariant),
-        ),
-        if (action != null) ...[const SizedBox(height: AppSpacing.md), action!],
-      ],
-    ),
-  );
-}
-
-class _MemberDetailsDialog extends StatelessWidget {
-  const _MemberDetailsDialog({required this.member, required this.branchNames});
-  final OrganizationMember member;
-  final List<String> branchNames;
-  @override
-  Widget build(BuildContext context) {
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _Detail(label: 'Role', value: member.role.displayName),
-        _Detail(label: 'Username', value: member.username),
-        _Detail(label: 'Email', value: member.email),
-        _Detail(label: 'Phone', value: member.phone ?? 'Not provided'),
-        _Detail(
-          label: 'Status',
-          value: member.status.name == 'active' ? 'Active' : 'Suspended',
-        ),
-        _Detail(
-          label: 'Branches',
-          value: branchNames.isEmpty ? 'None' : branchNames.join(', '),
-        ),
-      ],
-    );
-    if (context.isCompact) {
-      return Dialog.fullscreen(
-        child: Scaffold(
-          appBar: AppBar(title: const Text('Account details')),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    member.fullName,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  content,
-                ],
-              ),
-            ),
-          ),
-          bottomNavigationBar: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: AppButton.primary(
-                text: 'Close',
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return AlertDialog(
-      title: Text(member.fullName),
-      content: SizedBox(width: 480, child: content),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-      ],
-    );
-  }
-}
-
-class _Detail extends StatelessWidget {
-  const _Detail({required this.label, required this.value});
-  final String label;
-  final String value;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            style: const TextStyle(color: AppColors.onSurfaceVariant),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-        ),
-      ],
-    ),
-  );
 }

@@ -1,5 +1,8 @@
+import 'package:workaxis/core/errors/validation_exception.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/create_organization_request.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
@@ -17,6 +20,7 @@ class MockPlatformOrganizationsDataSource {
     'org-abc',
   };
   int _nextGeneratedOrganizationNumber = 1;
+  int _nextAdminNumber = 1;
 
   MockPlatformOrganizationsDataSource() {
     _initDefaultData();
@@ -45,7 +49,6 @@ class MockPlatformOrganizationsDataSource {
             email: 'd.warner@acmecorp.com',
             phone: '+1 (555) 019-4481',
             roleTitle: 'Primary Admin',
-            status: 'Active',
           ),
           OrganizationAdminUser(
             id: 'admin-el',
@@ -53,7 +56,6 @@ class MockPlatformOrganizationsDataSource {
             email: 'e.lindqvist@acmecorp.com',
             phone: '+1 (555) 018-7729',
             roleTitle: 'Secondary Admin',
-            status: 'Active',
           ),
         ],
       ),
@@ -78,7 +80,6 @@ class MockPlatformOrganizationsDataSource {
             email: 'operations@apexlogistics.com',
             phone: '+1 (555) 019-2834',
             roleTitle: 'Primary Admin',
-            status: 'Active',
           ),
         ],
       ),
@@ -103,7 +104,6 @@ class MockPlatformOrganizationsDataSource {
             email: 'support@xyzretail.com',
             phone: '+1 (555) 345-6789',
             roleTitle: 'Primary Admin',
-            status: 'Active',
           ),
         ],
       ),
@@ -128,7 +128,6 @@ class MockPlatformOrganizationsDataSource {
             email: 'ops@northernsupply.co.uk',
             phone: '+44 20 7946 0912',
             roleTitle: 'Primary Admin',
-            status: 'Active',
           ),
         ],
       ),
@@ -153,7 +152,6 @@ class MockPlatformOrganizationsDataSource {
             email: 'dispatch@metroquickserve.com',
             phone: '+1 (555) 901-2345',
             roleTitle: 'Primary Admin',
-            status: 'Active',
           ),
         ],
       ),
@@ -178,7 +176,6 @@ class MockPlatformOrganizationsDataSource {
             email: 'contact@abcenterprises.com',
             phone: '+1 (555) 432-1098',
             roleTitle: 'Primary Admin',
-            status: 'Active',
           ),
         ],
       ),
@@ -295,7 +292,7 @@ class MockPlatformOrganizationsDataSource {
 
       return CustomerOrganization(
         id: id,
-        name: request.name,
+        name: request.name.trim(),
         code: code,
         status: OrganizationStatus.active,
         branchCount: 0,
@@ -303,6 +300,7 @@ class MockPlatformOrganizationsDataSource {
         createdAt: DateTime.now(),
         taxIdentification: _optionalValue(request.taxIdentification),
         description: _optionalValue(request.description),
+        category: _optionalValue(request.category),
         contactName: _optionalValue(request.contactName),
         contactEmail: _optionalValue(request.contactEmail),
         contactPhone: _optionalValue(request.contactPhone),
@@ -319,19 +317,97 @@ class MockPlatformOrganizationsDataSource {
   CustomerOrganization update(CustomerOrganization updated) {
     final index = _organizations.indexWhere((o) => o.id == updated.id);
     if (index == -1) {
-      throw Exception('Organization not found with ID ${updated.id}');
+      throw ValidationException('Organization not found.');
     }
-    _organizations[index] = updated;
-    return updated;
+    // Status changes go through setStatus, as in production.
+    final saved = updated.copyWith(status: _organizations[index].status);
+    _organizations[index] = saved;
+    return saved;
   }
 
   CustomerOrganization setStatus(String id, OrganizationStatus newStatus) {
     final index = _organizations.indexWhere((o) => o.id == id);
     if (index == -1) {
-      throw Exception('Organization not found with ID $id');
+      throw ValidationException('Organization not found.');
     }
     final updated = _organizations[index].copyWith(status: newStatus);
     _organizations[index] = updated;
     return updated;
+  }
+
+  /// Adds an administrator the way the account callables would: the server
+  /// assigns the id and usernames are unique across the platform.
+  CustomerOrganization createAdmin(
+    String organizationId,
+    OrganizationAdminDraft draft,
+  ) {
+    final index = _indexOf(organizationId);
+    final username = draft.username.trim().toLowerCase();
+    final taken = _organizations.any(
+      (o) => o.admins.any((a) => a.username?.toLowerCase() == username),
+    );
+    if (taken) {
+      throw ValidationException('That username is already in use.');
+    }
+    final admin = OrganizationAdminUser(
+      id: 'admin-mock-${_nextAdminNumber++}',
+      authUid: 'uid-mock-${_nextAdminNumber - 1}',
+      name: draft.name.trim(),
+      username: username,
+      email: draft.email.trim().toLowerCase(),
+      phone: draft.phone.trim(),
+    );
+    final org = _organizations[index];
+    return _organizations[index] = org.copyWith(admins: [...org.admins, admin]);
+  }
+
+  CustomerOrganization updateAdmin(
+    String organizationId,
+    OrganizationAdminUser updated,
+  ) {
+    final index = _indexOf(organizationId);
+    final org = _organizations[index];
+    final adminIndex = org.admins.indexWhere((a) => a.id == updated.id);
+    if (adminIndex == -1) {
+      throw ValidationException('Administrator not found.');
+    }
+    final current = org.admins[adminIndex];
+    final admins = [...org.admins];
+    admins[adminIndex] = OrganizationAdminUser(
+      id: current.id,
+      authUid: current.authUid,
+      name: updated.name.trim(),
+      username: current.username,
+      email: updated.email.trim().toLowerCase(),
+      phone: updated.phone.trim(),
+      roleTitle: current.roleTitle,
+      status: current.status,
+      lastLogin: current.lastLogin,
+    );
+    return _organizations[index] = org.copyWith(admins: admins);
+  }
+
+  CustomerOrganization setAdminStatus(
+    String organizationId,
+    String adminId,
+    OrganizationAdminStatus status,
+  ) {
+    final index = _indexOf(organizationId);
+    final org = _organizations[index];
+    if (!org.admins.any((a) => a.id == adminId)) {
+      throw ValidationException('Administrator not found.');
+    }
+    return _organizations[index] = org.copyWith(
+      admins: [
+        for (final a in org.admins)
+          a.id == adminId ? a.copyWith(status: status) : a,
+      ],
+    );
+  }
+
+  int _indexOf(String organizationId) {
+    final index = _organizations.indexWhere((o) => o.id == organizationId);
+    if (index == -1) throw ValidationException('Organization not found.');
+    return index;
   }
 }

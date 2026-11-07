@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:workaxis/app/app.dart';
-import 'package:workaxis/features/access/data/mock_access_repository.dart';
-import 'package:workaxis/features/authentication/data/mock_auth_repository.dart';
+
+import '../../helpers/test_backend.dart';
+
 import 'package:workaxis/features/platform_dashboard/data/mock_platform_dashboard_repository.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/controllers/platform_dashboard_controller.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/screens/platform_home_screen.dart';
@@ -105,7 +105,9 @@ void main() {
         expect(find.text('Requires triage'), findsNothing);
 
         // Verify StatusChip in the table has uniform width
-        final statusChips = tester.widgetList<StatusChip>(find.byType(StatusChip));
+        final statusChips = tester.widgetList<StatusChip>(
+          find.byType(StatusChip),
+        );
         expect(statusChips, isNotEmpty);
         for (final chip in statusChips) {
           expect(chip.width, equals(96.0));
@@ -253,45 +255,31 @@ void main() {
       expect(crestlineRecent.isActive, isTrue);
     });
 
-    test('WorkAxisApp default repositories share one MockPlatformOrganizationsDataSource instance', () {
-      final app = WorkAxisApp(
-        authRepository: MockAuthenticationRepository(delay: Duration.zero),
-        accessRepository: MockAccessRepository(delay: Duration.zero),
-      );
+    test(
+      'mock bundle shares one MockPlatformOrganizationsDataSource instance',
+      () {
+        final repos = buildTestBackend();
 
-      expect(app.platformRepository, isA<MockPlatformDashboardRepository>());
-      expect(
-        app.platformOrganizationsRepository,
-        isA<MockPlatformOrganizationsRepository>(),
-      );
+        expect(
+          repos.platformRepository,
+          isA<MockPlatformDashboardRepository>(),
+        );
+        expect(
+          repos.platformOrganizationsRepository,
+          isA<MockPlatformOrganizationsRepository>(),
+        );
 
-      final dashboard =
-          app.platformRepository as MockPlatformDashboardRepository;
-      final orgs =
-          app.platformOrganizationsRepository
-              as MockPlatformOrganizationsRepository;
+        final dashboard =
+            repos.platformRepository as MockPlatformDashboardRepository;
+        final orgs =
+            repos.platformOrganizationsRepository
+                as MockPlatformOrganizationsRepository;
 
-      expect(
-        dashboard.dataSource.organizationsDataSource,
-        same(orgs.dataSource),
-      );
-    });
-
-    test('WorkAxisApp preserves explicit repository injection', () {
-      final customDashboardRepo = MockPlatformDashboardRepository(
-        delay: Duration.zero,
-      );
-      final customOrgsRepo = MockPlatformOrganizationsRepository();
-
-      final app = WorkAxisApp(
-        authRepository: MockAuthenticationRepository(delay: Duration.zero),
-        accessRepository: MockAccessRepository(delay: Duration.zero),
-        platformRepository: customDashboardRepo,
-        platformOrganizationsRepository: customOrgsRepo,
-      );
-
-      expect(app.platformRepository, same(customDashboardRepo));
-      expect(app.platformOrganizationsRepository, same(customOrgsRepo));
-    });
+        expect(
+          dashboard.dataSource.organizationsDataSource,
+          same(orgs.dataSource),
+        );
+      },
+    );
   });
 }

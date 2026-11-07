@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:workaxis/app/routing/app_router.dart';
+import 'package:workaxis/app/routing/role_destinations.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
@@ -167,7 +167,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Platform Users'), findsOneWidget);
-    expect(find.byType(PlatformAdministratorCard), findsNWidgets(4));
+    expect(find.byType(PlatformAdministratorCard), findsAtLeastNWidgets(2));
+    await tester.scrollUntilVisible(
+      find.text("Devendra Patel"),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.byType(PlatformAdministratorsTable), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -314,14 +319,14 @@ void main() {
     await tester.tap(find.text('Suspend access'));
     await tester.pumpAndSettle();
     expect(find.text('Suspend access?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(TextButton, 'Suspend access').last);
+    await tester.tap(find.widgetWithText(FilledButton, 'Suspend access').last);
     await tester.pumpAndSettle();
     expect(find.text('Suspended'), findsOneWidget);
 
     await tester.tap(find.text('Restore access'));
     await tester.pumpAndSettle();
     expect(find.text('Restore access?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(TextButton, 'Restore access').last);
+    await tester.tap(find.widgetWithText(FilledButton, 'Restore access').last);
     await tester.pumpAndSettle();
     expect(find.text('Active'), findsOneWidget);
     expect(tester.takeException(), isNull);

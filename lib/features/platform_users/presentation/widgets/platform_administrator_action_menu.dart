@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
+import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 
-enum PlatformAdministratorAction { view, edit, suspend, restore }
+enum PlatformAdministratorAction { view, edit, resetPassword, suspend, restore }
 
 class PlatformAdministratorActionMenu extends StatelessWidget {
   const PlatformAdministratorActionMenu({
@@ -29,6 +30,10 @@ class PlatformAdministratorActionMenu extends StatelessWidget {
           value: PlatformAdministratorAction.edit,
           child: Text('Edit profile'),
         ),
+        const PopupMenuItem(
+          value: PlatformAdministratorAction.resetPassword,
+          child: Text('Reset password'),
+        ),
         if (administrator.status == AccountStatus.active)
           const PopupMenuItem(
             value: PlatformAdministratorAction.suspend,
@@ -44,8 +49,8 @@ class PlatformAdministratorActionMenu extends StatelessWidget {
           ),
       ],
       child: const SizedBox(
-        width: 48,
-        height: 48,
+        width: AppSpacing.minTouchTarget,
+        height: AppSpacing.minTouchTarget,
         child: Icon(Icons.more_vert, semanticLabel: 'Administrator actions'),
       ),
     );

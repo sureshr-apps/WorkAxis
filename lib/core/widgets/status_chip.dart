@@ -45,8 +45,9 @@ class StatusChip extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: width != null ? MainAxisSize.max : MainAxisSize.min,
-        mainAxisAlignment:
-            width != null ? MainAxisAlignment.center : MainAxisAlignment.start,
+        mainAxisAlignment: width != null
+            ? MainAxisAlignment.center
+            : MainAxisAlignment.start,
         children: [
           Container(
             width: 6,

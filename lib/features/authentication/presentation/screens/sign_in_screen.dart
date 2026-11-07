@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/config/backend_config.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -12,7 +14,9 @@ import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/features/authentication/data/mock_auth_data_source.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
+import 'package:workaxis/features/authentication/presentation/screens/widgets/demo_accounts_panel.dart';
 import 'package:workaxis/features/authentication/presentation/screens/widgets/sign_in_header.dart';
 import 'package:workaxis/features/authentication/presentation/screens/widgets/sign_in_hero_panel.dart';
 
@@ -63,6 +67,14 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  void _fillDemoAccount(MockDemoAccount account) {
+    setState(() {
+      _identifierController.text = account.username;
+      _passwordController.text = account.password;
+      _validationError = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final authController = context.watch<AuthController>();
@@ -77,10 +89,7 @@ class _SignInScreenState extends State<SignInScreen> {
         body: Row(
           children: [
             // Left: Enterprise Brand & Telemetry Showcase
-            const Expanded(
-              flex: 5,
-              child: SignInHeroPanel(),
-            ),
+            const Expanded(flex: 5, child: SignInHeroPanel()),
 
             // Right: Authentication Workspace
             Expanded(
@@ -113,10 +122,7 @@ class _SignInScreenState extends State<SignInScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFEEF3FB),
-              Color(0xFFF8F9FC),
-            ],
+            colors: [Color(0xFFEEF3FB), Color(0xFFF8F9FC)],
           ),
         ),
         child: SafeArea(
@@ -207,10 +213,12 @@ class _SignInScreenState extends State<SignInScreen> {
 
         const SizedBox(height: AppSpacing.xl),
 
-        // Quick Demo Accounts Fill for ease of role inspection
-        _buildDemoAccountsQuickFill(),
-
-        const SizedBox(height: AppSpacing.lg),
+        // Debug-only quick fill; never rendered in profile/release builds or
+        // against the real backend.
+        if (BackendConfig.isMock && kDebugMode) ...[
+          DemoAccountsPanel(onSelected: _fillDemoAccount),
+          const SizedBox(height: AppSpacing.lg),
+        ],
 
         // Security Footnote
         Row(
@@ -256,89 +264,6 @@ class _SignInScreenState extends State<SignInScreen> {
       ),
       padding: const EdgeInsets.all(AppSpacing.xxl),
       child: content,
-    );
-  }
-
-  Widget _buildDemoAccountsQuickFill() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FC),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.bolt_rounded,
-                size: 14,
-                color: AppColors.primary,
-              ),
-              const SizedBox(width: 5),
-              Text(
-                'QUICK-FILL TEST ACCOUNTS',
-                style: GoogleFonts.robotoMono(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _buildDemoChip('Platform Owner', 'owner', 'Password123!'),
-              _buildDemoChip('Org Admin', 'orgadmin', 'Password123!'),
-              _buildDemoChip('Branch Mgr', 'manager_multi', 'Password123!'),
-              _buildDemoChip('Employee', 'employee', 'Password123!'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDemoChip(String roleLabel, String username, String password) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            _identifierController.text = username;
-            _passwordController.text = password;
-            _validationError = null;
-          });
-        },
-        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-            border: Border.all(color: const Color(0xFFCBD5E1)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                roleLabel,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.onSurface,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

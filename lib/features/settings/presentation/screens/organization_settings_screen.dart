@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
-import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/core/responsive/responsive_layout.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
-import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
+import 'package:workaxis/features/settings/domain/models/organization_settings.dart';
+import 'package:workaxis/features/settings/domain/validators/settings_validators.dart';
+import 'package:workaxis/features/settings/presentation/controllers/settings_controller.dart';
+import 'package:workaxis/features/settings/presentation/widgets/settings_page.dart';
+import 'package:workaxis/features/settings/presentation/widgets/settings_section_card.dart';
 
 class OrganizationSettingsScreen extends StatefulWidget {
   const OrganizationSettingsScreen({super.key});
@@ -17,17 +18,63 @@ class OrganizationSettingsScreen extends StatefulWidget {
       _OrganizationSettingsScreenState();
 }
 
-class _OrganizationSettingsScreenState extends State<OrganizationSettingsScreen> {
-  final _emailController = TextEditingController(text: 'ops@freshgrocer.internal');
-  final _phoneController = TextEditingController(text: '+1 (555) 392-1084');
-  final _geofenceRadiusController = TextEditingController(text: '150');
-  final _gracePeriodController = TextEditingController(text: '15');
+class _OrganizationSettingsScreenState
+    extends State<OrganizationSettingsScreen> {
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _geofenceRadiusController = TextEditingController();
+  final _gracePeriodController = TextEditingController();
 
-  bool _allowBreaks = true;
-  bool _requireGeolocation = true;
-  bool _dailyDigest = true;
-  bool _returnAlerts = true;
-  bool _isSaving = false;
+  bool _allowBreaks = OrganizationSettings.defaults.allowBreaks;
+  bool _requireGeolocation = OrganizationSettings.defaults.requireGeolocation;
+  bool _dailyDigest = OrganizationSettings.defaults.dailyDigest;
+  bool _returnAlerts = OrganizationSettings.defaults.returnAlerts;
+
+  /// The loaded settings the form fields were last populated from.
+  OrganizationSettings? _populatedFrom;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    final access = context.read<AccessController>().accessContext;
+    if (access == null) return;
+    await context.read<SettingsController>().loadOrganization(access: access);
+  }
+
+  void _populate(OrganizationSettings settings) {
+    if (identical(_populatedFrom, settings)) return;
+    _populatedFrom = settings;
+    _emailController.text = settings.operationsEmail ?? '';
+    _phoneController.text = settings.emergencyPhone ?? '';
+    _geofenceRadiusController.text = '${settings.geofenceRadiusMeters}';
+    _gracePeriodController.text = '${settings.gracePeriodMinutes}';
+    _allowBreaks = settings.allowBreaks;
+    _requireGeolocation = settings.requireGeolocation;
+    _dailyDigest = settings.dailyDigest;
+    _returnAlerts = settings.returnAlerts;
+  }
+
+  /// Unparseable numbers become -1 so validation reports the allowed range.
+  OrganizationSettings _collect() => OrganizationSettings(
+    geofenceRadiusMeters:
+        int.tryParse(_geofenceRadiusController.text.trim()) ?? -1,
+    gracePeriodMinutes: int.tryParse(_gracePeriodController.text.trim()) ?? -1,
+    allowBreaks: _allowBreaks,
+    requireGeolocation: _requireGeolocation,
+    dailyDigest: _dailyDigest,
+    returnAlerts: _returnAlerts,
+    operationsEmail: _blankToNull(_emailController.text),
+    emergencyPhone: _blankToNull(_phoneController.text),
+  );
+
+  String? _blankToNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
 
   @override
   void dispose() {
@@ -38,327 +85,189 @@ class _OrganizationSettingsScreenState extends State<OrganizationSettingsScreen>
     super.dispose();
   }
 
+  void _edited() => context.read<SettingsController>().clearSaveState();
+
+  void _toast(String message, {required bool success}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success
+            ? AppColors.statusActive
+            : AppColors.statusUrgent,
+      ),
+    );
+  }
+
   Future<void> _saveSettings() async {
-    setState(() => _isSaving = true);
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (mounted) {
-      setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Organization operational settings saved successfully.'),
-          backgroundColor: AppColors.statusActive,
-        ),
-      );
+    final access = context.read<AccessController>().accessContext;
+    if (access == null) {
+      _toast('Sign in again to save settings.', success: false);
+      return;
     }
+    final controller = context.read<SettingsController>();
+    final saved = await controller.saveOrganization(
+      access: access,
+      settings: _collect(),
+    );
+    if (!mounted) return;
+    _toast(
+      saved
+          ? 'Organization operational settings saved.'
+          : (controller.saveErrorMessage ??
+                controller.validationErrors.values.firstOrNull ??
+                'Settings could not be saved.'),
+      success: saved,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final access = context.watch<AccessController>().accessContext;
+    final settings = context.watch<SettingsController>();
     final org = access?.organization;
-    final orgName = org?.name ?? 'FreshGrocer Supermarkets';
-    final orgCode = org?.code ?? 'ORG-001';
+    final loaded = settings.organizationSettings;
+    if (loaded != null) _populate(loaded);
+    final errors = settings.validationErrors;
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: ResponsivePageContent(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (context.isCompact) ...[
-                  AppPageHeader(
-                    eyebrow: 'Enterprise Administration',
-                    title: 'Organization Settings',
-                    subtitle: 'Manage operational parameters, geofence radius defaults, and notification digests.',
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: AppButton(
-                      text: 'Save Changes',
-                      iconData: Icons.check,
-                      variant: AppButtonVariant.primary,
-                      isLoading: _isSaving,
-                      onPressed: _saveSettings,
-                    ),
-                  ),
-                ] else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: AppPageHeader(
-                          eyebrow: 'Enterprise Administration',
-                          title: 'Organization Settings',
-                          subtitle: 'Manage operational parameters, geofence radius defaults, and notification digests.',
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      AppButton(
-                        text: 'Save Changes',
-                        iconData: Icons.check,
-                        variant: AppButtonVariant.primary,
-                        isLoading: _isSaving,
-                        onPressed: _saveSettings,
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Organization Profile Card
-                _buildProfileCard(context, orgName, orgCode),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Attendance Policy Card
-                _buildAttendancePolicyCard(context),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Notifications Digest Card
-                _buildNotificationsCard(),
-                const SizedBox(height: AppSpacing.xxl),
-              ],
-            ),
+    return SettingsPage(
+      eyebrow: 'Enterprise Administration',
+      title: 'Organization Settings',
+      subtitle: 'Manage operational parameters, geofence radius defaults, and notification digests.',
+      controller: settings,
+      status: settings.organizationStatus,
+      hasLoaded: loaded != null,
+      loadFallbackMessage: 'Could not load organization settings.',
+      onRetry: _load,
+      onSave: _saveSettings,
+      children: [
+        SettingsSectionCard(
+          icon: Icons.business_outlined,
+          title: 'Organization Information',
+          subtitle: 'Identity and primary administrative contact coordinates',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingsFieldPair(
+                first: SettingsReadOnlyValue(
+                  label: 'Organization Name',
+                  value: org?.name ?? '—',
+                ),
+                second: SettingsReadOnlyValue(
+                  label: 'Identifier Code',
+                  value: org?.code ?? '—',
+                  mono: true,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color: AppColors.outlineSubtle,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              SettingsFieldPair(
+                first: AppTextField(
+                  controller: _emailController,
+                  label: 'Operations Contact Email',
+                  errorText: errors[SettingsField.operationsEmail],
+                  keyboardType: TextInputType.emailAddress,
+                  onChanged: (_) => _edited(),
+                ),
+                second: AppTextField(
+                  controller: _phoneController,
+                  label: 'Emergency Support Phone',
+                  errorText: errors[SettingsField.emergencyPhone],
+                  keyboardType: TextInputType.phone,
+                  onChanged: (_) => _edited(),
+                ),
+              ),
+            ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildProfileCard(BuildContext context, String orgName, String orgCode) {
-    final isCompact = context.isCompact;
-
-    return Card(
-      elevation: 0,
-      color: AppColors.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        side: const BorderSide(color: AppColors.outlineSubtle),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.business_outlined, color: AppColors.primary, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Organization Information',
-                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Identity and primary administrative contact coordinates',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Organization Name', style: AppTypography.labelSmall.copyWith(color: AppColors.textMuted)),
-                      const SizedBox(height: 4),
-                      Text(orgName, style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Identifier Code', style: AppTypography.labelSmall.copyWith(color: AppColors.textMuted)),
-                      const SizedBox(height: 4),
-                      Text(orgCode, style: AppTypography.labelMono.copyWith(fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const Divider(height: 1, thickness: 1, color: AppColors.outlineSubtle),
-            const SizedBox(height: AppSpacing.md),
-            if (isCompact) ...[
-              AppTextField(
-                controller: _emailController,
-                label: 'Operations Contact Email',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: _phoneController,
-                label: 'Emergency Support Phone',
-              ),
-            ] else
-              Row(
-                children: [
-                  Expanded(
-                    child: AppTextField(
-                      controller: _emailController,
-                      label: 'Operations Contact Email',
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: AppTextField(
-                      controller: _phoneController,
-                      label: 'Emergency Support Phone',
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttendancePolicyCard(BuildContext context) {
-    final isCompact = context.isCompact;
-
-    return Card(
-      elevation: 0,
-      color: AppColors.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        side: const BorderSide(color: AppColors.outlineSubtle),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.pin_drop_outlined, color: AppColors.primary, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Attendance & Geofencing Policies',
-                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
+        SettingsSectionCard(
+          icon: Icons.pin_drop_outlined,
+          title: 'Attendance & Geofencing Policies',
+          subtitle:
               'Enforce branch perimeter thresholds and punch grace intervals',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            if (isCompact) ...[
-              AppTextField(
-                controller: _geofenceRadiusController,
-                label: 'Default Geofence Radius (Meters)',
-                keyboardType: TextInputType.number,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingsFieldPair(
+                first: AppTextField(
+                  controller: _geofenceRadiusController,
+                  label: 'Default Geofence Radius (Meters)',
+                  errorText: errors[SettingsField.geofenceRadius],
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => _edited(),
+                ),
+                second: AppTextField(
+                  controller: _gracePeriodController,
+                  label: 'Check-in Grace Period (Minutes)',
+                  errorText: errors[SettingsField.gracePeriod],
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => _edited(),
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: _gracePeriodController,
-                label: 'Check-in Grace Period (Minutes)',
-                keyboardType: TextInputType.number,
+              SettingsSwitchTile(
+                value: _requireGeolocation,
+                onChanged: (v) {
+                  setState(() => _requireGeolocation = v);
+                  _edited();
+                },
+                title: 'Require Device GPS Fix for Check-in',
+                subtitle: 'Rejects punches when employee device is outside designated branch boundary',
               ),
-            ] else
-              Row(
-                children: [
-                  Expanded(
-                    child: AppTextField(
-                      controller: _geofenceRadiusController,
-                      label: 'Default Geofence Radius (Meters)',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: AppTextField(
-                      controller: _gracePeriodController,
-                      label: 'Check-in Grace Period (Minutes)',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color: AppColors.outlineSubtle,
               ),
-            const SizedBox(height: AppSpacing.md),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _requireGeolocation,
-              onChanged: (v) => setState(() => _requireGeolocation = v),
-              title: const Text('Require Device GPS Fix for Check-in', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              subtitle: const Text('Rejects punches when employee device is outside designated branch boundary', style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-            ),
-            const Divider(height: 1, thickness: 1, color: AppColors.outlineSubtle),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _allowBreaks,
-              onChanged: (v) => setState(() => _allowBreaks = v),
-              title: const Text('Allow Mid-Shift Break Recording', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              subtitle: const Text('Enables breakfast, tea, and meal break logs in the employee app', style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-            ),
-          ],
+              SettingsSwitchTile(
+                value: _allowBreaks,
+                onChanged: (v) {
+                  setState(() => _allowBreaks = v);
+                  _edited();
+                },
+                title: 'Allow Mid-Shift Break Recording',
+                subtitle: 'Enables breakfast, tea, and meal break logs in the employee app',
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNotificationsCard() {
-    return Card(
-      elevation: 0,
-      color: AppColors.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        side: const BorderSide(color: AppColors.outlineSubtle),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.notifications_active_outlined, color: AppColors.primary, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Automated Operational Digests',
-                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Select which automated operational alerts are dispatched to branch leadership',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _dailyDigest,
-              onChanged: (v) => setState(() => _dailyDigest = v),
-              title: const Text('Daily Morning Attendance Digest', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              subtitle: const Text('Summarizes shift roster, late arrivals, and absent staff at 09:00 AM', style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-            ),
-            const Divider(height: 1, thickness: 1, color: AppColors.outlineSubtle),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _returnAlerts,
-              onChanged: (v) => setState(() => _returnAlerts = v),
-              title: const Text('High-Value Product Return Alerts', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              subtitle: const Text('Immediate alert when a return request exceeds standard batch limits', style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-            ),
-          ],
+        SettingsSectionCard(
+          icon: Icons.notifications_active_outlined,
+          title: 'Automated Operational Digests',
+          subtitle: 'Select which automated operational alerts are dispatched to branch leadership',
+          child: Column(
+            children: [
+              SettingsSwitchTile(
+                value: _dailyDigest,
+                onChanged: (v) {
+                  setState(() => _dailyDigest = v);
+                  _edited();
+                },
+                title: 'Daily Morning Attendance Digest',
+                subtitle: 'Summarizes shift roster, late arrivals, and absent staff at 09:00 AM',
+              ),
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color: AppColors.outlineSubtle,
+              ),
+              SettingsSwitchTile(
+                value: _returnAlerts,
+                onChanged: (v) {
+                  setState(() => _returnAlerts = v);
+                  _edited();
+                },
+                title: 'High-Value Product Return Alerts',
+                subtitle: 'Immediate alert when a return request exceeds standard batch limits',
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

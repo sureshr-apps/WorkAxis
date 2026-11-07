@@ -1,62 +1,76 @@
-import 'dart:math';
+import 'package:workaxis/core/backend/account_callables.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/core/errors/backend_error_mapper.dart';
+import 'package:workaxis/core/errors/validation_exception.dart';
+import 'package:workaxis/core/ids/request_ids.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
+import 'package:workaxis/core/validation/contact_validators.dart';
+import 'package:workaxis/core/validation/login_email.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/employees/data/organization_members_remote_data_source.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
+import 'package:workaxis/features/employees/domain/policies/organization_member_policy.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 
-/// Production implementation of [OrganizationMembersRepository] using Firebase SQL Connect.
-class SqlConnectOrganizationMembersRepository implements OrganizationMembersRepository {
+/// Production [OrganizationMembersRepository].
+///
+/// Reads come from SQL Connect (server-side filters and pagination); every
+/// identity write goes through the account callables. Nothing is written to
+/// SQL, Auth or Firestore directly from the client.
+class SqlConnectOrganizationMembersRepository
+    implements OrganizationMembersRepository {
   SqlConnectOrganizationMembersRepository({
-    WorkaxisConnectorConnector? connector,
-  }) : _customConnector = connector;
+    required this._dataSource,
+    required this._accounts,
+  });
 
-  final WorkaxisConnectorConnector? _customConnector;
-  WorkaxisConnectorConnector get _connector =>
-      _customConnector ?? WorkaxisConnectorConnector.instance;
+  final OrganizationMembersRemoteDataSource _dataSource;
+  final AccountCallables _accounts;
 
-  final Random _random = Random();
-
-  String _getOrgId(UserAccessContext access) {
-    final orgId = access.organization?.id;
-    if (orgId == null || orgId.isEmpty) {
-      throw const AccessDeniedException('No organization context available.');
-    }
-    return orgId;
-  }
+  /// Idempotency keys for in-flight creates, so retrying the same draft
+  /// reuses the `requestId` (server ledger replays instead of duplicating).
+  final Map<String, String> _pendingRequestIds = {};
 
   @override
-  Future<List<OrganizationMember>> getMembers({
+  Future<PageResult<OrganizationMember>> getMembersPage({
     required UserAccessContext access,
     String? activeBranchId,
     String? query,
+    AccountStatus? status,
+    UserRole? role,
+    int offset = 0,
+    int limit = defaultPageSize,
   }) async {
-    final orgId = _getOrgId(access);
     try {
-      final response = await _connector.listMembersByOrg(orgId: orgId).execute();
-      var members = response.data.organizationMembers
-          .map((m) => _toMember(orgId, m))
-          .toList();
-
-      // Enforce role-based access scoping
-      if (access.user.role == UserRole.employee) {
-        members = members.where((m) => m.id == access.user.id).toList();
+      OrganizationMemberPolicy.assertCanViewMembers(access);
+      final orgId = OrganizationMemberPolicy.requireOrganizationId(access);
+      final branchId = OrganizationMemberPolicy.effectiveBranchId(
+        access,
+        activeBranchId,
+      );
+      final name = query?.trim();
+      if (branchId == null) {
+        return await _dataSource.listByOrganization(
+          organizationId: orgId,
+          limit: limit,
+          offset: offset,
+          nameContains: name,
+          status: status,
+          role: role,
+        );
       }
-
-      if (query != null && query.trim().isNotEmpty) {
-        final q = query.trim().toLowerCase();
-        members = members.where((m) =>
-            m.fullName.toLowerCase().contains(q) ||
-            m.email.toLowerCase().contains(q) ||
-            m.username.toLowerCase().contains(q)).toList();
-      }
-
-      return members;
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to retrieve members: ${e.toString()}');
+      return await _dataSource.listByBranch(
+        organizationId: orgId,
+        branchId: branchId,
+        limit: limit,
+        offset: offset,
+        nameContains: name,
+        status: status,
+      );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
   }
 
@@ -66,11 +80,22 @@ class SqlConnectOrganizationMembersRepository implements OrganizationMembersRepo
     required String memberId,
     String? activeBranchId,
   }) async {
-    final members = await getMembers(
-      access: access,
-      activeBranchId: activeBranchId,
-    );
-    return members.where((m) => m.id == memberId).firstOrNull;
+    try {
+      OrganizationMemberPolicy.assertCanViewMembers(access);
+      final orgId = OrganizationMemberPolicy.requireOrganizationId(access);
+      final member = await _dataSource.getById(memberId);
+      if (member == null || member.organizationId != orgId) return null;
+      if (access.user.role == UserRole.branchManager) {
+        final branch = OrganizationMemberPolicy.effectiveBranchId(
+          access,
+          activeBranchId,
+        );
+        if (!member.branchIds.contains(branch)) return null;
+      }
+      return member;
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
   }
 
   @override
@@ -80,60 +105,164 @@ class SqlConnectOrganizationMembersRepository implements OrganizationMembersRepo
     required String initialPassword,
     String? activeBranchId,
   }) async {
-    final orgId = _getOrgId(access);
-
-    if (access.user.role == UserRole.branchManager) {
-      if (member.role != UserRole.employee) {
-        throw const AccessDeniedException('Branch Managers may only create Employees.');
-      }
-    }
-
-    final id = member.id.isEmpty ? 'usr-${_random.nextInt(90000) + 10000}' : member.id;
-
     try {
-      await _connector
-          .createOrganizationMember(
-            id: id,
-            orgId: orgId,
-            fullName: member.fullName,
-            username: member.username,
-            email: member.email,
-            role: member.role.name,
-          )
-          .phone(member.phone)
-          .status(member.status.name)
-          .execute();
-
-      return member.copyWith(fullName: member.fullName);
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to save organization member: ${e.toString()}');
+      return member.id.isEmpty
+          ? await _create(access, member, initialPassword, activeBranchId)
+          : await _update(access, member, activeBranchId);
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
   }
 
-  OrganizationMember _toMember(
-    String orgId,
-    ListMembersByOrgOrganizationMembers m,
-  ) {
-    final role = UserRole.values.firstWhere(
-      (r) => r.name.toLowerCase() == m.role.toLowerCase(),
-      orElse: () => UserRole.employee,
-    );
-    final status = AccountStatus.values.firstWhere(
-      (s) => s.name.toLowerCase() == m.status.toLowerCase(),
-      orElse: () => AccountStatus.active,
-    );
+  @override
+  Future<OrganizationMember> setMemberStatus({
+    required UserAccessContext access,
+    required OrganizationMember member,
+    required AccountStatus status,
+    String? activeBranchId,
+  }) async {
+    try {
+      final existing = await _loadExisting(access, member.id);
+      OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+        access: access,
+        existing: existing,
+        activeBranchId: activeBranchId,
+      );
+      await _accounts.setStatus(
+        targetUid: _requireUid(existing),
+        status: status,
+      );
+      return await _reload(existing.id);
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
 
-    return OrganizationMember(
-      id: m.id,
-      organizationId: orgId,
-      fullName: m.fullName,
-      username: m.username,
-      email: m.email,
-      phone: m.phone,
-      role: role,
-      branchIds: const [],
-      status: status,
+  @override
+  Future<void> resetMemberPassword({
+    required UserAccessContext access,
+    required OrganizationMember member,
+    required String newPassword,
+    String? activeBranchId,
+  }) async {
+    try {
+      final passwordError = ContactValidators.password(newPassword);
+      if (passwordError != null) throw ValidationException(passwordError);
+      final existing = await _loadExisting(access, member.id);
+      OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+        access: access,
+        existing: existing,
+        activeBranchId: activeBranchId,
+      );
+      await _accounts.resetPassword(
+        targetUid: _requireUid(existing),
+        newPassword: newPassword,
+      );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  Future<OrganizationMember> _create(
+    UserAccessContext access,
+    OrganizationMember draft,
+    String password,
+    String? activeBranchId,
+  ) async {
+    final prepared = OrganizationMemberPolicy.prepareCreate(
+      access: access,
+      draft: draft,
+      initialPassword: password,
+      activeBranchId: activeBranchId,
     );
+    final key = '${prepared.organizationId}|${prepared.username}';
+    final requestId = _pendingRequestIds.putIfAbsent(key, RequestIds.uuidV4);
+    final result = await _accounts.provision(
+      requestId: requestId,
+      fullName: prepared.fullName,
+      username: prepared.username,
+      email: prepared.email,
+      phone: prepared.phone,
+      password: password,
+      role: prepared.role,
+      organizationId: prepared.organizationId,
+      branchIds: prepared.branchIds,
+    );
+    _pendingRequestIds.remove(key);
+    return prepared.copyWith(
+      id: result.memberId,
+      authUid: result.uid,
+      email: LoginEmail.displayable(result.loginEmail),
+      status: AccountStatus.active,
+    );
+  }
+
+  Future<OrganizationMember> _update(
+    UserAccessContext access,
+    OrganizationMember draft,
+    String? activeBranchId,
+  ) async {
+    final existing = await _loadExisting(access, draft.id);
+    final next = OrganizationMemberPolicy.prepareUpdate(
+      access: access,
+      existing: existing,
+      draft: draft,
+      activeBranchId: activeBranchId,
+    );
+    final uid = _requireUid(existing);
+
+    final sameBranches =
+        {...existing.branchIds}.difference({...next.branchIds}).isEmpty &&
+        {...next.branchIds}.difference({...existing.branchIds}).isEmpty;
+    final hadPhone = (existing.phone ?? '').isNotEmpty;
+    final nextPhone = next.phone ?? '';
+    await _accounts.update(
+      targetUid: uid,
+      fullName: next.fullName,
+      email: next.email != existing.email ? next.email : null,
+      phone: nextPhone.isNotEmpty && nextPhone != existing.phone
+          ? nextPhone
+          : null,
+      clearPhone: hadPhone && nextPhone.isEmpty,
+      role: next.role != existing.role ? next.role : null,
+      branchIds: sameBranches ? null : next.branchIds,
+    );
+    if (draft.status != existing.status) {
+      OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+        access: access,
+        existing: existing,
+        activeBranchId: activeBranchId,
+      );
+      await _accounts.setStatus(targetUid: uid, status: draft.status);
+    }
+    return _reload(existing.id);
+  }
+
+  Future<OrganizationMember> _loadExisting(
+    UserAccessContext access,
+    String memberId,
+  ) async {
+    final orgId = OrganizationMemberPolicy.requireOrganizationId(access);
+    final existing = await _dataSource.getById(memberId);
+    if (existing == null || existing.organizationId != orgId) {
+      throw const NotFoundException('Member not found in caller organization');
+    }
+    return existing;
+  }
+
+  Future<OrganizationMember> _reload(String id) async {
+    final saved = await _dataSource.getById(id);
+    if (saved == null) throw const NotFoundException('Member not found');
+    return saved;
+  }
+
+  String _requireUid(OrganizationMember member) {
+    final uid = member.authUid;
+    if (uid == null || uid.isEmpty) {
+      throw ValidationException(
+        'This account has no sign-in identity yet and cannot be changed here.',
+      );
+    }
+    return uid;
   }
 }

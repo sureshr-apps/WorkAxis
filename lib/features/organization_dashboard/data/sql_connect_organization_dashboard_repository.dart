@@ -1,101 +1,119 @@
-import 'package:flutter/material.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
-import 'package:workaxis/core/widgets/status_chip.dart';
+import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/features/access/domain/models/user_access_context.dart';
+import 'package:workaxis/features/attendance/data/attendance_day_counter.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/organization_dashboard/data/organization_dashboard_remote.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attendance_summary.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attention_item.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/organization_dashboard_summary.dart';
 import 'package:workaxis/features/organization_dashboard/domain/repositories/organization_dashboard_repository.dart';
 
-/// Production implementation of [OrganizationDashboardRepository] powered by Firebase SQL Connect.
-class SqlConnectOrganizationDashboardRepository implements OrganizationDashboardRepository {
+/// Production [OrganizationDashboardRepository].
+///
+/// Counts come from SQL Connect aggregate queries
+/// (`GetOrganizationDashboardCounts`); today's attendance comes from Firestore
+/// count queries scoped to the organization. Nothing is estimated: figures the
+/// backend cannot provide (leave, per-branch headcount) are left out.
+class SqlConnectOrganizationDashboardRepository
+    implements OrganizationDashboardRepository {
   SqlConnectOrganizationDashboardRepository({
     WorkaxisConnectorConnector? connector,
-    String organizationId = 'org-acme',
-  })  : _customConnector = connector,
-        _orgId = organizationId;
+    OrganizationDashboardRemote? remote,
+    AttendanceDayCounter? attendanceCounter,
+  }) : _remote =
+           remote ??
+           DataConnectOrganizationDashboardRemote(connector: connector),
+       _attendance = attendanceCounter ?? AttendanceDayCounter();
 
-  final WorkaxisConnectorConnector? _customConnector;
-  final String _orgId;
-
-  WorkaxisConnectorConnector get _connector =>
-      _customConnector ?? WorkaxisConnectorConnector.instance;
+  final OrganizationDashboardRemote _remote;
+  final AttendanceDayCounter _attendance;
 
   @override
-  Future<OrganizationDashboardSummary> getOrganizationDashboardSummary() async {
+  Future<OrganizationDashboardSummary> getOrganizationDashboardSummary({
+    required UserAccessContext access,
+  }) async {
     try {
-      final branchesResult = await _connector.listBranchesByOrg(orgId: _orgId).execute();
-      final branches = branchesResult.data.branches;
-
-      final membersResult = await _connector.listMembersByOrg(orgId: _orgId).execute();
-      final members = membersResult.data.organizationMembers;
-
-      final activeBranches = branches.where((b) => b.status.toLowerCase() == 'active').length;
-      final maintenanceBranches = branches.where((b) => b.status.toLowerCase() == 'maintenance').length;
-
-      final attendance = await getOrganizationAttendanceSummary();
-      final attentionItems = await getOrganizationAttentionItems();
-
-      final snapshots = branches.map((b) {
-        return BranchAdherenceSnapshot(
-          code: b.code,
-          name: b.name,
-          details: b.location ?? 'Active Branch',
-          adherenceRate: 0.94,
-          adherencePercentage: '94%',
-        );
-      }).toList();
+      final orgId = _requireOrgAdminScope(access);
+      final results = await Future.wait<Object>([
+        _remote.loadCounts(orgId),
+        _attendance.forOrganization(orgId),
+      ]);
+      final counts = results[0] as OrganizationCounts;
+      final checkIns = results[1] as DailyCheckInCounts;
 
       return OrganizationDashboardSummary(
-        attendance: attendance,
-        pendingReturns: 1,
-        totalEmployees: members.isNotEmpty ? members.length : 3,
-        totalBranches: branches.isNotEmpty ? branches.length : 3,
-        activeBranches: activeBranches > 0 ? activeBranches : 2,
-        maintenanceBranches: maintenanceBranches,
-        attentionItems: attentionItems,
-        branchSnapshots: snapshots,
+        attendance: AttendanceSummary.fromCheckIns(
+          checkedIn: checkIns.checkedIn,
+          late: checkIns.late,
+          expectedHeadcount: counts.activeEmployees,
+        ),
+        pendingReturns: counts.returns('pending'),
+        totalEmployees: counts.activeEmployees,
+        totalBranches: counts.totalBranches,
+        activeBranches: counts.branches('active'),
+        maintenanceBranches: counts.branches('maintenance'),
+        attentionItems: _attentionItems(counts, checkIns),
       );
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to load organization dashboard summary: ${e.toString()}');
+    } catch (e, st) {
+      throw mapBackendError(e, st);
     }
   }
 
-  @override
-  Future<AttendanceSummary> getOrganizationAttendanceSummary() async {
-    return const AttendanceSummary(
-      present: 42,
-      late: 3,
-      absent: 2,
-      onLeave: 1,
-      totalScheduled: 48,
-    );
+  String _requireOrgAdminScope(UserAccessContext access) {
+    final orgId = access.organization?.id;
+    if (access.user.role != UserRole.orgAdmin ||
+        orgId == null ||
+        orgId.isEmpty) {
+      throw const AccessDeniedException(
+        'Organization dashboard requires an Organization Admin session.',
+      );
+    }
+    return orgId;
   }
 
-  @override
-  Future<List<AttentionItem>> getOrganizationAttentionItems() async {
-    return const [
-      AttentionItem(
-        id: 'att-01',
-        title: 'Geofence Exception',
-        subtitle: 'Downtown Flagship',
-        details: 'Check-in 140m outside authorized radius',
-        statusType: StatusType.urgent,
-        statusLabel: 'Pending Review',
-        timestamp: '10:14 AM',
-        itemIcon: Icons.location_off_outlined,
-      ),
-      AttentionItem(
-        id: 'att-02',
-        title: 'Return Request',
-        subtitle: 'Metro Hub',
-        details: 'Defective item return above approval limit (₹3,499)',
-        statusType: StatusType.pending,
-        statusLabel: 'Approval Required',
-        timestamp: '11:05 AM',
-        itemIcon: Icons.assignment_return_outlined,
-      ),
+  List<AttentionItem> _attentionItems(
+    OrganizationCounts counts,
+    DailyCheckInCounts checkIns,
+  ) {
+    final pending = counts.returns('pending');
+    final offline = counts.totalBranches - counts.branches('active');
+    return [
+      if (pending > 0)
+        AttentionItem(
+          id: 'pending-returns',
+          kind: AttentionKind.pendingReturns,
+          severity: AttentionSeverity.pending,
+          title: 'Return requests awaiting review',
+          subtitle: 'Across the organization',
+          details: '$pending return request(s) are waiting for a decision.',
+          statusLabel: '$pending Pending',
+          timestamp: 'Now',
+          actionLabel: 'Review Returns',
+        ),
+      if (checkIns.late > 0)
+        AttentionItem(
+          id: 'late-arrivals',
+          kind: AttentionKind.lateArrivals,
+          severity: AttentionSeverity.urgent,
+          title: 'Late arrivals today',
+          subtitle: 'Across the organization',
+          details: '${checkIns.late} employee(s) checked in late today.',
+          statusLabel: '${checkIns.late} Late',
+          timestamp: 'Today',
+        ),
+      if (offline > 0)
+        AttentionItem(
+          id: 'branches-not-active',
+          kind: AttentionKind.branchOffline,
+          severity: AttentionSeverity.neutral,
+          title: 'Branches not active',
+          subtitle: 'Maintenance or inactive',
+          details: '$offline branch(es) are not currently active.',
+          statusLabel: '$offline Inactive',
+          timestamp: 'Now',
+        ),
     ];
   }
 }

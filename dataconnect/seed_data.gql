@@ -1,5 +1,7 @@
 # WorkAxis Seed Data
 
+# Seed members have no authUid (Firebase uid); link them after creating Auth
+# users or create real users through the provisionUser Cloud Function.
 mutation SeedWorkAxisData @transaction {
   organization_insertMany(data: [
     {

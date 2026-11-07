@@ -1,15 +1,26 @@
 import 'package:flutter/foundation.dart';
+import 'package:workaxis/core/errors/user_message.dart';
+import 'package:workaxis/core/session/session_scoped.dart';
+import 'package:workaxis/core/state/request_generation.dart';
+import 'package:workaxis/core/state/safe_notifier.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
 
-class ReturnsController extends ChangeNotifier {
+class ReturnsController extends ChangeNotifier
+    with SafeNotifier
+    implements SessionScoped {
   final ReturnsRepository repository;
 
+  final RequestGeneration _requests = RequestGeneration();
+  int _epoch = 0;
   bool _isLoading = false;
   bool _isSaving = false;
   String? _errorMessage;
-  List<ReturnItem> _items = [];
+  String? _actionErrorMessage;
+
+  /// Always replaced, never mutated: repositories may hand back const lists.
+  List<ReturnItem> _items = const [];
   ReturnStatus? _statusFilter;
   String _searchQuery = '';
 
@@ -17,7 +28,13 @@ class ReturnsController extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
+
+  /// Failure from the last load; replaces the list with an error state.
   String? get errorMessage => _errorMessage;
+
+  /// Failure from the last submit/review action; shown inline without
+  /// discarding the loaded list.
+  String? get actionErrorMessage => _actionErrorMessage;
   List<ReturnItem> get items => _items;
   ReturnStatus? get statusFilter => _statusFilter;
   String get searchQuery => _searchQuery;
@@ -62,21 +79,28 @@ class ReturnsController extends ChangeNotifier {
     required UserAccessContext access,
     String? activeBranchId,
   }) async {
+    final token = _requests.next();
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _items = await repository.getReturns(
+      final result = await repository.getReturns(
         access: access,
         activeBranchId: activeBranchId,
       );
-    } catch (e) {
-      _errorMessage = 'Failed to load return requests. Please try again.';
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!_requests.isCurrent(token)) return;
+      _items = List.unmodifiable(result);
+    } catch (e, st) {
+      if (!_requests.isCurrent(token)) return;
+      _errorMessage = userMessageFor(
+        e,
+        st,
+        fallback: 'Failed to load return requests. Please try again.',
+      );
     }
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<bool> submitReturn({
@@ -84,8 +108,9 @@ class ReturnsController extends ChangeNotifier {
     String? branchId,
     required CreateReturnInput input,
   }) async {
+    final epoch = _epoch;
     _isSaving = true;
-    _errorMessage = null;
+    _actionErrorMessage = null;
     notifyListeners();
 
     try {
@@ -94,10 +119,15 @@ class ReturnsController extends ChangeNotifier {
         branchId: branchId,
         input: input,
       );
-      _items.insert(0, created);
+      if (epoch != _epoch) return false;
+      _items = [created, ..._items];
       return true;
-    } catch (e) {
-      _errorMessage = 'Failed to submit return request.';
+    } catch (e, st) {
+      _actionErrorMessage = userMessageFor(
+        e,
+        st,
+        fallback: 'Failed to submit return request.',
+      );
       return false;
     } finally {
       _isSaving = false;
@@ -106,33 +136,59 @@ class ReturnsController extends ChangeNotifier {
   }
 
   Future<bool> reviewReturn({
-    required String returnId,
+    required UserAccessContext access,
+    String? activeBranchId,
+    required ReturnItem item,
     required ReturnStatus decision,
-    required String reviewerNotes,
-    required String reviewerName,
+    String? reviewerNotes,
   }) async {
+    final epoch = _epoch;
     _isSaving = true;
-    _errorMessage = null;
+    _actionErrorMessage = null;
     notifyListeners();
 
     try {
       final updated = await repository.reviewReturn(
-        returnId: returnId,
+        access: access,
+        activeBranchId: activeBranchId,
+        returnItem: item,
         decision: decision,
         reviewerNotes: reviewerNotes,
-        reviewerName: reviewerName,
       );
-      final index = _items.indexWhere((i) => i.id == returnId);
-      if (index != -1) {
-        _items[index] = updated;
-      }
+      if (epoch != _epoch) return false;
+      _items = [for (final i in _items) i.id == item.id ? updated : i];
       return true;
-    } catch (e) {
-      _errorMessage = 'Failed to update return decision.';
+    } catch (e, st) {
+      _actionErrorMessage = userMessageFor(
+        e,
+        st,
+        fallback: 'Failed to update return decision.',
+      );
       return false;
     } finally {
       _isSaving = false;
       notifyListeners();
     }
+  }
+
+  void clearActionError() {
+    if (_actionErrorMessage != null) {
+      _actionErrorMessage = null;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void reset() {
+    _epoch++;
+    _requests.invalidate();
+    _isLoading = false;
+    _isSaving = false;
+    _errorMessage = null;
+    _actionErrorMessage = null;
+    _items = const [];
+    _statusFilter = null;
+    _searchQuery = '';
+    notifyListeners();
   }
 }

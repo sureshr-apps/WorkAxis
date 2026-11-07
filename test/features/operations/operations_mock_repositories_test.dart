@@ -1,4 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/features/employees/domain/policies/organization_member_policy.dart';
+import 'package:workaxis/core/time/business_time.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
@@ -9,9 +12,12 @@ import 'package:workaxis/features/branches/data/mock_branch_management_repositor
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 import 'package:workaxis/features/employees/data/mock_organization_members_repository.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
+import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+
+import '../../helpers/fixed_clock.dart';
 
 void main() {
   group('Mock branch management', () {
@@ -78,7 +84,7 @@ void main() {
 
         await expectLater(
           repository.getBranches(manager),
-          throwsA(isA<StateError>()),
+          throwsA(isA<AppException>()),
         );
       },
     );
@@ -111,13 +117,17 @@ void main() {
           branchEmployees.map((member) => member.fullName),
           isNot(contains('Priya Shah')),
         );
-        expect(
-          branchEmployees.every((member) => member.role == UserRole.employee),
-          isTrue,
-        );
+        // Co-managers of the branch are listed but not manageable.
+        for (final member in branchEmployees) {
+          expect(
+            OrganizationMemberPolicy.canManage(manager, member, 'br-01'),
+            member.role == UserRole.employee,
+            reason: member.fullName,
+          );
+        }
         await expectLater(
           repository.getMembers(access: manager, activeBranchId: 'br-04'),
-          throwsA(isA<StateError>()),
+          throwsA(isA<AppException>()),
         );
 
         final saved = await repository.saveMember(
@@ -144,7 +154,7 @@ void main() {
               status: AccountStatus.active,
             ),
           ),
-          throwsA(isA<StateError>()),
+          throwsA(isA<AppException>()),
         );
       },
     );
@@ -189,14 +199,14 @@ void main() {
       'employee history is self-only and branch manager review is branch-only',
       () async {
         final dataSource = MockAccessDataSource();
-        final repository = MockAttendanceRepository();
+        final repository = MockAttendanceRepository(now: fixedNow);
         final employee = await _accessFor(
           dataSource,
           id: 'user-emp-01',
           name: 'Sarah Connor',
           role: UserRole.employee,
         );
-        final today = DateTime.now();
+        final today = BusinessTime.today(fixedNow);
         final mine = await repository.getAttendance(
           access: employee,
           date: today,
@@ -209,7 +219,7 @@ void main() {
             date: today,
             employeeId: 'user-emp-02',
           ),
-          throwsA(isA<StateError>()),
+          throwsA(isA<AccessDeniedException>()),
         );
 
         final manager = await _accessFor(
@@ -233,7 +243,7 @@ void main() {
             date: today,
             activeBranchId: 'br-04',
           ),
-          throwsA(isA<StateError>()),
+          throwsA(isA<AccessDeniedException>()),
         );
         await expectLater(
           repository.reviewException(
@@ -242,14 +252,14 @@ void main() {
             activeBranchId: 'br-01',
             decision: AttendanceReviewDecision.verify,
           ),
-          throwsA(isA<StateError>()),
+          throwsA(isA<AccessDeniedException>()),
         );
       },
     );
 
     test('organization admin can verify an exception', () async {
       final dataSource = MockAccessDataSource();
-      final repository = MockAttendanceRepository();
+      final repository = MockAttendanceRepository(now: fixedNow);
       final orgAdmin = await _accessFor(
         dataSource,
         id: 'user-oa-01',

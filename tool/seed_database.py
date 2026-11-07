@@ -11,13 +11,19 @@ import pg8000.native
 HOST = os.getenv("PGHOST", "127.0.0.1")
 PORT = int(os.getenv("PGPORT", "5433"))
 DATABASE = os.getenv("PGDATABASE", "workaxis")
-USER = os.getenv("PGUSER", "sureshr.apps@gmail.com")
+USER = os.getenv("PGUSER")
 PASSWORD = os.getenv("PGPASSWORD", "")
 
 SQL_FILE = os.path.join(os.path.dirname(__file__), "..", "dataconnect", "seed_data.sql")
 
 
 def seed_database():
+    if not USER:
+        print("Error: PGUSER environment variable is not set.")
+        print("Set it to the Cloud SQL IAM database user, e.g.:")
+        print("  $env:PGUSER = '<your-iam-user>'   (PowerShell)")
+        sys.exit(2)
+
     print(f"Connecting to PostgreSQL database '{DATABASE}' at {HOST}:{PORT} as '{USER}'...")
     try:
         conn = pg8000.native.Connection(

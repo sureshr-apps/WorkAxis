@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
+import 'package:workaxis/app/routing/role_destinations.dart';
+import 'package:workaxis/app/routing/route_error_screen.dart';
 import 'package:workaxis/app/shell/adaptive_app_shell.dart';
-import 'package:workaxis/app/shell/nav_destination.dart';
+import 'package:workaxis/app/startup/splash_screen.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/access/presentation/screens/access_verification_screen.dart';
 import 'package:workaxis/features/access/presentation/screens/branch_selection_screen.dart';
+import 'package:workaxis/features/access/presentation/screens/no_branch_assigned_screen.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:workaxis/features/authentication/presentation/screens/sign_in_screen.dart';
@@ -45,48 +48,14 @@ GoRouter createAppRouter({
       accessController,
       branchController,
     ]),
-    redirect: (context, state) {
-      final isAuthenticated = authController.isAuthenticated;
-      final isSignInLocation = state.matchedLocation == AppRoutes.signIn;
-      final isVerifyLocation = state.matchedLocation == AppRoutes.verifyAccess;
-
-      // 1. Unauthenticated users must always be directed to Sign In
-      if (!isAuthenticated) {
-        return isSignInLocation ? null : AppRoutes.signIn;
-      }
-
-      // 2. If authenticated and on Sign In, forward to Access Verification
-      if (isSignInLocation) {
-        return AppRoutes.verifyAccess;
-      }
-
-      final accessContext = accessController.accessContext;
-
-      // 3. If access context is not yet resolved, keep user on verification screen
-      if (accessContext == null) {
-        return isVerifyLocation ? null : AppRoutes.verifyAccess;
-      }
-
-      final userRole = accessContext.user.role;
-      final matched = state.matchedLocation;
-
-      // 4. Branch Manager multi-branch context guard
-      final isBranchManager = userRole == UserRole.branchManager;
-      if (isBranchManager) {
-        final hasActiveBranch = branchController.hasActiveBranch;
-        final hasMultipleBranches = accessContext.hasMultipleAssignedBranches;
-
-        if (!hasActiveBranch && hasMultipleBranches) {
-          final isSelectingBranch = matched == AppRoutes.selectBranch;
-          if (!isSelectingBranch && !isVerifyLocation) {
-            return AppRoutes.selectBranch;
-          }
-        }
-      }
-
-      // 5. Role-based Route Protection
-      return redirectForRoleRoute(role: userRole, matchedLocation: matched);
-    },
+    errorBuilder: (context, state) =>
+        RouteErrorScreen(location: state.uri.toString()),
+    redirect: (context, state) => resolveRedirect(
+      matchedLocation: state.matchedLocation,
+      authController: authController,
+      accessController: accessController,
+      branchController: branchController,
+    ),
     routes: [
       GoRoute(
         path: AppRoutes.signIn,
@@ -100,6 +69,14 @@ GoRouter createAppRouter({
         path: AppRoutes.selectBranch,
         builder: (context, state) => const BranchSelectionScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.noBranchAssigned,
+        builder: (context, state) => const NoBranchAssignedScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.splash,
+        builder: (context, state) => const SplashScreen(),
+      ),
 
       // -------------------------------------------------------------
       // Platform Owner / Platform Admin Shell & Routes
@@ -109,33 +86,7 @@ GoRouter createAppRouter({
           final isOwner =
               accessController.accessContext?.user.role ==
               UserRole.platformOwner;
-          final destinations = [
-            const AppNavDestination(
-              label: 'Home',
-              icon: Icons.dashboard_outlined,
-              selectedIcon: Icons.dashboard,
-              route: AppRoutes.platformWorkspace,
-            ),
-            const AppNavDestination(
-              label: 'Organizations',
-              icon: Icons.business_outlined,
-              selectedIcon: Icons.business,
-              route: AppRoutes.platformOrganizations,
-            ),
-            if (isOwner)
-              const AppNavDestination(
-                label: 'Platform Users',
-                icon: Icons.admin_panel_settings_outlined,
-                selectedIcon: Icons.admin_panel_settings,
-                route: AppRoutes.platformUsers,
-              ),
-            const AppNavDestination(
-              label: 'Settings',
-              icon: Icons.settings_outlined,
-              selectedIcon: Icons.settings,
-              route: AppRoutes.platformSettings,
-            ),
-          ];
+          final destinations = RoleDestinations.platform(isOwner: isOwner);
 
           return AdaptiveAppShell(
             currentRoute: state.matchedLocation,
@@ -215,50 +166,7 @@ GoRouter createAppRouter({
       // -------------------------------------------------------------
       ShellRoute(
         builder: (context, state, child) {
-          const destinations = [
-            AppNavDestination(
-              label: 'Home',
-              icon: Icons.home_outlined,
-              selectedIcon: Icons.home,
-              route: AppRoutes.orgAdminWorkspace,
-            ),
-            AppNavDestination(
-              label: 'Branches',
-              icon: Icons.store_outlined,
-              selectedIcon: Icons.store,
-              route: AppRoutes.orgAdminBranches,
-            ),
-            AppNavDestination(
-              label: 'Employees',
-              icon: Icons.badge_outlined,
-              selectedIcon: Icons.badge,
-              route: AppRoutes.orgAdminEmployees,
-            ),
-            AppNavDestination(
-              label: 'Attendance',
-              icon: Icons.event_available_outlined,
-              selectedIcon: Icons.event_available,
-              route: AppRoutes.orgAdminAttendance,
-            ),
-            AppNavDestination(
-              label: 'Returns',
-              icon: Icons.assignment_return_outlined,
-              selectedIcon: Icons.assignment_return,
-              route: AppRoutes.orgAdminReturns,
-            ),
-            AppNavDestination(
-              label: 'Reports',
-              icon: Icons.analytics_outlined,
-              selectedIcon: Icons.analytics,
-              route: AppRoutes.orgAdminReports,
-            ),
-            AppNavDestination(
-              label: 'Settings',
-              icon: Icons.settings_outlined,
-              selectedIcon: Icons.settings,
-              route: AppRoutes.orgAdminSettings,
-            ),
-          ];
+          const destinations = RoleDestinations.organizationAdmin;
 
           return AdaptiveAppShell(
             currentRoute: state.matchedLocation,
@@ -303,38 +211,7 @@ GoRouter createAppRouter({
       // -------------------------------------------------------------
       ShellRoute(
         builder: (context, state, child) {
-          const destinations = [
-            AppNavDestination(
-              label: 'Home',
-              icon: Icons.dashboard_outlined,
-              selectedIcon: Icons.dashboard,
-              route: AppRoutes.branchManagerWorkspace,
-            ),
-            AppNavDestination(
-              label: 'Employees',
-              icon: Icons.badge_outlined,
-              selectedIcon: Icons.badge,
-              route: AppRoutes.branchManagerEmployees,
-            ),
-            AppNavDestination(
-              label: 'Attendance',
-              icon: Icons.access_time_outlined,
-              selectedIcon: Icons.access_time_filled,
-              route: AppRoutes.branchManagerAttendance,
-            ),
-            AppNavDestination(
-              label: 'Returns',
-              icon: Icons.assignment_return_outlined,
-              selectedIcon: Icons.assignment_return,
-              route: AppRoutes.branchManagerReturns,
-            ),
-            AppNavDestination(
-              label: 'Reports',
-              icon: Icons.assessment_outlined,
-              selectedIcon: Icons.assessment,
-              route: AppRoutes.branchManagerReports,
-            ),
-          ];
+          const destinations = RoleDestinations.branchManager;
 
           return AdaptiveAppShell(
             currentRoute: state.matchedLocation,
@@ -371,32 +248,7 @@ GoRouter createAppRouter({
       // -------------------------------------------------------------
       ShellRoute(
         builder: (context, state, child) {
-          const destinations = [
-            AppNavDestination(
-              label: 'Home',
-              icon: Icons.home_outlined,
-              selectedIcon: Icons.home,
-              route: AppRoutes.employeeWorkspace,
-            ),
-            AppNavDestination(
-              label: 'Attendance',
-              icon: Icons.access_time_outlined,
-              selectedIcon: Icons.access_time_filled,
-              route: AppRoutes.employeeAttendance,
-            ),
-            AppNavDestination(
-              label: 'Returns',
-              icon: Icons.assignment_return_outlined,
-              selectedIcon: Icons.assignment_return,
-              route: AppRoutes.employeeReturns,
-            ),
-            AppNavDestination(
-              label: 'Profile',
-              icon: Icons.person_outline,
-              selectedIcon: Icons.person,
-              route: AppRoutes.employeeProfile,
-            ),
-          ];
+          const destinations = RoleDestinations.employee;
 
           return AdaptiveAppShell(
             currentRoute: state.matchedLocation,
@@ -427,42 +279,60 @@ GoRouter createAppRouter({
   );
 }
 
-/// Returns the safe landing route when a role cannot open [matchedLocation].
+/// Pure redirect decision for [matchedLocation]; `null` means "stay".
 ///
-/// Kept separate from router rendering so route authorization can be tested
-/// without building the destination screen.
-String? redirectForRoleRoute({
-  required UserRole role,
+/// Order of guards: startup, authentication, access resolution, Branch Manager
+/// branch context, then role-area protection.
+String? resolveRedirect({
   required String matchedLocation,
+  required AuthController authController,
+  required AccessController accessController,
+  required BranchContextController branchController,
 }) {
-  if (matchedLocation.startsWith('/platform')) {
-    if (role != UserRole.platformOwner && role != UserRole.platformAdmin) {
-      return _defaultRouteForRole(role);
-    }
-    if (matchedLocation.startsWith(AppRoutes.platformUsers) &&
-        role != UserRole.platformOwner) {
-      return _defaultRouteForRole(role);
-    }
-  } else if (matchedLocation.startsWith('/organization')) {
-    if (role != UserRole.orgAdmin) return _defaultRouteForRole(role);
-  } else if (matchedLocation.startsWith('/branch-manager')) {
-    if (role != UserRole.branchManager) return _defaultRouteForRole(role);
-  } else if (matchedLocation.startsWith('/employee')) {
-    if (role != UserRole.employee) return _defaultRouteForRole(role);
-  }
-  return null;
-}
+  final matched = matchedLocation;
 
-String _defaultRouteForRole(UserRole role) {
-  switch (role) {
-    case UserRole.platformOwner:
-    case UserRole.platformAdmin:
-      return AppRoutes.platformWorkspace;
-    case UserRole.orgAdmin:
-      return AppRoutes.orgAdminWorkspace;
-    case UserRole.branchManager:
-      return AppRoutes.branchManagerWorkspace;
-    case UserRole.employee:
-      return AppRoutes.employeeWorkspace;
+  // 0. While the previous session is being restored, show the splash.
+  if (authController.isInitializing) {
+    return matched == AppRoutes.splash ? null : AppRoutes.splash;
   }
+
+  // 1. Unauthenticated users must always be directed to Sign In
+  if (!authController.isAuthenticated) {
+    return matched == AppRoutes.signIn ? null : AppRoutes.signIn;
+  }
+
+  // 2. Authenticated users never rest on Sign In or the splash.
+  if (matched == AppRoutes.signIn || matched == AppRoutes.splash) {
+    return AppRoutes.verifyAccess;
+  }
+
+  // 3. Access must be resolved before any other screen is reachable.
+  final accessContext = accessController.accessContext;
+  if (accessContext == null) {
+    return matched == AppRoutes.verifyAccess ? null : AppRoutes.verifyAccess;
+  }
+
+  final role = accessContext.user.role;
+  final isBranchManager = role == UserRole.branchManager;
+
+  // 4. A Branch Manager is always gated until a branch context exists.
+  if (isBranchManager && !branchController.hasActiveBranch) {
+    if (accessContext.hasNoAssignedBranches) {
+      return matched == AppRoutes.noBranchAssigned
+          ? null
+          : AppRoutes.noBranchAssigned;
+    }
+    return matched == AppRoutes.selectBranch ? null : AppRoutes.selectBranch;
+  }
+
+  // 5. Branch-specific utility screens are for Branch Managers only; resolved
+  //    users have nothing to do on the verification screen.
+  if (matched == AppRoutes.verifyAccess ||
+      matched == AppRoutes.noBranchAssigned ||
+      (matched == AppRoutes.selectBranch && !isBranchManager)) {
+    return defaultRouteForRole(role);
+  }
+
+  // 6. Role-based Route Protection
+  return redirectForRoleRoute(role: role, matchedLocation: matched);
 }

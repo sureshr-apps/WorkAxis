@@ -1,6 +1,19 @@
 # WorkAxis Queries
+#
+# Authorization model (see docs/backend-api.md):
+#   Custom claims (written only by Cloud Functions): role, organizationId,
+#   branchIds, status. Every operation requires auth.token.status == 'active'.
+#   Platform roles may pass any organization; customer roles only their own
+#   auth.token.organizationId; Branch Managers/Employees only branches listed
+#   in auth.token.branchIds; Employees only their own records.
+#   Unset optional filter variables must be OMITTED by the client.
 
-query ListOrganizations @auth(level: USER) {
+# ---------------------------------------------------------------------------
+# Organizations (platform)
+# ---------------------------------------------------------------------------
+
+query ListOrganizations
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin']") {
   organizations(orderBy: [{ createdAt: DESC }]) {
     id
     name
@@ -13,7 +26,37 @@ query ListOrganizations @auth(level: USER) {
   }
 }
 
-query GetOrganizationById($id: String!) @auth(level: USER) {
+query ListOrganizationsPaged(
+  $limit: Int!
+  $offset: Int!
+  $nameContains: String
+  $status: String
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin']") {
+  organizations(
+    where: { name: { contains: $nameContains }, status: { eq: $status } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    name
+    code
+    category
+    country
+    status
+    currency
+    createdAt
+  }
+  total: organizations(
+    where: { name: { contains: $nameContains }, status: { eq: $status } }
+  ) {
+    _count
+  }
+}
+
+query GetOrganizationById($id: String!)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || auth.token.organizationId == vars.id)") {
   organization(id: $id) {
     id
     name
@@ -23,11 +66,47 @@ query GetOrganizationById($id: String!) @auth(level: USER) {
     status
     currency
     logoUrl
+    taxIdentification
+    description
+    contactName
+    contactEmail
+    contactPhone
+    address
     createdAt
   }
 }
 
-query ListBranchesByOrg($orgId: String!) @auth(level: USER) {
+# Aggregate counts for an organization (replaces full-list downloads).
+query GetOrganizationStats($orgId: String!)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId))") {
+  branchCount: branches(where: { organization: { id: { eq: $orgId } } }) {
+    _count
+  }
+  memberCount: organizationMembers(where: { organization: { id: { eq: $orgId } } }) {
+    _count
+  }
+}
+
+# Platform dashboard: organizations grouped by status.
+query GetPlatformStats
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin']") {
+  organizationsByStatus: organizations {
+    status
+    _count
+  }
+  platformAdminCount: organizationMembers(
+    where: { role: { in: ["platformOwner", "platformAdmin"] } }
+  ) {
+    _count
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Branches
+# ---------------------------------------------------------------------------
+
+query ListBranchesByOrg($orgId: String!)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || auth.token.organizationId == vars.orgId)") {
   branches(where: { organization: { id: { eq: $orgId } } }, orderBy: [{ name: ASC }]) {
     id
     name
@@ -42,7 +121,79 @@ query ListBranchesByOrg($orgId: String!) @auth(level: USER) {
   }
 }
 
-query ListMembersByOrg($orgId: String!) @auth(level: USER) {
+# Branch details. Org Admin: any branch of own org. Branch Manager/Employee:
+# only branches in their claims. Platform: any.
+query GetBranchById($id: String!)
+@auth(expr: "auth.token.status == 'active'") {
+  branch(id: $id)
+  @check(
+    expr: "this != null && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && this.organization.id == auth.token.organizationId) || (auth.token.role in ['branchManager','employee'] && vars.id in auth.token.branchIds))"
+    message: "Branch not found or access denied."
+  ) {
+    id
+    name
+    code
+    location
+    status
+    isMainBranch
+    geofenceRadiusMeters
+    latitude
+    longitude
+    kioskEnabled
+    organization { id }
+  }
+}
+
+# Branches assigned to the caller (Branch Manager / Employee). Only active
+# branches are returned.
+query ListMyBranchAssignments
+@auth(expr: "auth.token.status == 'active'") {
+  userBranchAssignments(
+    where: {
+      member: { authUid: { eq_expr: "auth.uid" } }
+      branch: { status: { eq: "active" } }
+    }
+    orderBy: [{ assignedAt: ASC }]
+  ) {
+    id
+    branch {
+      id
+      name
+      code
+      location
+      status
+      isMainBranch
+      geofenceRadiusMeters
+      latitude
+      longitude
+      kioskEnabled
+      organization { id }
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Members
+# ---------------------------------------------------------------------------
+
+# The caller's own member record (role, org, status) for access resolution.
+query GetMyMember
+@auth(expr: "auth.token.status == 'active'") {
+  organizationMembers(where: { authUid: { eq_expr: "auth.uid" } }, limit: 1) {
+    id
+    authUid
+    fullName
+    username
+    email
+    phone
+    role
+    status
+    organization { id name code status }
+  }
+}
+
+query ListMembersByOrg($orgId: String!)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId))") {
   organizationMembers(where: { organization: { id: { eq: $orgId } } }, orderBy: [{ fullName: ASC }]) {
     id
     fullName
@@ -54,21 +205,384 @@ query ListMembersByOrg($orgId: String!) @auth(level: USER) {
   }
 }
 
-query ListReturnsByBranch($branchId: String!) @auth(level: USER) {
-  returnRecords(where: { branch: { id: { eq: $branchId } } }, orderBy: [{ createdAt: DESC }]) {
+query ListMembersByOrgPaged(
+  $orgId: String!
+  $limit: Int!
+  $offset: Int!
+  $nameContains: String
+  $status: String
+  $role: String
+)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId))") {
+  organizationMembers(
+    where: {
+      organization: { id: { eq: $orgId } }
+      fullName: { contains: $nameContains }
+      status: { eq: $status }
+      role: { eq: $role }
+    }
+    orderBy: [{ fullName: ASC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    authUid
+    fullName
+    username
+    email
+    phone
+    role
+    status
+    userBranchAssignments_on_member { branch { id } }
+  }
+  total: organizationMembers(
+    where: {
+      organization: { id: { eq: $orgId } }
+      fullName: { contains: $nameContains }
+      status: { eq: $status }
+      role: { eq: $role }
+    }
+  ) {
+    _count
+  }
+}
+
+# Members assigned to one branch (Branch Manager view). Platform roles are
+# deliberately excluded: operational member lists are customer-side.
+query ListMembersByBranchPaged(
+  $branchId: String!
+  $limit: Int!
+  $offset: Int!
+  $nameContains: String
+  $status: String
+)
+@auth(expr: "auth.token.status == 'active'") {
+  branch(id: $branchId)
+  @check(
+    expr: "this != null && ((auth.token.role == 'orgAdmin' && this.organization.id == auth.token.organizationId) || (auth.token.role == 'branchManager' && vars.branchId in auth.token.branchIds))"
+    message: "Branch not found or access denied."
+  )
+  @redact {
+    id
+    organization { id }
+  }
+  userBranchAssignments(
+    where: {
+      branch: { id: { eq: $branchId } }
+      member: { fullName: { contains: $nameContains }, status: { eq: $status } }
+    }
+    orderBy: [{ assignedAt: ASC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    member {
+      id
+      authUid
+      fullName
+      username
+      email
+      phone
+      role
+      status
+      userBranchAssignments_on_member { branch { id } }
+    }
+  }
+  total: userBranchAssignments(
+    where: {
+      branch: { id: { eq: $branchId } }
+      member: { fullName: { contains: $nameContains }, status: { eq: $status } }
+    }
+  ) {
+    _count
+  }
+}
+
+# One member. Platform: any. Org Admin: own org. Branch Manager: members
+# sharing one of their branches. Anyone: themselves.
+query GetMemberById($id: String!)
+@auth(expr: "auth.token.status == 'active'") {
+  organizationMember(id: $id)
+  @check(
+    expr: "this != null && (this.authUid == auth.uid || auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && this.organization.id == auth.token.organizationId) || (auth.token.role == 'branchManager' && this.userBranchAssignments_on_member.exists(a, a.branch.id in auth.token.branchIds)))"
+    message: "Member not found or access denied."
+  ) {
+    id
+    authUid
+    fullName
+    username
+    email
+    phone
+    role
+    status
+    createdAt
+    organization { id }
+    userBranchAssignments_on_member { branch { id name } }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Returns
+# ---------------------------------------------------------------------------
+
+# Branch returns for managers. Org Admin: branches of own org. Branch
+# Manager: only branches in their claims. Employees use ListMyReturns.
+query ListReturnsByBranch($branchId: String!)
+@auth(expr: "auth.token.status == 'active'") {
+  branch(id: $branchId)
+  @check(
+    expr: "this != null && ((auth.token.role == 'orgAdmin' && this.organization.id == auth.token.organizationId) || (auth.token.role == 'branchManager' && vars.branchId in auth.token.branchIds))"
+    message: "Branch not found or access denied."
+  )
+  @redact {
+    id
+    organization { id }
+  }
+  returnRecords(where: { branch: { id: { eq: $branchId } } }, orderBy: [{ createdAt: DESC }], limit: 200) {
     id
     employeeId
+    employeeUid
     employeeName
     customerName
     invoiceNumber
     status
     returnReason
     amount
+    productTitle
+    quantity
+    unit
+    billImageUrl
+    remarks
+    reviewerNotes
+    reviewerUid
+    reviewerName
+    reviewedAt
     createdAt
   }
 }
 
-query GetCommercialAgreementByOrg($orgId: String!) @auth(level: USER) {
+query ListReturnsByBranchPaged(
+  $branchId: String!
+  $limit: Int!
+  $offset: Int!
+  $status: String
+)
+@auth(expr: "auth.token.status == 'active'") {
+  branch(id: $branchId)
+  @check(
+    expr: "this != null && ((auth.token.role == 'orgAdmin' && this.organization.id == auth.token.organizationId) || (auth.token.role == 'branchManager' && vars.branchId in auth.token.branchIds))"
+    message: "Branch not found or access denied."
+  )
+  @redact {
+    id
+    organization { id }
+  }
+  returnRecords(
+    where: { branch: { id: { eq: $branchId } }, status: { eq: $status } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    employeeId
+    employeeUid
+    employeeName
+    customerName
+    invoiceNumber
+    status
+    returnReason
+    amount
+    productTitle
+    quantity
+    unit
+    billImageUrl
+    remarks
+    reviewerNotes
+    reviewerUid
+    reviewerName
+    reviewedAt
+    createdAt
+  }
+  total: returnRecords(
+    where: { branch: { id: { eq: $branchId } }, status: { eq: $status } }
+  ) {
+    _count
+  }
+}
+
+# Organization-wide returns (Org Admin of the org, or platform roles), newest
+# first. Optional $status / $branchId must be OMITTED when unset.
+query ListReturnsByOrgPaged(
+  $orgId: String!
+  $limit: Int!
+  $offset: Int!
+  $status: String
+  $branchId: String
+)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId))") {
+  returnRecords(
+    where: {
+      organization: { id: { eq: $orgId } }
+      branch: { id: { eq: $branchId } }
+      status: { eq: $status }
+    }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    branch { id name }
+    employeeId
+    employeeUid
+    employeeName
+    customerName
+    invoiceNumber
+    status
+    returnReason
+    amount
+    productTitle
+    quantity
+    unit
+    billImageUrl
+    remarks
+    reviewerNotes
+    reviewerUid
+    reviewerName
+    reviewedAt
+    createdAt
+  }
+  total: returnRecords(
+    where: {
+      organization: { id: { eq: $orgId } }
+      branch: { id: { eq: $branchId } }
+      status: { eq: $status }
+    }
+  ) {
+    _count
+  }
+}
+# The caller's own returns (Employee, or a Branch Manager's own submissions).
+query ListMyReturns($limit: Int!, $offset: Int!, $status: String)
+@auth(expr: "auth.token.status == 'active'") {
+  returnRecords(
+    where: { employeeUid: { eq_expr: "auth.uid" }, status: { eq: $status } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    branch { id name }
+    employeeId
+    employeeName
+    invoiceNumber
+    status
+    returnReason
+    productTitle
+    quantity
+    unit
+    billImageUrl
+    remarks
+    reviewerNotes
+    reviewerName
+    reviewedAt
+    createdAt
+  }
+  total: returnRecords(
+    where: { employeeUid: { eq_expr: "auth.uid" }, status: { eq: $status } }
+  ) {
+    _count
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Aggregates for dashboards and reports
+# ---------------------------------------------------------------------------
+
+# Org dashboard counts: branches and members by status, returns by status.
+query GetOrganizationDashboardCounts($orgId: String!)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId))") {
+  branchesByStatus: branches(where: { organization: { id: { eq: $orgId } } }) {
+    status
+    _count
+  }
+  membersByRole: organizationMembers(where: { organization: { id: { eq: $orgId } } }) {
+    role
+    status
+    _count
+  }
+  returnsByStatus: returnRecords(where: { organization: { id: { eq: $orgId } } }) {
+    status
+    _count
+  }
+}
+
+# Return counts per branch for an organization (reports; replaces N+1).
+# Optional $from (inclusive) / $to (exclusive) scope the counts to a period;
+# omit both for all time. returnsByReason is the per-reason breakdown for the
+# same window.
+query GetReturnCountsByBranch($orgId: String!, $from: Timestamp, $to: Timestamp)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId))") {
+  returnRecords(
+    where: {
+      organization: { id: { eq: $orgId } }
+      createdAt: { ge: $from, lt: $to }
+    }
+  ) {
+    branchId
+    status
+    _count
+  }
+  returnsByReason: returnRecords(
+    where: {
+      organization: { id: { eq: $orgId } }
+      createdAt: { ge: $from, lt: $to }
+    }
+  ) {
+    returnReason
+    _count
+  }
+}
+
+# Branch dashboard counts: assigned members and returns by status.
+query GetBranchStats($branchId: String!, $from: Timestamp, $to: Timestamp)
+@auth(expr: "auth.token.status == 'active'") {
+  branch(id: $branchId)
+  @check(
+    expr: "this != null && ((auth.token.role == 'orgAdmin' && this.organization.id == auth.token.organizationId) || (auth.token.role == 'branchManager' && vars.branchId in auth.token.branchIds))"
+    message: "Branch not found or access denied."
+  )
+  @redact {
+    id
+    organization { id }
+  }
+  memberCount: userBranchAssignments(where: { branch: { id: { eq: $branchId } } }) {
+    _count
+  }
+  returnsByStatus: returnRecords(
+    where: {
+      branch: { id: { eq: $branchId } }
+      createdAt: { ge: $from, lt: $to }
+    }
+  ) {
+    status
+    _count
+  }
+  returnsByReason: returnRecords(
+    where: {
+      branch: { id: { eq: $branchId } }
+      createdAt: { ge: $from, lt: $to }
+    }
+  ) {
+    returnReason
+    _count
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Commercial data (Org Admin of the org, or platform)
+# ---------------------------------------------------------------------------
+
+query GetCommercialAgreementByOrg($orgId: String!)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId))") {
   commercialAgreements(where: { organization: { id: { eq: $orgId } } }, limit: 1) {
     id
     agreementReference
@@ -84,7 +598,8 @@ query GetCommercialAgreementByOrg($orgId: String!) @auth(level: USER) {
   }
 }
 
-query ListLicenseEventsByOrg($orgId: String!) @auth(level: USER) {
+query ListLicenseEventsByOrg($orgId: String!)
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId))") {
   licenseEvents(where: { organization: { id: { eq: $orgId } } }, orderBy: [{ createdAt: DESC }]) {
     id
     eventType
@@ -96,5 +611,44 @@ query ListLicenseEventsByOrg($orgId: String!) @auth(level: USER) {
     oneTimePrice
     annualMaintenancePrice
     createdAt
+  }
+}
+
+# Platform administrators (SQL is authoritative; platform roles only).
+query ListPlatformMembersPaged(
+  $limit: Int!
+  $offset: Int!
+  $nameContains: String
+  $status: String
+)
+@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin']") {
+  organizationMembers(
+    where: {
+      role: { eq: "platformAdmin" }
+      fullName: { contains: $nameContains }
+      status: { eq: $status }
+    }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    authUid
+    fullName
+    username
+    email
+    phone
+    role
+    status
+    createdAt
+  }
+  total: organizationMembers(
+    where: {
+      role: { eq: "platformAdmin" }
+      fullName: { contains: $nameContains }
+      status: { eq: $status }
+    }
+  ) {
+    _count
   }
 }

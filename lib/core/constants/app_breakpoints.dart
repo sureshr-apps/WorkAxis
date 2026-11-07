@@ -25,4 +25,33 @@ abstract final class AppBreakpoints {
 
   /// Maximum comfortable content width for primary operational/dashboard/catalog screens on desktop/web (matching Home page).
   static const double maxPageWidth = 1440.0;
+
+  // Content-level layout thresholds (available width, not screen width).
+
+  /// Width at which two-column form sections switch from stacked to split.
+  static const double formSplit = 650.0;
+
+  /// Width at which wide content compositions (side-by-side panels) begin.
+  static const double wideContent = 900.0;
+
+  /// Width at which detail screens switch to master/detail composition.
+  static const double detailsSplit = 980.0;
+
+  /// Width at which data tables replace card lists.
+  static const double wideTable = 1000.0;
+
+  /// Width at which the employee home uses its two-column composition.
+  static const double employeeHomeWide = 1024.0;
+
+  /// Width of the persistent navigation sidebar on expanded layouts.
+  static const double sidebarWidth = 260.0;
+
+  /// Height of the expanded-layout top console bar.
+  static const double topBarHeight = 60.0;
+
+  /// Content width below which attendance metric tiles use two columns.
+  static const double metricTilesRow = 620.0;
+
+  /// Content width at which branch snapshot rows show their progress bar.
+  static const double snapshotBarMin = 420.0;
 }

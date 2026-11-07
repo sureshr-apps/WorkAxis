@@ -1,11 +1,12 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
-import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 
 /// Executive hero banner for the Platform Overview screen.
 /// Features high-contrast deep navy styling, ambient illumination,
@@ -19,24 +20,20 @@ class PlatformOverviewHeroBanner extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF001738),
+        color: _Hero.navy,
         borderRadius: AppSpacing.roundedLg,
         border: Border.all(
-          color: const Color(0xFF1E3A66).withValues(alpha: 0.8),
+          color: _Hero.navyLine.withValues(alpha: 0.8),
           width: 1,
         ),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x33000A1A),
+            color: _Hero.shadowA,
             offset: Offset(0, 10),
             blurRadius: 28,
             spreadRadius: -4,
           ),
-          BoxShadow(
-            color: Color(0x1F001738),
-            offset: Offset(0, 2),
-            blurRadius: 8,
-          ),
+          BoxShadow(color: _Hero.shadowB, offset: Offset(0, 2), blurRadius: 8),
         ],
       ),
       clipBehavior: Clip.antiAlias,
@@ -44,9 +41,7 @@ class PlatformOverviewHeroBanner extends StatelessWidget {
         children: [
           // Ambient background glow & grid
           Positioned.fill(
-            child: CustomPaint(
-              painter: _BannerBackgroundPainter(),
-            ),
+            child: CustomPaint(painter: _BannerBackgroundPainter()),
           ),
 
           Padding(
@@ -90,20 +85,16 @@ class PlatformOverviewHeroBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF0A2E5C),
+                color: _Hero.navyChip,
                 borderRadius: BorderRadius.circular(100),
-                border: Border.all(
-                  color: const Color(0xFF1E5296),
-                  width: 1,
-                ),
+                border: Border.all(color: _Hero.navyChipLine, width: 1),
               ),
               child: Text(
                 'PLATFORM ADMINISTRATION',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
+                style: AppTypography.labelSmall.copyWith(
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.8,
-                  color: const Color(0xFF7DD3FC),
+                  color: _Hero.skyText,
                 ),
               ),
             ),
@@ -115,13 +106,15 @@ class PlatformOverviewHeroBanner extends StatelessWidget {
         // Main Title
         Text(
           'Platform Overview',
-          style: GoogleFonts.inter(
-            fontSize: context.isCompact ? 24 : 30,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-            letterSpacing: -0.6,
-            height: 1.15,
-          ),
+          style:
+              (context.isCompact
+                      ? AppTypography.headlineLarge
+                      : AppTypography.displayLarge)
+                  .copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.6,
+                  ),
         ),
 
         const SizedBox(height: AppSpacing.xs),
@@ -129,36 +122,17 @@ class PlatformOverviewHeroBanner extends StatelessWidget {
         // Subtitle
         Text(
           'System administration and multi-tenant organization monitoring',
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            color: const Color(0xFF94A3B8),
-            height: 1.4,
-          ),
+          style: AppTypography.bodyMedium.copyWith(color: _Hero.slateText),
         ),
       ],
     );
   }
 
   Widget _buildActionButtons(BuildContext context) {
-    final isCompact = context.isCompact;
-    return ElevatedButton.icon(
+    return AppButton.responsive(
+      text: 'Add Organization',
+      iconData: Icons.add_rounded,
       onPressed: () => context.push(AppRoutes.platformOrganizationsAdd),
-      icon: const Icon(Icons.add_rounded, size: 18),
-      label: const Text('Add Organization'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 2,
-        minimumSize: Size(
-          isCompact ? double.infinity : 0,
-          AppSpacing.minTouchTarget,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppSpacing.roundedSm,
-        ),
-      ),
     );
   }
 }
@@ -172,8 +146,8 @@ class _BannerBackgroundPainter extends CustomPainter {
         center: const Alignment(0.85, -0.6),
         radius: 0.95,
         colors: [
-          const Color(0xFF0052CC).withValues(alpha: 0.28),
-          const Color(0xFF003380).withValues(alpha: 0.12),
+          _Hero.glowBlue.withValues(alpha: 0.28),
+          _Hero.glowDeep.withValues(alpha: 0.12),
           Colors.transparent,
         ],
         stops: const [0.0, 0.45, 1.0],
@@ -186,17 +160,14 @@ class _BannerBackgroundPainter extends CustomPainter {
       ..shader = RadialGradient(
         center: const Alignment(-0.8, 0.9),
         radius: 0.7,
-        colors: [
-          const Color(0xFF0284C7).withValues(alpha: 0.14),
-          Colors.transparent,
-        ],
+        colors: [_Hero.glowCyan.withValues(alpha: 0.14), Colors.transparent],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), cyanPaint);
 
     // Geometric micro grid lines
     final gridPaint = Paint()
-      ..color = const Color(0xFF1E3A66).withValues(alpha: 0.22)
+      ..color = _Hero.navyLine.withValues(alpha: 0.22)
       ..strokeWidth = 0.8;
 
     const spacing = 36.0;
@@ -209,7 +180,7 @@ class _BannerBackgroundPainter extends CustomPainter {
 
     // High-tech decorative micro telemetry circles
     final dotPaint = Paint()
-      ..color = const Color(0xFF38BDF8).withValues(alpha: 0.35)
+      ..color = _Hero.dot.withValues(alpha: 0.35)
       ..style = PaintingStyle.fill;
 
     for (int i = 0; i < 4; i++) {
@@ -221,4 +192,21 @@ class _BannerBackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Banner-specific dark palette. The hero is the only dark surface in the
+/// platform console, so these are intentionally not global tokens.
+abstract final class _Hero {
+  static const Color navy = Color(0xFF001738);
+  static const Color navyLine = Color(0xFF1E3A66);
+  static const Color navyChip = Color(0xFF0A2E5C);
+  static const Color navyChipLine = Color(0xFF1E5296);
+  static const Color skyText = Color(0xFF7DD3FC);
+  static const Color slateText = Color(0xFF94A3B8);
+  static const Color glowBlue = Color(0xFF0052CC);
+  static const Color glowDeep = Color(0xFF003380);
+  static const Color glowCyan = Color(0xFF0284C7);
+  static const Color dot = Color(0xFF38BDF8);
+  static const Color shadowA = Color(0x33000A1A);
+  static const Color shadowB = Color(0x1F001738);
 }

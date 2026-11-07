@@ -37,13 +37,19 @@ lib/
 ├── app/
 │   ├── app.dart                   # Root application widget
 │   ├── bootstrap/                 # Application startup and dependency registration
-│   ├── routing/                   # Centralized GoRouter configuration and guards
+│   ├── routing/                   # Centralized GoRouter configuration, guards and role destinations
+│   ├── session/                   # SessionController: sign-out and per-session state lifecycle
+│   ├── startup/                   # Splash shown while a previous session is restored
 │   ├── shell/                     # Adaptive authenticated application shells
 │   └── theme/                     # Material 3 theme and shared visual tokens
 │
 ├── core/
 │   ├── constants/                 # Breakpoints and genuinely shared constants
-│   ├── errors/                    # Typed application failures / exceptions
+│   ├── errors/                    # Typed application failures, backend error mapper, user-safe messages
+│   ├── formatting/                # Cached date/time/number formatters (AppFormatters)
+│   ├── session/                   # SessionScoped contract implemented by controllers
+│   ├── state/                     # RequestGeneration (stale-response guard), SafeNotifier
+│   ├── time/                      # Injectable clock (Now / Clock)
 │   ├── responsive/                # Adaptive layout helpers and breakpoints
 │   ├── services/                  # Cross-cutting services
 │   ├── utils/                     # Focused validators / formatters
@@ -124,7 +130,8 @@ WorkAxis defines stable domain repository contracts in `lib/features/*/domain/re
 - `AuthenticationRepository`:
   - `Future<AuthenticationResult> signIn({required String identifier, required String password})`
   - `Future<void> signOut()`
-  - `AppUser? get currentUser`
+  - `Future<void> changePassword({required String currentPassword, required String newPassword})`
+  - `Future<AppUser?> getCurrentUser()` and `Stream<AppUser?> authStateChanges()`
 - `AccessRepository`:
   - `Future<UserAccessContext> resolveCurrentUserAccess(AppUser user)`
   - `Future<List<BranchSummary>> getAssignedBranches(String userId)`
@@ -299,7 +306,7 @@ The authenticated application shell dynamically adapts based on screen width:
 The router includes a centralized redirect guard reacting to `AuthController`, `AccessController`, and `BranchContextController`:
 1. Unauthenticated users are redirected to `/sign-in`.
 2. Authenticated users without resolved access are redirected to `/access-verification`.
-3. Branch Managers with multiple branches and no active branch context are redirected to `/select-branch`.
+3. Branch Managers without an active branch context are always gated (`/no-branch-assigned` when no active branch is assigned, otherwise `/select-branch`). See section 17.
 4. Users attempting to access a route for a different role are redirected to their permitted workspace.
 
 Conceptual routing flow:
@@ -447,7 +454,93 @@ When a Stitch design exists:
 - Sensitive business data must be exposed only to roles authorized to see it.
 - Backend rules / trusted services remain authoritative for privileged mutations.
 
-## 15. Architecture Change Policy
+## 16. Session Lifecycle
+
+App-lifetime controllers hold per-user data, so the session boundary is explicit:
+
+- `AuthController.init()` runs once at startup (`WorkAxisApp.initState`). While it restores the previous session (`getCurrentUser()`) `isInitializing` is true and the router shows `SplashScreen` (`/initializing`) instead of redirecting. After init it subscribes to `authStateChanges()` (cancelled in `dispose`). A provider-side sign-out (revoked token, disabled account) ends the session; a stream *error* is logged and never treated as a sign-out. Non-null stream events never sign a user in: only `signIn()` does, because it enforces all checks.
+- `AccessController` takes an `onResolved` callback that initialises `BranchContextController` *before* listeners are notified, so the router never sees "access resolved, branch not yet initialised". Every resolve carries a generation token; `clear()` invalidates in-flight resolutions so user A's context can never land after user B signs in.
+- `SessionController` (`lib/app/session/`) is the single sign-out path (shell, verification, branch selection, no-branch and profile screens). `signOut()` starts `AuthController.signOut()` (which nulls the user synchronously and then calls the identity provider inside try/catch), clears access and branch context, and calls `reset()` on every feature controller. Provider failures are logged; local state is wiped regardless. Identity-provider-initiated sign-out runs the same cleanup.
+- Every feature controller implements `SessionScoped.reset()`: it invalidates in-flight requests, restores the initial state and clears filters/queries/errors. `SessionController` also resets the branch-scoped controllers (branch dashboard, attendance, returns, members, reports) whenever `BranchContextController.activeBranch` changes, so data from the previous branch is never shown under the new one.
+- Screens that show summaries (Employee Home, Organization Home) load on entry rather than only when status is `initial`.
+
+### Stale responses
+
+Controllers that load asynchronously use `RequestGeneration` (`lib/core/state/`): `final token = _requests.next(); ... if (!_requests.isCurrent(token)) return;`. `PlatformOrganizationsController` keeps separate list and detail state (`isListLoading`/`listErrorMessage` vs `isDetailLoading`/`detailErrorMessage`); `isLoading`/`errorMessage` remain as legacy combined getters until screens migrate. `OrganizationMembersController.setQuery` is debounced (300 ms). Controllers expose their current filter/query so screens seed their text fields from them.
+
+## 17. Routing Guards (current)
+
+`resolveRedirect` in `app_router.dart` is a pure function, unit-tested per role:
+
+1. Initializing -> `/initializing`.
+2. Unauthenticated -> `/signin`.
+3. Authenticated on `/signin` or splash -> `/verify-access`; access unresolved -> `/verify-access`.
+4. A Branch Manager without an active branch is always gated: no active assigned branch -> `/no-branch-assigned`, otherwise `/select-branch`.
+5. `/select-branch` is Branch-Manager-only; `/verify-access` and `/no-branch-assigned` redirect away once resolved.
+6. Role-area protection (`redirectForRoleRoute`), including the Owner-only `/platform/users`.
+
+Unknown locations render `RouteErrorScreen`. Role destination lists live in `lib/app/routing/role_destinations.dart`. A deep link is not preserved across a session restore (the user lands on their role workspace).
+
+## 18. Error Handling
+
+Repositories and infrastructure may throw anything; presentation shows only safe text.
+
+- `AppException` (`lib/core/errors/app_exceptions.dart`) carries a developer-facing `message` and a user-safe `userMessage`. Types: `AuthenticationException`, `AccessResolutionException`, `BranchAuthorizationException`, `AccessDeniedException`, `NotFoundException`, `DatabaseException`, `NetworkException`, `RequestTimeoutException`.
+- `mapBackendError(error, [stackTrace])` (`backend_error_mapper.dart`) maps `FirebaseException`, `FirebaseAuthException` and Data Connect errors (`DataConnectError.dataConnectErrorCode`) to those types and logs the raw error through `dart:developer` (never `print`). Unknown errors become a generic `DatabaseException`.
+- `userMessageFor(error, stackTrace, fallback: ...)` is what controllers call: typed failures with a specific category show their `userMessage`; raw exceptions collapse to the controller's fallback text. Controllers never interpolate `$e`/`toString()`.
+- Load errors (`errorMessage`) are separate from action errors (`actionErrorMessage`, `clearActionError()`), so a failed submit never replaces a loaded list.
+- Authentication fails closed: `FirebaseAuthRepository` denies a missing profile or unknown role/status, returns the same "Invalid username or password." for unknown identifiers and wrong passwords, and surfaces transient failures from `getCurrentUser`/`authStateChanges` instead of reporting "signed out".
+
+## 19. Clock, Formatting and Theme Tokens
+
+- `lib/core/time/clock.dart`: `typedef Now = DateTime Function()` plus `Clock` (`Clock.fixed(...)` for tests). Controllers that need "today" (e.g. `AttendanceController`) take a `Now`; tests use `test/helpers/fixed_clock.dart`. Business-critical timestamps must still be server-confirmed once the backend is connected.
+- `AppFormatters` (`lib/core/formatting/date_time_formatters.dart`): cached `DateFormat`/`NumberFormat` helpers with one canonical `formatTime` (`h:mm a`), dates and INR currency. Do not construct formatters in `build()`.
+- Tokens: `AppColors.kpi*` (semantic KPI triplets and slate neutrals), `AppColors.consoleBadge*`, `AppShadows.card`/`topBar`, and named content breakpoints in `AppBreakpoints` (`formSplit`, `wideContent`, `detailsSplit`, `wideTable`, `employeeHomeWide`, `sidebarWidth`, `topBarHeight`).
+- Core widgets: `AppButton` keeps variant colors and a visible spinner while loading; `AppKpiCard` has a minimum height and scales its value; `ResponsiveKpiSection` and `AppPageHeader` choose their layout from `ContentWidthScope` (the width left after the sidebar, published by the shell and `ResponsivePageContent`) instead of the screen width. A `LayoutBuilder` is deliberately not used there because these widgets are embedded in `IntrinsicHeight`.
+
+## 20. App Wiring
+
+`WorkAxisApp` takes one required `BackendRepositories` value (`repositories:`) built by `BackendFactory`. There are no per-repository mock defaults, so a mock and a production repository can never be mixed by omission. `BackendFactory.createMockRepositories({delay})` is the single place where mock fixtures are shared (one `MockAccessDataSource`, one `MockPlatformOrganizationsDataSource`); tests use `test/helpers/test_backend.dart`. `main()` calls `BackendConfig.assertReleaseSafe()` (a release build with the mock backend throws) and lets a Firebase initialisation failure propagate. Sign-in quick-fill accounts are shown only when `BackendConfig.isMock && kDebugMode`, and come from `MockAuthDataSource.demoAccounts`; the mock backend has no universal password.
+
+`AuthenticationRepository.changePassword({currentPassword, newPassword})` re-authenticates (Firebase: `reauthenticateWithCredential` + `updatePassword`) before applying the change; `AuthController.changePassword` exposes the result to the profile screen.
+
+### Shell
+
+`AdaptiveAppShell` picks `ExpandedShell` (>= 840dp: `ShellSidebar` + `TopConsoleBar`) or `CompactShell` (app bar + `AppNavigationDrawer`). `BranchContextCard`, `OrgScopeCard`, `NavTile` and `UserProfileMenu` are shared by the sidebar and drawer. Identity text comes only from the access context; nothing is shown until it resolves. Selected navigation items expose `Semantics(selected: true)` and all icon actions are at least 48dp with tooltips.
+
+## 21. Accounts, Organizations and Branches Data Layer
+
+Applies to `access`, `authentication`, `employees`, `platform_users`, `platform_organizations` and `branches`. Server contract: `docs/backend-api.md`.
+
+**Remote data sources.** Each SQL-backed repository depends on a thin `*RemoteDataSource` interface (`AccessRemoteDataSource`, `OrganizationMembersRemoteDataSource`, `PlatformUsersRemoteDataSource`, `PlatformOrganizationsRemoteDataSource`, `BranchesRemoteDataSource`) with one `SqlConnect*RemoteDataSource` implementation that is the only code touching the generated connector. Repositories hold the rules and error mapping, so they are unit-tested with in-memory fakes (`test/helpers/fake_*`). Identity writes never use SQL Connect or Firestore from the client: `AccountCallables` wraps `provisionUser`, `updateUserAccount`, `resetUserPassword` and `setUserStatus`; organization status uses `setOrganizationStatus`; kiosk codes use `createKioskPairingToken`. `BackendFactory` injects `FirebaseCallableFunctions` (lazy, region `asia-south1`); mocks stay hermetic.
+
+**Sign-in.** `FirebaseAuthRepository` resolves username/email/phone through `resolveLoginIdentifier` (never reads `user_aliases`). Role, organization and status come from ID-token custom claims and fail closed when missing or unknown. The profile document supplies display fields only. Any identifier failure shows "Invalid username or password."; network and rate-limit failures show their own safe text.
+
+**Access.** `AccessResolver` (pure) is shared by `MockAccessRepository` and `SqlConnectAccessRepository`: members and organizations must be active; Organization Admins are organization-wide (all active branches in `assignedBranches`, no `activeBranch`); Branch Managers get their active assigned branches (one is auto-selected); Employees get their active assigned branches and work in the first. The production repository additionally cross-checks the token role/organization and member status against `GetMyMember` (SQL is authoritative) and takes assignments from `ListMyBranchAssignments`. `validateBranchAccess` denies on any error. Permissions are the `AppPermission` enum via `AppPermissionSet.forRole`.
+
+**Policies shared by mock and real.** `OrganizationMemberPolicy` (who may create/edit/suspend whom; edits preserve role and other branches), `PlatformAdministratorValidator`, `OrganizationValidator`, `BranchManagementPolicy` and `BranchGeofenceValidator` (radius 25-5000 m, optional coordinates, (0,0) rejected). Validation failures are `ValidationException` with user-safe text. Email and phone are optional aliases (`ContactValidators`); synthetic `*.invalid` login emails are never displayed (`LoginEmail`).
+
+**Pagination.** Lists use `PageResult` (`items`, `total`, `offset`, `hasMore`) with server-side `limit/offset` and filters (`ListMembersByOrgPaged`, `ListMembersByBranchPaged`, `ListPlatformMembersPaged`, `ListOrganizationsPaged`). Summary counts come from aggregate queries (`GetPlatformStats`, `GetOrganizationStats`), never from downloading lists. Controllers expose `loadMore()` and apply search/status filters instantly to loaded rows, reloading from the server (debounced) when the loaded rows are not the complete result.
+
+**Ids.** The server assigns all entity ids. The only client-generated identifier is the per-create `requestId` idempotency key (`RequestIds.uuidV4`, secure random), reused when the same create is retried.
+
+**Tests.** `test/contracts/*_contract.dart` define behaviour once per repository interface (access, members, platform users, organizations, branches) and run against the mock and against the production repository wired to fakes.
+## 21a. Operational Data Layer (attendance, returns, dashboards, reports, settings)
+
+Repositories take the caller's `UserAccessContext` (and the active branch where relevant) and derive organization and branch from it; there are no magic ids, and no repository substitutes fabricated numbers for a failure. Every method maps errors through `mapBackendError`, so UI text is always safe.
+
+- **Business day.** `lib/core/time/business_time.dart` holds `kBusinessTimeZone = 'Asia/Kolkata'` (UTC+05:30, same as `BUSINESS_TIMEZONE` in `functions/src/config.ts`) and `BusinessTime` (`dateOf`, `today(now)`, `keyOfInstant`, `keyOfDate`, `startOfDay`). `workDateString` keys are always computed through it from the injected `Now`, never from the device-local date. Attendance dates passed to repositories are business calendar dates; `AttendanceController` defaults to `BusinessTime.today`.
+- **Attendance** (`FirestoreAttendanceRepository`): reads are constrained by organization, then active assigned branch (Branch Manager), own uid (Employee) or none (Org Admin) and capped at 500 documents; platform users have no attendance scope. Manager group check-ins write `checkInAt`/`createdAt`/`reviewedAt` as `FieldValue.serverTimestamp()` (the rules require `== request.time`), `source: 'manager-group'`, only rule-allowed fields, document id `{employeeId}_{workDate}` (one entry per employee per day, like punches). The repository rejects employees already recorded, attendees above 400, statuses other than present/late, and dates outside today..today-6. Employee ids must be Firebase uids (`OrganizationMember.authUid`). `GroupAttendanceEligibility` (domain) decides who is "recorded" (any check-in that business day, including late) and "eligible" (active employee assigned to the branch); the dialog uses it.
+- **Employee Home**: `EmployeeHomeRepository` takes `UserAccessContext`; the real repository reads the employee's own entry for today and records punches only via the `recordAttendancePunch` callable with the GPS fix from an `AttendanceLocationProvider`. The device fix comes from `GatewayAttendanceLocationProvider` (domain service: service-on check, one permission request when denied, blocked state, 15 s timeout, every failure a `LocationException` with a `LocationFailure` and a user-safe message) over the `DeviceLocationGateway` seam; `GeolocatorDeviceLocationGateway` (data) is the only code touching the `geolocator` plugin, and `BackendFactory` wires it for Firebase mode (the mock repository needs no provider). `UnavailableAttendanceLocationProvider` remains only as the repository default when none is injected. `EmployeeHomeSimulator` is implemented by the mock only; `EmployeeHomeController.simulator` is non-null only for a mock in debug builds and the screen renders `ShiftSimulatorBar` only then. Fields the backend does not hold are `EmployeeHomeSummary.unavailable` / null.
+- **Returns**: `ReturnsScope` (domain) holds the shared authorization rules used by the mock and the real repository. Employees use `ListMyReturns`, Branch Managers `ListReturnsByBranchPaged` for the active branch, Org Admins `ListReturnsByOrgPaged` (one org-wide query, optionally narrowed to a branch), `SubmitReturn` and `UpdateReturnRecordReview` take no identity (the server derives submitter/reviewer). The seam `ReturnsRemote` is faked in tests.
+- **Dashboards**: SQL Connect aggregates only (`GetOrganizationDashboardCounts`, `GetBranchStats`, `GetPlatformStats`, `GetOrganizationStats` for the 5 most recent organizations) plus Firestore count queries (`AttendanceDayCounter`) for today's attendance. `AttentionItem` is a pure domain model (`AttentionKind`/`AttentionSeverity`); `attention_item_presentation.dart` maps it to icons and `StatusType`. `AttendanceSummary.onLeave` is null (no leave data); per-branch adherence snapshots are not provided.
+- **Reports**: return totals per branch and per reason come from `GetReturnCountsByBranch` (Org Admin, whole organization) or `GetBranchStats` (Branch Manager, or an Org Admin narrowed to one branch), both scoped by optional `$from`/`$to` (business-calendar period via `ReportPeriodRange`, `[from, to)`), so `returnCountsCoverPeriod` is true and `returnCategories` is filled (percentages of the period total; unknown legacy reasons count as Other). Attendance rates, hours, exceptions and trends are null/empty until the backend can compute them. `ReportPeriod` is an enum.
+- **Settings**: `SettingsRepository` (mock in memory; `FirestoreSettingsRepository` on `organization_settings/{orgId}` and `platform_settings/global`), typed `OrganizationSettings`/`PlatformSettings` with `SettingsValidators` (geofence 10-5000 m, grace 0-120 min, session timeout 5-1440 min, lockout attempts 3-10), `SettingsController` (load/save, field errors, `lastSaveSucceeded`, `SessionScoped`). Organization Admins manage organization settings; platform roles read and only the Platform Owner writes platform settings. Rules (in `firestore.rules`, covered by `functions/test-rules`): `organization_settings/{orgId}` read/write when `isOrgAdminOf(orgId)` (read also for platform roles), with a field whitelist and `updatedAt == request.time`, `updatedBy == request.auth.uid`; `platform_settings/global` read for platform roles, write only for `platformOwner` with the same audit checks and numeric range checks.
+- **Test seams**: remote interfaces (`ReturnsRemote`, `OrganizationDashboardRemote`, `BranchDashboardRemote`, `PlatformDashboardRemote`, `ReportsRemote`) wrap the generated connector; Firestore-backed repositories are tested with `FakeFirebaseFirestore`; the punch callable with a fake `CallableFunctions`. Contract suites run the same assertions against the mock and the real repository.
+
+**Dependency note - `geolocator` (^14).** Attendance punches need a real GPS fix with accuracy for server-side geofence validation (AGENTS 28). Flutter has no built-in geolocation API, and `geolocator` is the maintained federated plugin covering all three targets (Android, iOS, and web through `geolocator_web`) with one permission/service/accuracy/timeout API, so a single package replaces three platform integrations. It is isolated behind `DeviceLocationGateway`; nothing else imports it. Platform config: Android `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`, iOS `NSLocationWhenInUseUsageDescription`; the web build prompts through the browser and requires HTTPS (or localhost).
+
+## 22. Architecture Change Policy
 
 Before making a significant architectural change:
 
@@ -458,3 +551,4 @@ Before making a significant architectural change:
 5. Update this document after the change is accepted and implemented.
 
 This document must describe **actual current architecture**, not aspirational features that have not been adopted.
+

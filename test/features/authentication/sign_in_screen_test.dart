@@ -34,7 +34,10 @@ void main() {
       ],
     );
 
-    Widget app = MaterialApp.router(theme: AppTheme.light, routerConfig: router);
+    Widget app = MaterialApp.router(
+      theme: AppTheme.light,
+      routerConfig: router,
+    );
     if (screenSize != null) {
       app = MediaQuery(
         data: MediaQueryData(size: screenSize),

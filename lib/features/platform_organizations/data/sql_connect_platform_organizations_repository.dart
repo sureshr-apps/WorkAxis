@@ -1,239 +1,240 @@
-import 'dart:math';
+import 'package:workaxis/core/backend/account_callables.dart';
+import 'package:workaxis/core/backend/callable_functions.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/core/errors/backend_error_mapper.dart';
+import 'package:workaxis/core/ids/request_ids.dart';
+import 'package:workaxis/core/errors/validation_exception.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
+import 'package:workaxis/core/validation/contact_validators.dart';
+import 'package:workaxis/features/authentication/domain/models/account_status.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/platform_organizations/data/platform_organizations_remote_data_source.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/create_organization_request.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
+import 'package:workaxis/features/platform_organizations/domain/organization_admin_rules.dart';
+import 'package:workaxis/features/platform_organizations/domain/organization_validator.dart';
 import 'package:workaxis/features/platform_organizations/domain/repositories/platform_organizations_repository.dart';
 
-/// Production implementation of [PlatformOrganizationsRepository] using Firebase SQL Connect
-/// (Cloud SQL for PostgreSQL).
+/// Production [PlatformOrganizationsRepository].
+///
+/// Reads and field writes use SQL Connect through the remote data source
+/// (server-side filters, pagination and aggregate counts). Status changes use
+/// the `setOrganizationStatus` callable because suspension must also revoke
+/// every member's access. Methods return what the server saved.
 class SqlConnectPlatformOrganizationsRepository
     implements PlatformOrganizationsRepository {
   SqlConnectPlatformOrganizationsRepository({
-    WorkaxisConnectorConnector? connector,
-  }) : _customConnector = connector;
+    required this._dataSource,
+    required this._functions,
+  });
 
-  final WorkaxisConnectorConnector? _customConnector;
-  WorkaxisConnectorConnector get _connector =>
-      _customConnector ?? WorkaxisConnectorConnector.instance;
+  final PlatformOrganizationsRemoteDataSource _dataSource;
+  final CallableFunctions _functions;
+  late final AccountCallables _accounts = AccountCallables(_functions);
+  final Map<String, String> _pendingAdminRequestIds = {};
 
   @override
-  Future<List<CustomerOrganization>> getOrganizations({
+  Future<PageResult<CustomerOrganization>> getOrganizationsPage({
     String? query,
     OrganizationStatus? statusFilter,
-  }) async {
-    try {
-      final response = await _connector.listOrganizations().execute();
-      final orgs = response.data.organizations;
-
-      var results = orgs.map(_mapListOrgToCustomerOrg).toList();
-
-      if (query != null && query.trim().isNotEmpty) {
-        final q = query.trim().toLowerCase();
-        results = results
-            .where((o) =>
-                o.name.toLowerCase().contains(q) ||
-                o.code.toLowerCase().contains(q))
-            .toList();
-      }
-
-      if (statusFilter != null) {
-        results = results.where((o) => o.status == statusFilter).toList();
-      }
-
-      return results;
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to retrieve organizations: ${e.toString()}');
-    }
-  }
+    int offset = 0,
+    int limit = defaultPageSize,
+  }) => _guard(
+    () => _dataSource.listPage(
+      limit: limit,
+      offset: offset,
+      nameContains: query,
+      status: statusFilter,
+    ),
+  );
 
   @override
-  Future<CustomerOrganization?> getOrganizationById(String id) async {
-    try {
-      final response = await _connector.getOrganizationById(id: id).execute();
-      final org = response.data.organization;
-      if (org == null) return null;
+  Future<OrganizationStatusCounts> getStatusCounts() =>
+      _guard(_dataSource.statusCounts);
 
-      // Query branch and member counts concurrently
-      final branchesFuture = _connector.listBranchesByOrg(orgId: id).execute();
-      final membersFuture = _connector.listMembersByOrg(orgId: id).execute();
-      final results = await Future.wait([branchesFuture, membersFuture]);
-
-      final branchCount = (results[0] as ListBranchesByOrgData).branches.length;
-      final memberCount = (results[1] as ListMembersByOrgData).organizationMembers.length;
-
-      return CustomerOrganization(
-        id: org.id,
-        name: org.name,
-        code: org.code,
-        status: _parseStatus(org.status),
-        branchCount: branchCount,
-        employeeCount: memberCount,
-        createdAt: org.createdAt.toDateTime(),
-        description: org.category != null ? 'Category: ${org.category}' : null,
-      );
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to fetch organization "$id": ${e.toString()}');
-    }
-  }
+  @override
+  Future<CustomerOrganization?> getOrganizationById(String id) =>
+      _guard(() => _dataSource.getById(id));
 
   @override
   Future<OrganizationLicenseDetails?> getOrganizationLicenseDetails(
     String organizationId,
-  ) async {
-    try {
-      final agreementResponse =
-          await _connector.getCommercialAgreementByOrg(orgId: organizationId).execute();
-      final agreements = agreementResponse.data.commercialAgreements;
-      if (agreements.isEmpty) return null;
-
-      final agreement = agreements.first;
-      final historyResponse =
-          await _connector.listLicenseEventsByOrg(orgId: organizationId).execute();
-
-      final historyEntries = historyResponse.data.licenseEvents.map((evt) {
-        return LicenseHistoryEntry(
-          event: evt.eventType,
-          occurredAt: evt.createdAt.toDateTime(),
-          planName: evt.planName,
-          level: 1,
-          periodStart: DateTime.now(),
-          periodEnd: DateTime.now().add(const Duration(days: 365)),
-          stores: evt.storesCount,
-          users: evt.usersCount,
-          negotiatedPrice: evt.oneTimePrice,
-          annualMaintenancePrice: evt.annualMaintenancePrice,
-        );
-      }).toList();
-
-      return OrganizationLicenseDetails(
-        planName: agreement.planName,
-        status: agreement.status,
-        level: 1,
-        agreementId: agreement.agreementReference,
-        agreementStart: DateTime.parse(agreement.startDate.toString()),
-        agreementExpiry: DateTime.parse(agreement.expiryDate.toString()),
-        maximumStores: agreement.maxStores,
-        maximumUsers: agreement.maxUsers,
-        negotiatedPrice: agreement.negotiatedPrice,
-        annualMaintenancePrice: agreement.annualMaintenancePrice,
-        currencyCode: 'INR',
-        history: historyEntries,
-      );
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to fetch license details: ${e.toString()}');
-    }
-  }
+  ) => _guard(() => _dataSource.getLicense(organizationId));
 
   @override
   Future<CustomerOrganization> createOrganization(
     CreateOrganizationRequest request,
-  ) async {
-    try {
-      final code = _generateOrgCode(request.name);
-      final id = 'org-${code.toLowerCase()}';
-
-      await _connector
-          .createOrganization(id: id, name: request.name, code: code)
-          .category(request.description)
-          .country('India')
-          .status(OrganizationStatus.active.name)
-          .currency('INR')
-          .execute();
-
-      return CustomerOrganization(
-        id: id,
-        name: request.name,
-        code: code,
-        status: OrganizationStatus.active,
-        branchCount: 0,
-        employeeCount: 0,
-        createdAt: DateTime.now(),
-        description: request.description,
-        contactName: request.contactName,
-        contactEmail: request.contactEmail,
-        contactPhone: request.contactPhone,
-        address: request.address,
-        taxIdentification: request.taxIdentification,
-      );
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to create organization: ${e.toString()}');
-    }
-  }
+  ) => _guard(() async {
+    OrganizationValidator.validate(
+      name: request.name,
+      contactEmail: request.contactEmail,
+    );
+    final id = await _dataSource.create(
+      request,
+      code: 'ORG-${RequestIds.shortCode(6)}',
+    );
+    return _require(id);
+  });
 
   @override
   Future<CustomerOrganization> updateOrganization(
     CustomerOrganization organization,
-  ) async {
-    try {
-      await _connector
-          .updateOrganization(id: organization.id)
-          .name(organization.name)
-          .status(organization.status.name)
-          .category(organization.description)
-          .execute();
-
-      return organization;
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to update organization: ${e.toString()}');
-    }
-  }
+  ) => _guard(() async {
+    OrganizationValidator.validate(
+      name: organization.name,
+      contactEmail: organization.contactEmail,
+    );
+    await _dataSource.update(organization);
+    return _require(organization.id);
+  });
 
   @override
   Future<CustomerOrganization> updateOrganizationStatus(
     String id,
     OrganizationStatus newStatus,
-  ) async {
-    try {
-      await _connector
-          .updateOrganization(id: id)
-          .status(newStatus.name)
-          .execute();
-
-      final existing = await getOrganizationById(id);
-      if (existing == null) {
-        throw NotFoundException('Organization with ID "$id" not found.');
-      }
-      return existing.copyWith(status: newStatus);
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw DatabaseException('Failed to update organization status: ${e.toString()}');
+  ) => _guard(() async {
+    final response = await _functions.call('setOrganizationStatus', {
+      'organizationId': id,
+      'status': newStatus.name,
+    });
+    final failed = response['membersFailed'];
+    if (failed is int && failed > 0) {
+      throw DatabaseException(
+        'setOrganizationStatus left $failed members unsynchronized',
+        userMessage:
+            'The organization status changed, but $failed member accounts '
+            'could not be updated. Try the change again to finish.',
+      );
     }
-  }
+    return _require(id);
+  });
 
-  CustomerOrganization _mapListOrgToCustomerOrg(
-    ListOrganizationsOrganizations org,
-  ) {
-    return CustomerOrganization(
-      id: org.id,
-      name: org.name,
-      code: org.code,
-      status: _parseStatus(org.status),
-      branchCount: 0,
-      employeeCount: 0,
-      createdAt: org.createdAt.toDateTime(),
-      description: org.category,
+  @override
+  Future<CustomerOrganization> createOrganizationAdmin(
+    String organizationId,
+    OrganizationAdminDraft draft,
+  ) => _guard(() async {
+    OrganizationAdminRules.validate(draft, isCreate: true);
+    final username = draft.username.trim().toLowerCase();
+    final requestId = _pendingAdminRequestIds.putIfAbsent(
+      '$organizationId/$username',
+      RequestIds.uuidV4,
     );
+    await _accounts.provision(
+      requestId: requestId,
+      fullName: draft.name.trim(),
+      username: username,
+      email: _blankToNull(draft.email)?.toLowerCase(),
+      phone: ContactValidators.normalizePhone(draft.phone),
+      password: draft.initialPassword!,
+      role: UserRole.orgAdmin,
+      organizationId: organizationId,
+    );
+    _pendingAdminRequestIds.remove('$organizationId/$username');
+    return _require(organizationId);
+  });
+
+  @override
+  Future<CustomerOrganization> updateOrganizationAdmin(
+    String organizationId,
+    OrganizationAdminUser administrator,
+  ) => _guard(() async {
+    final draft = OrganizationAdminDraft(
+      name: administrator.name,
+      username: administrator.username ?? '',
+      email: administrator.email,
+      phone: administrator.phone,
+    );
+    OrganizationAdminRules.validate(draft, isCreate: false);
+    final org = await _require(organizationId);
+    final existing = _admin(org, administrator.id);
+    final nextEmail = administrator.email.trim().toLowerCase();
+    final nextPhone = ContactValidators.normalizePhone(administrator.phone);
+    await _accounts.update(
+      targetUid: _uid(existing),
+      fullName: administrator.name.trim(),
+      email: nextEmail != existing.email.toLowerCase() ? nextEmail : null,
+      phone: nextPhone != null && nextPhone != existing.phone
+          ? nextPhone
+          : null,
+      clearPhone: existing.phone.isNotEmpty && nextPhone == null,
+    );
+    return _require(organizationId);
+  });
+
+  @override
+  Future<void> resetOrganizationAdminPassword({
+    required String organizationId,
+    required String adminId,
+    required String newPassword,
+  }) => _guard(() async {
+    final passwordError = ContactValidators.password(newPassword);
+    if (passwordError != null) throw ValidationException(passwordError);
+    final org = await _require(organizationId);
+    await _accounts.resetPassword(
+      targetUid: _uid(_admin(org, adminId)),
+      newPassword: newPassword,
+    );
+  });
+
+  @override
+  Future<CustomerOrganization> setOrganizationAdminStatus(
+    String organizationId,
+    String adminId,
+    OrganizationAdminStatus status,
+  ) => _guard(() async {
+    final org = await _require(organizationId);
+    final admin = _admin(org, adminId);
+    OrganizationAdminRules.checkStatusChange(org.admins, adminId, status);
+    await _accounts.setStatus(
+      targetUid: _uid(admin),
+      status: status == OrganizationAdminStatus.active
+          ? AccountStatus.active
+          : AccountStatus.suspended,
+    );
+    return _require(organizationId);
+  });
+
+  OrganizationAdminUser _admin(CustomerOrganization org, String adminId) {
+    for (final admin in org.admins) {
+      if (admin.id == adminId) return admin;
+    }
+    throw const NotFoundException('Administrator not found');
   }
 
-  OrganizationStatus _parseStatus(String statusStr) {
-    return OrganizationStatus.fromString(statusStr);
+  String _uid(OrganizationAdminUser admin) {
+    final uid = admin.authUid;
+    if (uid == null || uid.isEmpty) {
+      throw ValidationException(
+        'This account has no sign-in identity yet and cannot be changed here.',
+      );
+    }
+    return uid;
   }
 
-  String _generateOrgCode(String orgName) {
-    final letters = orgName
-        .trim()
-        .replaceAll(RegExp(r'[^a-zA-Z]'), '')
-        .toUpperCase();
-    final prefix = letters.length >= 3 ? letters.substring(0, 3) : 'ORG';
-    final randomSuffix = Random().nextInt(900) + 100;
-    return '$prefix-$randomSuffix';
+  String? _blankToNull(String value) {
+    final v = value.trim();
+    return v.isEmpty ? null : v;
+  }
+
+  Future<CustomerOrganization> _require(String id) async {
+    final org = await _dataSource.getById(id);
+    if (org == null) {
+      throw const NotFoundException('Organization not found');
+    }
+    return org;
+  }
+
+  Future<T> _guard<T>(Future<T> Function() body) async {
+    try {
+      return await body();
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
   }
 }

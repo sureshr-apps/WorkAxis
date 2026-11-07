@@ -1,7 +1,13 @@
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 
 /// Typed dashboard metrics for Employee Home overview matching Stitch design.
+///
+/// Fields the backend cannot provide hold [unavailable] (text) or null
+/// (counts); they are never filled with invented values.
 class EmployeeHomeSummary {
+  /// Placeholder shown for text the backend does not provide.
+  static const String unavailable = '—';
+
   final String employeeId;
   final String employeeName;
   final String branchName;
@@ -32,12 +38,12 @@ class EmployeeHomeSummary {
   final String supervisorInitials;
   final String assignedStationCode;
   final String assignedStationName;
-  final int monthlyDaysPresent;
-  final int monthlyDaysLate;
-  final int monthlyDaysAbsent;
-  final int monthlyAdherencePercentage;
-  final int pendingReturnsCount;
-  final int approvedReturnsCount;
+  final int? monthlyDaysPresent;
+  final int? monthlyDaysLate;
+  final int? monthlyDaysAbsent;
+  final int? monthlyAdherencePercentage;
+  final int? pendingReturnsCount;
+  final int? approvedReturnsCount;
   final String? recentReturnTitle;
   final String? recentReturnSubtitle;
   final String? recentReturnOffice;
@@ -50,12 +56,12 @@ class EmployeeHomeSummary {
     required this.employeeId,
     required this.employeeName,
     required this.branchName,
-    this.organizationName = 'Apex Logistics & Freight',
-    this.shiftCode = 'CH-001',
+    this.organizationName = unavailable,
+    this.shiftCode = unavailable,
     required this.shiftName,
     required this.shiftHours,
-    this.standardDuration = '8h 00m',
-    this.terminalId = 'CH-TERM-09',
+    this.standardDuration = unavailable,
+    this.terminalId = unavailable,
     required this.currentStatus,
     this.checkInTime,
     this.checkInNote,
@@ -63,29 +69,29 @@ class EmployeeHomeSummary {
     this.checkOutNote,
     required this.workingDuration,
     required this.shiftProgress,
-    this.elapsedActive = '5h 42m',
-    this.elapsedActivePercentText = '71% complete',
+    this.elapsedActive = unavailable,
+    this.elapsedActivePercentText = unavailable,
     required this.locationStatus,
     required this.isWithinGeofence,
-    this.geofenceId = 'GEO-CENTRAL-01',
-    this.geofenceZone = 'Zone B • Outbound Logistics Corridor',
-    this.networkMac = 'B4:F2:79:A1:09',
-    this.syncRate = '1000ms',
-    this.badgeAuth = 'NFC Verified',
-    this.supervisorName = 'Rajesh Kumar',
-    this.supervisorRole = 'Logistics Operations • Ext. 408',
-    this.supervisorInitials = 'RK',
-    this.assignedStationCode = 'BAY-SORT-04',
-    this.assignedStationName = 'Primary Conveyor Tier 1 • Automated Induction',
-    required this.monthlyDaysPresent,
-    required this.monthlyDaysLate,
-    required this.monthlyDaysAbsent,
-    required this.monthlyAdherencePercentage,
-    required this.pendingReturnsCount,
-    this.approvedReturnsCount = 4,
+    this.geofenceId = unavailable,
+    this.geofenceZone = unavailable,
+    this.networkMac = unavailable,
+    this.syncRate = unavailable,
+    this.badgeAuth = unavailable,
+    this.supervisorName = unavailable,
+    this.supervisorRole = unavailable,
+    this.supervisorInitials = unavailable,
+    this.assignedStationCode = unavailable,
+    this.assignedStationName = unavailable,
+    this.monthlyDaysPresent,
+    this.monthlyDaysLate,
+    this.monthlyDaysAbsent,
+    this.monthlyAdherencePercentage,
+    this.pendingReturnsCount,
+    this.approvedReturnsCount,
     this.recentReturnTitle,
-    this.recentReturnSubtitle = 'Size L • Ticket #RET-8841 • Submitted Oct 24',
-    this.recentReturnOffice = 'Terminal QM Office',
+    this.recentReturnSubtitle = unavailable,
+    this.recentReturnOffice = unavailable,
     this.recentReturnStatus,
     String? recentReturnItem,
   });

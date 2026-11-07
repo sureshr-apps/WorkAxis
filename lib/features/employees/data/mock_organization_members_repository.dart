@@ -1,9 +1,14 @@
+import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/errors/validation_exception.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
+import 'package:workaxis/core/validation/contact_validators.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/domain/models/access_user_summary.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
+import 'package:workaxis/features/employees/domain/policies/organization_member_policy.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 
 class MockOrganizationMembersRepository
@@ -14,6 +19,7 @@ class MockOrganizationMembersRepository
   final Map<String, OrganizationMember> _members = {
     'user-bm-multi-01': const OrganizationMember(
       id: 'user-bm-multi-01',
+      authUid: 'user-bm-multi-01',
       organizationId: 'org-acme',
       fullName: 'Marcus Chen',
       username: 'marcus.chen',
@@ -24,6 +30,7 @@ class MockOrganizationMembersRepository
     ),
     'user-bm-single-01': const OrganizationMember(
       id: 'user-bm-single-01',
+      authUid: 'user-bm-single-01',
       organizationId: 'org-acme',
       fullName: 'Sophia Patel',
       username: 'sophia.patel',
@@ -34,6 +41,7 @@ class MockOrganizationMembersRepository
     ),
     'user-emp-01': const OrganizationMember(
       id: 'user-emp-01',
+      authUid: 'user-emp-01',
       organizationId: 'org-acme',
       fullName: 'Sarah Connor',
       username: 'sarah.connor',
@@ -45,6 +53,7 @@ class MockOrganizationMembersRepository
     ),
     'user-emp-02': const OrganizationMember(
       id: 'user-emp-02',
+      authUid: 'user-emp-02',
       organizationId: 'org-acme',
       fullName: 'Alex Chen',
       username: 'alex.chen',
@@ -56,6 +65,7 @@ class MockOrganizationMembersRepository
     ),
     'user-emp-03': const OrganizationMember(
       id: 'user-emp-03',
+      authUid: 'user-emp-03',
       organizationId: 'org-acme',
       fullName: 'Priya Shah',
       username: 'priya.shah',
@@ -67,6 +77,7 @@ class MockOrganizationMembersRepository
     ),
     'user-emp-04': const OrganizationMember(
       id: 'user-emp-04',
+      authUid: 'user-emp-04',
       organizationId: 'org-acme',
       fullName: 'Daniel Kim',
       username: 'daniel.kim',
@@ -78,43 +89,47 @@ class MockOrganizationMembersRepository
     ),
   };
 
+  int _nextId = 1;
+
   @override
-  Future<List<OrganizationMember>> getMembers({
+  Future<PageResult<OrganizationMember>> getMembersPage({
     required UserAccessContext access,
     String? activeBranchId,
     String? query,
+    AccountStatus? status,
+    UserRole? role,
+    int offset = 0,
+    int limit = defaultPageSize,
   }) async {
-    final orgId = access.organization?.id;
-    if (orgId == null) {
-      return const [];
-    }
-    final branchId = _effectiveBranchId(access, activeBranchId);
+    OrganizationMemberPolicy.assertCanViewMembers(access);
+    final orgId = OrganizationMemberPolicy.requireOrganizationId(access);
+    final branchId = OrganizationMemberPolicy.effectiveBranchId(
+      access,
+      activeBranchId,
+    );
     final normalized = query?.trim().toLowerCase() ?? '';
-    return _members.values
-        .where((member) {
-          if (member.organizationId != orgId) {
-            return false;
-          }
-          if (access.user.role == UserRole.employee &&
-              member.id != access.user.id) {
-            return false;
-          }
-          if (access.user.role == UserRole.branchManager &&
-              member.role != UserRole.employee) {
-            return false;
-          }
-          if (branchId != null && !member.branchIds.contains(branchId)) {
-            return false;
-          }
-          if (normalized.isNotEmpty &&
-              !'${member.fullName} ${member.username} ${member.email} ${member.role.displayName}'
-                  .toLowerCase()
-                  .contains(normalized)) {
-            return false;
-          }
-          return true;
-        })
-        .toList(growable: false);
+    final matches = _members.values.where((member) {
+      if (member.organizationId != orgId) return false;
+      if (branchId != null && !member.branchIds.contains(branchId)) {
+        return false;
+      }
+      if (status != null && member.status != status) return false;
+      if (role != null && member.role != role) return false;
+      if (normalized.isNotEmpty &&
+          !'${member.fullName} ${member.username} ${member.email} ${member.role.displayName}'
+              .toLowerCase()
+              .contains(normalized)) {
+        return false;
+      }
+      return true;
+    }).toList()..sort((a, b) => a.fullName.compareTo(b.fullName));
+    final end = (offset + limit).clamp(0, matches.length);
+    final start = offset.clamp(0, matches.length);
+    return PageResult(
+      items: List.unmodifiable(matches.sublist(start, end)),
+      total: matches.length,
+      offset: start,
+    );
   }
 
   @override
@@ -123,20 +138,17 @@ class MockOrganizationMembersRepository
     required String memberId,
     String? activeBranchId,
   }) async {
+    OrganizationMemberPolicy.assertCanViewMembers(access);
     final member = _members[memberId];
     if (member == null || member.organizationId != access.organization?.id) {
       return null;
     }
-    if (access.user.role == UserRole.employee && member.id != access.user.id) {
-      return null;
-    }
-    if (access.user.role == UserRole.branchManager &&
-        member.role != UserRole.employee) {
-      return null;
-    }
-    final branchId = _effectiveBranchId(access, activeBranchId);
-    if (branchId != null && !member.branchIds.contains(branchId)) {
-      return null;
+    if (access.user.role == UserRole.branchManager) {
+      final branchId = OrganizationMemberPolicy.effectiveBranchId(
+        access,
+        activeBranchId,
+      );
+      if (!member.branchIds.contains(branchId)) return null;
     }
     return member;
   }
@@ -148,109 +160,114 @@ class MockOrganizationMembersRepository
     required String initialPassword,
     String? activeBranchId,
   }) async {
-    final actorRole = access.user.role;
-    final orgId = access.organization?.id;
-    if (orgId == null || member.organizationId != orgId) {
-      throw StateError('This account is outside your organization.');
-    }
-    if (member.fullName.trim().isEmpty ||
-        member.username.trim().isEmpty ||
-        !member.email.contains('@')) {
-      throw StateError('Enter a name, username, and valid email address.');
-    }
-    if (actorRole != UserRole.orgAdmin && actorRole != UserRole.branchManager) {
-      throw StateError(
-        'You do not have permission to manage organization accounts.',
+    final isCreate = member.id.isEmpty;
+    final OrganizationMember persisted;
+    if (isCreate) {
+      final prepared = OrganizationMemberPolicy.prepareCreate(
+        access: access,
+        draft: member,
+        initialPassword: initialPassword,
+        activeBranchId: activeBranchId,
       );
-    }
-    final branchId = _effectiveBranchId(access, activeBranchId);
-    if (actorRole == UserRole.branchManager) {
-      final existingMember = _members[member.id];
-      if (existingMember != null && existingMember.role != UserRole.employee) {
-        throw StateError('Branch managers can only edit employee accounts.');
-      }
-      if (existingMember != null &&
-          (branchId == null || !existingMember.branchIds.contains(branchId))) {
-        throw StateError(
-          'Branch managers can only edit employees assigned to their active branch.',
+      _ensureUnique(prepared);
+      final id = 'member-${_nextId++}';
+      persisted = prepared.copyWith(id: id, authUid: id);
+    } else {
+      final existing = _requireExisting(access, member.id);
+      final next = OrganizationMemberPolicy.prepareUpdate(
+        access: access,
+        existing: existing,
+        draft: member,
+        activeBranchId: activeBranchId,
+      );
+      _ensureUnique(next);
+      var updated = next;
+      if (member.status != existing.status) {
+        OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+          access: access,
+          existing: existing,
+          activeBranchId: activeBranchId,
         );
+        updated = next.copyWith(status: member.status);
       }
-      if (branchId == null ||
-          member.role != UserRole.employee ||
-          member.branchIds.length != 1 ||
-          member.branchIds.single != branchId) {
-        throw StateError(
-          'Branch managers can only manage employees in their active branch.',
-        );
-      }
-    } else if (member.role.isPlatformLevel) {
-      throw StateError(
-        'Platform accounts cannot be created in an organization.',
-      );
+      persisted = updated;
     }
-    if (member.branchIds.isEmpty ||
-        member.branchIds.any(
-          (id) => !access.assignedBranches.any((branch) => branch.id == id),
-        )) {
-      throw StateError('Select a branch within your authorized organization.');
-    }
-    final normalizedUsername = member.username.trim().toLowerCase();
-    final normalizedEmail = member.email.trim().toLowerCase();
-    final normalizedPhone = member.phone?.replaceAll(RegExp(r'\D'), '');
-    final duplicate = _members.values.any((existing) {
-      if (existing.id == member.id) return false;
-      return existing.username.toLowerCase() == normalizedUsername ||
-          existing.email.toLowerCase() == normalizedEmail ||
-          (normalizedPhone != null &&
-              normalizedPhone.isNotEmpty &&
-              existing.phone?.replaceAll(RegExp(r'\D'), '') == normalizedPhone);
-    });
-    if (duplicate) {
-      throw StateError(
-        'Another organization account already uses that username, email, or phone.',
-      );
-    }
-
-    // The mock repository deliberately discards credentials. A real adapter
-    // will pass this value directly to Firebase Authentication.
-    if (member.id.isEmpty && initialPassword.length < 8) {
-      throw StateError('Set an initial password of at least 8 characters.');
-    }
-    final saved = member;
-    final persisted = OrganizationMember(
-      id: member.id.isEmpty
-          ? 'member-${DateTime.now().microsecondsSinceEpoch}'
-          : saved.id,
-      organizationId: saved.organizationId,
-      fullName: saved.fullName.trim(),
-      username: saved.username.trim(),
-      email: saved.email.trim(),
-      phone: saved.phone,
-      role: saved.role,
-      branchIds: List.unmodifiable(saved.branchIds),
-      status: saved.status,
-    );
-    _members[persisted.id] = persisted;
-    accessDataSource?.saveUserAccessProfile(
-      AccessUserSummary(
-        id: persisted.id,
-        organizationId: persisted.organizationId,
-        fullName: persisted.fullName,
-        role: persisted.role,
-      ),
-    );
-    accessDataSource?.setAssignedBranchIds(persisted.id, persisted.branchIds);
+    _store(persisted);
     return persisted;
   }
 
-  String? _effectiveBranchId(UserAccessContext access, String? requested) {
-    if (access.user.role != UserRole.branchManager) return requested;
-    if (requested == null ||
-        !access.assignedBranches.any(
-          (branch) => branch.id == requested && branch.isActive,
-        )) {
-      throw StateError('Choose an active branch assigned to your account.');
+  @override
+  Future<OrganizationMember> setMemberStatus({
+    required UserAccessContext access,
+    required OrganizationMember member,
+    required AccountStatus status,
+    String? activeBranchId,
+  }) async {
+    final existing = _requireExisting(access, member.id);
+    OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+      access: access,
+      existing: existing,
+      activeBranchId: activeBranchId,
+    );
+    final updated = existing.copyWith(status: status);
+    _store(updated);
+    return updated;
+  }
+
+  @override
+  Future<void> resetMemberPassword({
+    required UserAccessContext access,
+    required OrganizationMember member,
+    required String newPassword,
+    String? activeBranchId,
+  }) async {
+    final existing = _requireExisting(access, member.id);
+    OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+      access: access,
+      existing: existing,
+      activeBranchId: activeBranchId,
+    );
+    final error = ContactValidators.password(newPassword);
+    if (error != null) throw ValidationException(error);
+    // The mock deliberately discards credentials.
+  }
+
+  OrganizationMember _requireExisting(UserAccessContext access, String id) {
+    final orgId = OrganizationMemberPolicy.requireOrganizationId(access);
+    final existing = _members[id];
+    if (existing == null || existing.organizationId != orgId) {
+      throw const NotFoundException('Member not found in caller organization');
     }
-    return requested;
+    return existing;
+  }
+
+  void _ensureUnique(OrganizationMember candidate) {
+    final phone = candidate.phone ?? '';
+    final duplicate = _members.values.any((existing) {
+      if (existing.id == candidate.id) return false;
+      return existing.username.toLowerCase() == candidate.username ||
+          (candidate.email.isNotEmpty &&
+              existing.email.toLowerCase() == candidate.email) ||
+          (phone.isNotEmpty &&
+              ContactValidators.normalizePhone(existing.phone) == phone);
+    });
+    if (duplicate) {
+      throw ValidationException(
+        'Another organization account already uses that username, email, or phone.',
+      );
+    }
+  }
+
+  void _store(OrganizationMember member) {
+    _members[member.id] = member;
+    accessDataSource?.saveUserAccessProfile(
+      AccessUserSummary(
+        id: member.id,
+        organizationId: member.organizationId,
+        fullName: member.fullName,
+        role: member.role,
+      ),
+    );
+    accessDataSource?.setAssignedBranchIds(member.id, member.branchIds);
   }
 }

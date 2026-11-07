@@ -29,6 +29,8 @@ class AppTextField extends StatelessWidget {
     this.enabled = true,
     this.autofocus = false,
     this.focusNode,
+    this.onClear,
+    this.showClearButton = false,
   });
 
   /// Factory template for Search text fields with standard search icon prefix.
@@ -49,13 +51,8 @@ class AppTextField extends StatelessWidget {
         size: 20,
         color: AppColors.onSurfaceVariant,
       ),
-      suffixIcon:
-          (controller != null && controller.text.isNotEmpty && onClear != null)
-          ? IconButton(
-              icon: const Icon(Icons.clear, size: 18),
-              onPressed: onClear,
-            )
-          : null,
+      showClearButton: true,
+      onClear: onClear,
       onChanged: onChanged,
       onSubmitted: onSubmitted,
     );
@@ -83,6 +80,37 @@ class AppTextField extends StatelessWidget {
   final bool autofocus;
   final FocusNode? focusNode;
 
+  /// Called when the clear button is pressed. When null and [showClearButton]
+  /// is set, the controller is cleared and [onChanged] receives an empty string.
+  final VoidCallback? onClear;
+
+  /// Shows a clear button that appears only while the field has text.
+  /// Requires a [controller].
+  final bool showClearButton;
+
+  Widget? _buildSuffix() {
+    final c = controller;
+    if (!showClearButton || c == null) return suffixIcon;
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: c,
+      builder: (context, value, _) {
+        if (value.text.isEmpty) return suffixIcon ?? const SizedBox.shrink();
+        return IconButton(
+          tooltip: 'Clear',
+          icon: const Icon(Icons.clear, size: 18),
+          onPressed: () {
+            if (onClear != null) {
+              onClear!();
+            } else {
+              c.clear();
+              onChanged?.call('');
+            }
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -90,38 +118,46 @@ class AppTextField extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (label != null) ...[
-          Text(
-            label!,
-            style: AppTypography.labelLarge.copyWith(
-              fontWeight: FontWeight.w500,
-              color: AppColors.onSurface,
+          // The visible label is exposed through the field's semantics below.
+          ExcludeSemantics(
+            child: Text(
+              label!,
+              style: AppTypography.labelLarge.copyWith(
+                fontWeight: FontWeight.w500,
+                color: AppColors.onSurface,
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
         ],
-        TextField(
-          controller: controller,
-          obscureText: obscureText,
-          maxLines: obscureText ? 1 : maxLines,
-          minLines: minLines,
-          maxLength: maxLength,
-          textCapitalization: textCapitalization,
-          inputFormatters: inputFormatters,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
-          enabled: enabled,
-          autofocus: autofocus,
-          focusNode: focusNode,
-          onChanged: onChanged,
-          onSubmitted: onSubmitted,
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.onSurface),
-          decoration: InputDecoration(
-            hintText: hintText,
-            errorText: errorText,
-            helperText: helperText,
-            counterText: counterText,
-            prefixIcon: prefixIcon,
-            suffixIcon: suffixIcon,
+        Semantics(
+          label: label,
+          child: TextField(
+            controller: controller,
+            obscureText: obscureText,
+            maxLines: obscureText ? 1 : maxLines,
+            minLines: minLines,
+            maxLength: maxLength,
+            textCapitalization: textCapitalization,
+            inputFormatters: inputFormatters,
+            keyboardType: keyboardType,
+            textInputAction: textInputAction,
+            enabled: enabled,
+            autofocus: autofocus,
+            focusNode: focusNode,
+            onChanged: onChanged,
+            onSubmitted: onSubmitted,
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.onSurface,
+            ),
+            decoration: InputDecoration(
+              hintText: hintText,
+              errorText: errorText,
+              helperText: helperText,
+              counterText: counterText,
+              prefixIcon: prefixIcon,
+              suffixIcon: _buildSuffix(),
+            ),
           ),
         ),
       ],
@@ -167,6 +203,7 @@ class _AppPasswordFieldState extends State<AppPasswordField> {
       obscureText: _obscureText,
       prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
       suffixIcon: IconButton(
+        tooltip: _obscureText ? 'Show password' : 'Hide password',
         icon: Icon(
           _obscureText
               ? Icons.visibility_outlined

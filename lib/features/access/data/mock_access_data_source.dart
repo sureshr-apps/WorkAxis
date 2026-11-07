@@ -118,6 +118,21 @@ class MockAccessDataSource {
 
   void saveBranch(BranchSummary branch) => _branches[branch.id] = branch;
 
+  /// Access profile (role and organization) of a known user, if any.
+  AccessUserSummary? getUserProfile(String userId) => _users[userId];
+
+  /// Suspends or reactivates an organization (tests and demos).
+  void setOrganizationActive(String organizationId, {required bool isActive}) {
+    final org = _orgs[organizationId];
+    if (org == null) return;
+    _orgs[organizationId] = OrganizationSummary(
+      id: org.id,
+      name: org.name,
+      code: org.code,
+      isActive: isActive,
+    );
+  }
+
   List<String> getAssignedBranchIds(String userId) =>
       List.unmodifiable(_userBranchAssignments[userId] ?? const []);
 

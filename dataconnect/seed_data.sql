@@ -70,13 +70,19 @@ ON CONFLICT (id) DO UPDATE SET
   kiosk_enabled = EXCLUDED.kiosk_enabled;
 
 -- 5. Organization Members
-INSERT INTO organization_member (id, organization_id, full_name, username, email, phone, role, status, created_at)
+-- auth_uid is the Firebase Auth uid and is intentionally NULL here: seed rows
+-- have no Auth identity yet. Link each one after creating the Auth user, e.g.
+--   UPDATE organization_member SET auth_uid = '<firebase-uid>' WHERE id = 'usr-acme-admin';
+-- New users should be created through the provisionUser Cloud Function, which
+-- sets auth_uid and the custom claims atomically from the caller's view.
+INSERT INTO organization_member (id, organization_id, auth_uid, full_name, username, email, phone, role, status, created_at)
 VALUES
-  ('usr-acme-admin', 'org-acme', 'David Warner', 'david.warner', 'd.warner@acmecorp.com', '+919876543210', 'orgAdmin', 'active', '2026-11-07 10:00:00+00'),
-  ('usr-acme-bm', 'org-acme', 'Marcus Chen', 'marcus.chen', 'm.chen@acmecorp.com', '+919876543211', 'branchManager', 'active', '2026-11-07 10:00:00+00'),
-  ('usr-acme-emp', 'org-acme', 'Alex Rivera', 'alex.rivera', 'a.rivera@acmecorp.com', '+919876543212', 'employee', 'active', '2026-11-07 10:00:00+00'),
-  ('usr-apex-admin', 'org-apex', 'Marcus Sterling', 'marcus.sterling', 'operations@apexlogistics.com', '+919876543213', 'orgAdmin', 'active', '2026-10-12 10:00:00+00')
+  ('usr-acme-admin', 'org-acme', NULL, 'David Warner', 'david.warner', 'd.warner@acmecorp.com', '+919876543210', 'orgAdmin', 'active', '2026-11-07 10:00:00+00'),
+  ('usr-acme-bm', 'org-acme', NULL, 'Marcus Chen', 'marcus.chen', 'm.chen@acmecorp.com', '+919876543211', 'branchManager', 'active', '2026-11-07 10:00:00+00'),
+  ('usr-acme-emp', 'org-acme', NULL, 'Alex Rivera', 'alex.rivera', 'a.rivera@acmecorp.com', '+919876543212', 'employee', 'active', '2026-11-07 10:00:00+00'),
+  ('usr-apex-admin', 'org-apex', NULL, 'Marcus Sterling', 'marcus.sterling', 'operations@apexlogistics.com', '+919876543213', 'orgAdmin', 'active', '2026-10-12 10:00:00+00')
 ON CONFLICT (id) DO UPDATE SET
+  -- auth_uid is deliberately not overwritten so re-seeding keeps linked uids.
   full_name = EXCLUDED.full_name,
   username = EXCLUDED.username,
   email = EXCLUDED.email,
@@ -95,14 +101,17 @@ ON CONFLICT (id) DO UPDATE SET
   branch_id = EXCLUDED.branch_id;
 
 -- 7. Returns (Sample Data)
-INSERT INTO return_record (id, organization_id, branch_id, employee_id, employee_name, customer_name, invoice_number, return_reason, amount, status, created_at)
+INSERT INTO return_record (id, organization_id, branch_id, employee_id, employee_name, customer_name, product_title, quantity, unit, invoice_number, return_reason, amount, status, created_at)
 VALUES
-  ('ret-01', 'org-acme', 'br-acme-01', 'usr-acme-emp', 'Alex Rivera', 'Priya Sharma', 'INV-2026-0042', 'Defective zipper on winter jacket', 3499.00, 'pending', '2026-11-07 11:15:00+00'),
-  ('ret-02', 'org-acme', 'br-acme-01', 'usr-acme-emp', 'Alex Rivera', 'Vikram Patel', 'INV-2026-0048', 'Incorrect shoe size 9 vs 10', 5299.00, 'approved', '2026-11-07 12:30:00+00')
+  ('ret-01', 'org-acme', 'br-acme-01', 'usr-acme-emp', 'Alex Rivera', 'Priya Sharma', 'Winter jacket', 1, 'pcs', 'INV-2026-0042', 'Defective zipper on winter jacket', 3499.00, 'pending', '2026-11-07 11:15:00+00'),
+  ('ret-02', 'org-acme', 'br-acme-01', 'usr-acme-emp', 'Alex Rivera', 'Vikram Patel', 'Running shoes', 1, 'pairs', 'INV-2026-0048', 'Incorrect shoe size 9 vs 10', 5299.00, 'approved', '2026-11-07 12:30:00+00')
 ON CONFLICT (id) DO UPDATE SET
   employee_id = EXCLUDED.employee_id,
   employee_name = EXCLUDED.employee_name,
   customer_name = EXCLUDED.customer_name,
+  product_title = EXCLUDED.product_title,
+  quantity = EXCLUDED.quantity,
+  unit = EXCLUDED.unit,
   invoice_number = EXCLUDED.invoice_number,
   return_reason = EXCLUDED.return_reason,
   amount = EXCLUDED.amount,

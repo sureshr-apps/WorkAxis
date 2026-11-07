@@ -4,15 +4,18 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
+import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
+import 'package:workaxis/features/returns/presentation/return_presentation.dart';
+
+/// Submits a return. Returns null on success, or the message to show inline
+/// when the request could not be saved.
+typedef ReturnSubmitHandler = Future<String?> Function(CreateReturnInput input);
 
 class SubmitReturnDialog extends StatefulWidget {
-  final Future<bool> Function(CreateReturnInput input) onSubmit;
+  final ReturnSubmitHandler onSubmit;
 
-  const SubmitReturnDialog({
-    super.key,
-    required this.onSubmit,
-  });
+  const SubmitReturnDialog({super.key, required this.onSubmit});
 
   @override
   State<SubmitReturnDialog> createState() => _SubmitReturnDialogState();
@@ -30,8 +33,8 @@ class _SubmitReturnDialogState extends State<SubmitReturnDialog> {
 
   ReturnReason _selectedReason = ReturnReason.damaged;
   String _selectedUnit = 'units';
-  bool _hasAttachedBill = true;
   bool _isSubmitting = false;
+  String? _submitError;
 
   @override
   void dispose() {
@@ -53,6 +56,8 @@ class _SubmitReturnDialogState extends State<SubmitReturnDialog> {
       qErr = 'Required';
     } else if (double.tryParse(quantityStr) == null) {
       qErr = 'Invalid number';
+    } else if (double.parse(quantityStr) <= 0) {
+      qErr = 'Must be greater than zero';
     }
     if (invoice.isEmpty) iErr = 'Invoice number is required';
 
@@ -71,31 +76,43 @@ class _SubmitReturnDialogState extends State<SubmitReturnDialog> {
       quantity: quantity,
       unit: _selectedUnit,
       invoiceNumber: invoice,
-      billImageUrl: _hasAttachedBill ? 'mock_bill_scan.jpg' : null,
+      // No upload pipeline yet: never send a placeholder URL to the backend.
+      billImageUrl: null,
       remarks: _remarksController.text.trim(),
     );
 
-    setState(() => _isSubmitting = true);
+    setState(() {
+      _isSubmitting = true;
+      _submitError = null;
+    });
+    String? error;
     try {
-      final success = await widget.onSubmit(input);
-      if (success && mounted) {
-        Navigator.of(context).pop(true);
-      }
+      error = await widget.onSubmit(input);
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _submitError = error;
+        });
+      }
     }
+    if (error == null && mounted) Navigator.of(context).pop(true);
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: AppSpacing.roundedLg),
       backgroundColor: AppColors.surfaceContainerLowest,
-      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.lg),
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.lg,
+      ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 540),
+        constraints: BoxConstraints(
+          maxWidth: 540,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+        ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
@@ -139,7 +156,11 @@ class _SubmitReturnDialogState extends State<SubmitReturnDialog> {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              const Divider(height: 1, thickness: 1, color: AppColors.outlineSubtle),
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color: AppColors.outlineSubtle,
+              ),
               const SizedBox(height: AppSpacing.lg),
 
               // Product Title
@@ -164,7 +185,10 @@ class _SubmitReturnDialogState extends State<SubmitReturnDialog> {
                 initialValue: _selectedReason,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                 ),
                 items: ReturnReason.values.map((reason) {
                   return DropdownMenuItem(
@@ -193,7 +217,9 @@ class _SubmitReturnDialogState extends State<SubmitReturnDialog> {
                     child: AppTextField(
                       controller: _quantityController,
                       label: 'Quantity *',
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       errorText: _quantityError,
                     ),
                   ),
@@ -215,13 +241,25 @@ class _SubmitReturnDialogState extends State<SubmitReturnDialog> {
                           initialValue: _selectedUnit,
                           decoration: const InputDecoration(
                             border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
                           ),
                           items: const [
-                            DropdownMenuItem(value: 'units', child: Text('Units')),
+                            DropdownMenuItem(
+                              value: 'units',
+                              child: Text('Units'),
+                            ),
                             DropdownMenuItem(value: 'kg', child: Text('kg')),
-                            DropdownMenuItem(value: 'boxes', child: Text('Boxes')),
-                            DropdownMenuItem(value: 'liters', child: Text('Liters')),
+                            DropdownMenuItem(
+                              value: 'boxes',
+                              child: Text('Boxes'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'liters',
+                              child: Text('Liters'),
+                            ),
                           ],
                           onChanged: (v) {
                             if (v != null) setState(() => _selectedUnit = v);
@@ -243,76 +281,41 @@ class _SubmitReturnDialogState extends State<SubmitReturnDialog> {
               ),
               const SizedBox(height: AppSpacing.md),
 
-              // Attached bill scan mockup
+              // Bill capture has no upload pipeline yet, so say so instead
+              // of pretending a file was attached.
               Text(
-                'Attached Bill Image *',
+                'Bill Image',
                 style: AppTypography.labelMedium.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
-              InkWell(
-                onTap: () {
-                  setState(() => _hasAttachedBill = !_hasAttachedBill);
-                },
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: _hasAttachedBill
-                        ? AppColors.statusActiveContainer.withValues(alpha: 0.4)
-                        : AppColors.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                    border: Border.all(
-                      color: _hasAttachedBill
-                          ? AppColors.statusActive
-                          : AppColors.outlineSubtle,
+              const SizedBox(height: AppSpacing.xs),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerLow,
+                  borderRadius: AppSpacing.roundedMd,
+                  border: Border.all(color: AppColors.outlineSubtle),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.add_photo_alternate_outlined,
+                      color: AppColors.textMuted,
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _hasAttachedBill
-                            ? Icons.check_circle_outline
-                            : Icons.add_photo_alternate_outlined,
-                        color: _hasAttachedBill
-                            ? AppColors.statusActiveText
-                            : AppColors.primary,
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _hasAttachedBill
-                                  ? 'Bill Receipt Attached (bill_scan_8812.jpg)'
-                                  : 'Tap to attach bill or receipt image',
-                              style: AppTypography.labelLarge.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: _hasAttachedBill
-                                    ? AppColors.statusActiveText
-                                    : AppColors.onSurface,
-                              ),
-                            ),
-                            Text(
-                              _hasAttachedBill
-                                  ? 'OCR verified: matching vendor invoice number'
-                                  : 'Supports JPG, PNG, PDF up to 5MB',
-                              style: AppTypography.bodySmall.copyWith(
-                                fontSize: 11,
-                                color: AppColors.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text(
+                        'Bill photo upload is coming soon. Enter the invoice number above for now.',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.onSurfaceVariant,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-
               // Remarks
               AppTextField(
                 controller: _remarksController,
@@ -322,19 +325,25 @@ class _SubmitReturnDialogState extends State<SubmitReturnDialog> {
               ),
               const SizedBox(height: AppSpacing.xl),
 
-              // Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              if (_submitError != null) ...[
+                ErrorBanner(message: _submitError!),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.sm,
                 children: [
-                  AppButton(
+                  AppButton.outlined(
                     text: 'Cancel',
-                    variant: AppButtonVariant.outlined,
-                    onPressed: () => Navigator.of(context).pop(false),
+                    isFullWidth: false,
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => Navigator.of(context).pop(false),
                   ),
-                  const SizedBox(width: AppSpacing.md),
-                  AppButton(
+                  AppButton.primary(
                     text: 'Submit Return',
-                    variant: AppButtonVariant.primary,
+                    isFullWidth: false,
                     isLoading: _isSubmitting,
                     onPressed: _handleSubmit,
                   ),

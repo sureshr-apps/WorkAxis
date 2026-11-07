@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/time/business_time.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
@@ -15,8 +17,12 @@ import 'package:workaxis/features/attendance/presentation/screens/attendance_ope
 import 'package:workaxis/features/attendance/presentation/screens/widgets/group_attendance_dialog.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/employees/data/mock_organization_members_repository.dart';
+import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
+
+import '../../helpers/fixed_clock.dart';
 
 void main() {
   late MockAccessDataSource accessDataSource;
@@ -33,12 +39,13 @@ void main() {
       dataSource: accessDataSource,
       delay: Duration.zero,
     );
-    attendanceRepository = MockAttendanceRepository();
+    attendanceRepository = MockAttendanceRepository(now: fixedNow);
     membersRepository = MockOrganizationMembersRepository();
     accessController = AccessController(accessRepository: accessRepository);
     branchContextController = BranchContextController();
     attendanceController = AttendanceController(
       repository: attendanceRepository,
+      now: fixedNow,
     );
   });
 
@@ -65,8 +72,8 @@ void main() {
         final access = accessController.accessContext!;
         final request = GroupAttendanceRequest(
           branchId: 'br-01',
-          workDate: DateTime.now(),
-          checkInAt: DateTime.now(),
+          workDate: BusinessTime.today(fixedNow),
+          checkInAt: testNow,
           attendees: const [
             GroupAttendanceAttendee(
               employeeId: 'user-emp-02',
@@ -80,7 +87,7 @@ void main() {
             access: access,
             request: request,
           ),
-          throwsA(isA<StateError>()),
+          throwsA(isA<AccessDeniedException>()),
         );
       },
     );
@@ -97,7 +104,7 @@ void main() {
       );
 
       final access = accessController.accessContext!;
-      final today = DateTime.now();
+      final today = BusinessTime.today(fixedNow);
       final request = GroupAttendanceRequest(
         branchId: 'br-01',
         workDate: today,
@@ -105,12 +112,12 @@ void main() {
         shiftName: 'Morning Shift',
         attendees: const [
           GroupAttendanceAttendee(
-            employeeId: 'user-emp-01',
-            employeeName: 'Sarah Connor',
+            employeeId: 'user-emp-08',
+            employeeName: 'Rita Gomez',
           ),
           GroupAttendanceAttendee(
-            employeeId: 'user-emp-02',
-            employeeName: 'Alex Chen',
+            employeeId: 'user-emp-09',
+            employeeName: 'Omar Haddad',
           ),
         ],
         note: 'Transit bus arrival',
@@ -122,7 +129,7 @@ void main() {
       );
 
       expect(results.length, 2);
-      expect(results.first.employeeName, 'Sarah Connor');
+      expect(results.first.employeeName, 'Rita Gomez');
       expect(results.first.status, AttendanceStatus.present);
       expect(
         results.first.note,
@@ -134,7 +141,7 @@ void main() {
         date: today,
         activeBranchId: 'br-01',
       );
-      expect(records.any((r) => r.employeeId == 'user-emp-01'), isTrue);
+      expect(records.any((r) => r.employeeId == 'user-emp-08'), isTrue);
     });
   });
 
@@ -221,6 +228,24 @@ void main() {
           branchId: 'br-01',
         );
 
+        // Everyone seeded for br-01 already has a check-in today, so add a
+        // new employee who does not (group check-in never double-records).
+        await membersRepository.saveMember(
+          access: accessController.accessContext!,
+          activeBranchId: 'br-01',
+          initialPassword: 'Temporary!123',
+          member: const OrganizationMember(
+            id: '',
+            organizationId: 'org-acme',
+            fullName: 'Nora Fresh',
+            username: 'nora.fresh',
+            email: 'nora.fresh@example.com',
+            role: UserRole.employee,
+            branchIds: ['br-01'],
+            status: AccountStatus.active,
+          ),
+        );
+
         expect(find.text('Group Check-In'), findsOneWidget);
         await tester.tap(find.text('Group Check-In'));
         await tester.pumpAndSettle();
@@ -233,6 +258,7 @@ void main() {
         // Verify roster loaded with members for br-01 (Sarah Connor, Alex Chen)
         expect(find.text('Sarah Connor'), findsWidgets);
         expect(find.text('Alex Chen'), findsWidgets);
+        expect(find.text('Nora Fresh'), findsWidgets);
 
         // Tap Confirm Check-In button
         final confirmBtn = find.byWidgetPredicate(

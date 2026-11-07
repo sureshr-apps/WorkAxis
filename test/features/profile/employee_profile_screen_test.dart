@@ -63,7 +63,9 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<AccessController>.value(value: accessController),
+          ChangeNotifierProvider<AccessController>.value(
+            value: accessController,
+          ),
           ChangeNotifierProvider<BranchContextController>.value(
             value: branchContextController,
           ),
@@ -85,14 +87,18 @@ void main() {
 
       expect(find.text('My Profile & Credentials'), findsOneWidget);
       expect(find.text('Sarah Connor'), findsOneWidget);
-      expect(find.text('Assigned Work Schedule & Geofence'), findsOneWidget);
-      expect(find.text('Employee Information'), findsOneWidget);
+      expect(find.text('Account Information'), findsOneWidget);
+      expect(find.text('Marcus Vance'), findsNothing);
+      expect(find.text('EMP-101'), findsNothing);
+      expect(find.textContaining('150m'), findsNothing);
       expect(find.text('Security & Password'), findsOneWidget);
       expect(find.text('Sign Out'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('renders cleanly on smartphone (390x844) with zero overflow', (tester) async {
+    testWidgets('renders cleanly on smartphone (390x844) with zero overflow', (
+      tester,
+    ) async {
       await pumpEmployeeProfileScreen(tester, width: 390, height: 844);
 
       expect(find.text('My Profile & Credentials'), findsOneWidget);
@@ -100,7 +106,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('renders cleanly on tablet (768x1024) with zero overflow', (tester) async {
+    testWidgets('renders cleanly on tablet (768x1024) with zero overflow', (
+      tester,
+    ) async {
       await pumpEmployeeProfileScreen(tester, width: 768, height: 1024);
 
       expect(find.text('My Profile & Credentials'), findsOneWidget);
@@ -108,7 +116,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('empty password fields trigger validation error', (tester) async {
+    testWidgets('empty password fields trigger validation error', (
+      tester,
+    ) async {
       await pumpEmployeeProfileScreen(tester, width: 1200);
 
       final updateButton = find.text('Update Password');
@@ -119,7 +129,9 @@ void main() {
       expect(find.text('Please fill out all password fields.'), findsOneWidget);
     });
 
-    testWidgets('mismatching passwords trigger validation error', (tester) async {
+    testWidgets('mismatching passwords trigger validation error', (
+      tester,
+    ) async {
       await pumpEmployeeProfileScreen(tester, width: 1200);
 
       final currentField = find.byType(TextField).at(0);
@@ -139,7 +151,9 @@ void main() {
       expect(find.text('New passwords do not match.'), findsOneWidget);
     });
 
-    testWidgets('short password (<8 chars) triggers validation error', (tester) async {
+    testWidgets('short password (<8 chars) triggers validation error', (
+      tester,
+    ) async {
       await pumpEmployeeProfileScreen(tester, width: 1200);
 
       final currentField = find.byType(TextField).at(0);
@@ -156,10 +170,19 @@ void main() {
       await tester.tap(updateButton);
       await tester.pump();
 
-      expect(find.text('New password must be at least 8 characters long.'), findsOneWidget);
+      expect(
+        find.text('New password must be at least 8 characters long.'),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('valid password update displays success snackbar', (tester) async {
+    testWidgets('valid password update displays success snackbar', (
+      tester,
+    ) async {
+      await authController.signIn(
+        identifier: 'employee',
+        password: 'Password123!',
+      );
       await pumpEmployeeProfileScreen(tester, width: 1200);
 
       final currentField = find.byType(TextField).at(0);
@@ -177,7 +200,42 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 
-      expect(find.text('Your password has been changed successfully.'), findsOneWidget);
+      expect(
+        find.text('Your password has been changed successfully.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('wrong current password shows the real failure, not success', (
+      tester,
+    ) async {
+      await authController.signIn(
+        identifier: 'employee',
+        password: 'Password123!',
+      );
+      await pumpEmployeeProfileScreen(tester, width: 1200);
+
+      await tester.enterText(find.byType(TextField).at(0), 'definitely-wrong');
+      await tester.enterText(
+        find.byType(TextField).at(1),
+        'FreshNewSecret123!',
+      );
+      await tester.enterText(
+        find.byType(TextField).at(2),
+        'FreshNewSecret123!',
+      );
+
+      final updateButton = find.text('Update Password');
+      await tester.ensureVisible(updateButton);
+      await tester.tap(updateButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(find.text('Your current password is incorrect.'), findsOneWidget);
+      expect(
+        find.text('Your password has been changed successfully.'),
+        findsNothing,
+      );
     });
 
     testWidgets('tapping Sign Out opens confirmation modal', (tester) async {
@@ -187,7 +245,10 @@ void main() {
       await tester.tap(signOutButton);
       await tester.pump();
 
-      expect(find.text('Are you sure you want to end your current session?'), findsOneWidget);
+      expect(
+        find.text('Are you sure you want to end your current session?'),
+        findsOneWidget,
+      );
     });
   });
 }

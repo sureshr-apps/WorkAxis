@@ -1,17 +1,20 @@
-import 'dart:math';
-
+import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/errors/validation_exception.dart';
+import 'package:workaxis/core/ids/request_ids.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/branches/domain/branch_geofence_validator.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
+import 'package:workaxis/features/branches/domain/policies/branch_management_policy.dart';
 import 'package:workaxis/features/branches/domain/repositories/branch_management_repository.dart';
 
 /// Mock implementation. Branch identity and membership remain in the shared
 /// access data source; this repository stores only branch-specific operations.
 class MockBranchManagementRepository implements BranchManagementRepository {
   MockBranchManagementRepository({MockAccessDataSource? accessDataSource})
-      : accessDataSource = accessDataSource ?? MockAccessDataSource() {
+    : accessDataSource = accessDataSource ?? MockAccessDataSource() {
     _settings.addAll({
       'br-01': const _BranchSettings(125, 40.7128, -74.0060, true),
       'br-02': const _BranchSettings(180, 40.7359, -74.0036, false),
@@ -22,7 +25,7 @@ class MockBranchManagementRepository implements BranchManagementRepository {
 
   final MockAccessDataSource accessDataSource;
   final Map<String, _BranchSettings> _settings = {};
-  final Random _random = Random();
+  int _nextBranchNumber = 1;
 
   @override
   Future<List<BranchRecord>> getBranches(UserAccessContext access) async {
@@ -61,32 +64,26 @@ class MockBranchManagementRepository implements BranchManagementRepository {
   }) async {
     final organizationId = _organizationIdForAdmin(access);
     if (branch.organizationId != organizationId) {
-      throw StateError('A branch cannot be moved to another organization.');
+      throw ValidationException(
+        'A branch cannot be moved to another organization.',
+      );
     }
     final existing = branch.id.isEmpty
         ? null
         : accessDataSource.getBranch(branch.id);
     if (existing != null && existing.organizationId != organizationId) {
-      throw StateError('This branch is outside your organization.');
+      throw const NotFoundException('Branch not found in caller organization');
     }
     final allowedManagerIds = accessDataSource
         .getUsersWithRole(UserRole.branchManager, organizationId)
         .map((user) => user.id)
         .toSet();
     if (branch.managerIds.any((id) => !allowedManagerIds.contains(id))) {
-      throw StateError(
+      throw ValidationException(
         'A selected branch manager is outside your organization.',
       );
     }
-    if (branch.name.trim().isEmpty ||
-        branch.location.trim().isEmpty ||
-        branch.geofenceRadiusMeters < 25 ||
-        branch.latitude < -90 ||
-        branch.latitude > 90 ||
-        branch.longitude < -180 ||
-        branch.longitude > 180) {
-      throw StateError('Enter valid branch details and geofence coordinates.');
-    }
+    BranchManagementPolicy.validate(branch);
     final normalizedCode = branch.code.trim().toLowerCase();
     if (normalizedCode.isNotEmpty &&
         accessDataSource.getAllBranches().any(
@@ -94,10 +91,10 @@ class MockBranchManagementRepository implements BranchManagementRepository {
               candidate.id != branch.id &&
               candidate.code.toLowerCase() == normalizedCode,
         )) {
-      throw StateError('That branch code is already in use.');
+      throw ValidationException('That branch code is already in use.');
     }
 
-    final id = branch.id.isEmpty ? _newId() : branch.id;
+    final id = branch.id.isEmpty ? 'br-mock-${_nextBranchNumber++}' : branch.id;
     final summary = BranchSummary(
       id: id,
       organizationId: organizationId,
@@ -115,6 +112,7 @@ class MockBranchManagementRepository implements BranchManagementRepository {
       branch.latitude,
       branch.longitude,
       branch.kioskStatus == KioskPairingStatus.paired,
+      isMainBranch: branch.isMainBranch,
       pairingPending: branch.kioskStatus == KioskPairingStatus.pairingPending,
     );
     _saveManagerAssignments(id, branch.managerIds);
@@ -126,17 +124,26 @@ class MockBranchManagementRepository implements BranchManagementRepository {
     required UserAccessContext access,
     required String branchId,
   }) async {
-    final branch = await getBranch(access, branchId);
-    if (branch == null) throw StateError('This branch could not be found.');
-    final token = 'WA-${_randomToken()}';
+    BranchManagementPolicy.assertCanPairKiosk(access, branchId);
+    final summary = accessDataSource.getBranch(branchId);
+    if (summary == null || summary.organizationId != access.organization?.id) {
+      throw const NotFoundException('Branch not found in caller organization');
+    }
+    final branch = _toRecord(summary);
+    final token = 'WA-${RequestIds.shortCode(12)}';
     _settings[branchId] = _BranchSettings(
       branch.geofenceRadiusMeters,
       branch.latitude,
       branch.longitude,
       false,
+      isMainBranch: branch.isMainBranch,
       pairingPending: true,
     );
-    return KioskPairingToken(branchId: branchId, value: token);
+    return KioskPairingToken(
+      branchId: branchId,
+      value: token,
+      expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+    );
   }
 
   @override
@@ -145,27 +152,30 @@ class MockBranchManagementRepository implements BranchManagementRepository {
     required String branchId,
   }) async {
     final branch = await getBranch(access, branchId);
-    if (branch == null) throw StateError('This branch could not be found.');
+    if (branch == null) {
+      throw const NotFoundException('Branch not found in caller organization');
+    }
     _settings[branchId] = _BranchSettings(
       branch.geofenceRadiusMeters,
       branch.latitude,
       branch.longitude,
       true,
+      isMainBranch: branch.isMainBranch,
     );
   }
 
-  String _organizationIdForAdmin(UserAccessContext access) {
-    if (access.user.role != UserRole.orgAdmin || access.organization == null) {
-      throw StateError(
-        'Only an organization administrator can manage branches.',
-      );
-    }
-    return access.organization!.id;
-  }
+  String _organizationIdForAdmin(UserAccessContext access) =>
+      BranchManagementPolicy.requireOrgAdminOrganization(access);
 
   BranchRecord _toRecord(BranchSummary summary) {
     final settings =
-        _settings[summary.id] ?? const _BranchSettings(150, 0, 0, false);
+        _settings[summary.id] ??
+        const _BranchSettings(
+          BranchGeofenceValidator.defaultRadiusMeters,
+          null,
+          null,
+          false,
+        );
     final managers = accessDataSource.knownUserIds
         .where((userId) {
           return accessDataSource
@@ -184,6 +194,7 @@ class MockBranchManagementRepository implements BranchManagementRepository {
       geofenceRadiusMeters: settings.radius,
       latitude: settings.latitude,
       longitude: settings.longitude,
+      isMainBranch: settings.isMainBranch,
       managerIds: managers,
       kioskStatus: settings.paired
           ? KioskPairingStatus.paired
@@ -212,11 +223,15 @@ class MockBranchManagementRepository implements BranchManagementRepository {
       } else {
         branchIds.remove(branchId);
       }
+      if (branchIds.isEmpty) {
+        throw ValidationException(
+          'A branch manager must keep at least one branch. '
+          'Assign another branch first.',
+        );
+      }
       accessDataSource.setAssignedBranchIds(managerId, branchIds.toList());
     }
   }
-
-  String _newId() => 'br-${DateTime.now().microsecondsSinceEpoch}';
 
   String _nextBranchCode() {
     final existingCodes = accessDataSource.getAllBranches().map((b) => b.code);
@@ -224,16 +239,12 @@ class MockBranchManagementRepository implements BranchManagementRepository {
     for (final code in existingCodes) {
       final match = RegExp(r'BR-(\d+)').firstMatch(code);
       if (match != null) {
-        maxNumber = max(maxNumber, int.parse(match.group(1)!));
+        final number = int.parse(match.group(1)!);
+        if (number > maxNumber) maxNumber = number;
       }
     }
     return 'BR-${maxNumber + 1}';
   }
-
-  String _randomToken() => List.generate(
-    12,
-    (_) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[_random.nextInt(32)],
-  ).join();
 }
 
 class _BranchSettings {
@@ -242,12 +253,14 @@ class _BranchSettings {
     this.latitude,
     this.longitude,
     this.paired, {
+    this.isMainBranch = false,
     this.pairingPending = false,
   });
 
   final int radius;
-  final double latitude;
-  final double longitude;
+  final double? latitude;
+  final double? longitude;
   final bool paired;
+  final bool isMainBranch;
   final bool pairingPending;
 }

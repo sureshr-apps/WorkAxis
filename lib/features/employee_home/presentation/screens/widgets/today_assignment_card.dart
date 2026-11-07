@@ -1,213 +1,186 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
+import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 
-/// Card displaying today's work station assignment and shift supervisor.
+/// Today's station assignment and shift supervisor, shown only for the parts
+/// the backend provides.
 class TodayAssignmentCard extends StatelessWidget {
+  const TodayAssignmentCard({super.key, required this.summary});
+
   final EmployeeHomeSummary summary;
 
-  const TodayAssignmentCard({super.key, required this.summary});
+  static bool _has(String value) =>
+      value.isNotEmpty && value != EmployeeHomeSummary.unavailable;
+
+  /// Whether the summary carries anything for this card.
+  static bool hasContent(EmployeeHomeSummary summary) =>
+      _has(summary.assignedStationCode) ||
+      _has(summary.assignedStationName) ||
+      _has(summary.supervisorName);
 
   @override
   Widget build(BuildContext context) {
+    final hasStation =
+        _has(summary.assignedStationCode) || _has(summary.assignedStationName);
+    final hasSupervisor = _has(summary.supervisorName);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            offset: Offset(0, 1),
-            blurRadius: 3,
-          ),
-          BoxShadow(
-            color: Color(0x06000000),
-            offset: Offset(0, 1),
-            blurRadius: 2,
-          ),
-        ],
+        borderRadius: AppSpacing.roundedMd,
+        border: Border.all(color: AppColors.kpiBorder),
+        boxShadow: AppShadows.card,
       ),
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header Row
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Flexible(
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.work_history_outlined,
-                      size: 21,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        "Today's Assignment",
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.onSurface,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+              const Icon(
+                Icons.work_history_outlined,
+                size: 20,
+                color: AppColors.primary,
               ),
-              const SizedBox(width: AppSpacing.xs),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.secondaryContainer,
-                  borderRadius: BorderRadius.circular(6),
-                ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
                 child: Text(
-                  'Tier 1 Priority',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 11,
+                  "Today's Assignment",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.titleMedium.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF0D1C2E),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-
-          // Inner Assignment Box
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: AppColors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusSm + 2),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              borderRadius: AppSpacing.roundedMd,
+              border: Border.all(color: AppColors.kpiBorder),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Station info & Icon
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'ASSIGNED STATION',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            summary.assignedStationCode,
-                            style: GoogleFonts.inter(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            summary.assignedStationName,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE2E8F0),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.precision_manufacturing_outlined,
-                        size: 22,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-
-                // Supervisor info
-                Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: const BoxDecoration(
-                        color: AppColors.secondaryContainer,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        summary.supervisorInitials,
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF0D1C2E),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Shift Supervisor',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                          Text(
-                            summary.supervisorName,
-                            style: GoogleFonts.inter(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.onSurface,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            summary.supervisorRole,
-                            style: GoogleFonts.inter(
-                              fontSize: 11.5,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                if (hasStation) _station(),
+                if (hasStation && hasSupervisor)
+                  const SizedBox(height: AppSpacing.md),
+                if (hasSupervisor) _supervisor(),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _station() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'ASSIGNED STATION',
+                style: AppTypography.labelMono.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                summary.assignedStationCode,
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                summary.assignedStationName,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppColors.kpiBorder,
+            borderRadius: AppSpacing.roundedSm,
+          ),
+          child: const Icon(
+            Icons.precision_manufacturing_outlined,
+            size: 22,
+            color: AppColors.primary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _supervisor() {
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: const BoxDecoration(
+            color: AppColors.secondaryContainer,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            summary.supervisorInitials,
+            style: AppTypography.labelMono.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.onSurface,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Shift Supervisor',
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                summary.supervisorName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (_has(summary.supervisorRole))
+                Text(
+                  summary.supervisorRole,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -8,33 +8,16 @@ import 'package:workaxis/firebase_options.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // A release build must never ship the mock backend (fixture credentials).
+  BackendConfig.assertReleaseSafe();
+
   if (BackendConfig.isFirebase) {
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    } catch (e) {
-      debugPrint('Firebase initialization notice: $e');
-    }
+    // Fail clearly: building Firebase repositories on top of an uninitialised
+    // Firebase app would only fail later and more confusingly.
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   }
 
-  final repos = BackendFactory.createRepositories();
-
-  runApp(
-    WorkAxisApp(
-      authRepository: repos.authRepository,
-      accessRepository: repos.accessRepository,
-      platformRepository: repos.platformRepository,
-      platformOrganizationsRepository: repos.platformOrganizationsRepository,
-      platformUsersRepository: repos.platformUsersRepository,
-      orgRepository: repos.orgRepository,
-      branchRepository: repos.branchRepository,
-      employeeRepository: repos.employeeRepository,
-      branchManagementRepository: repos.branchManagementRepository,
-      organizationMembersRepository: repos.organizationMembersRepository,
-      attendanceRepository: repos.attendanceRepository,
-      returnsRepository: repos.returnsRepository,
-      reportsRepository: repos.reportsRepository,
-    ),
-  );
+  runApp(WorkAxisApp(repositories: BackendFactory.createRepositories()));
 }

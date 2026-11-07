@@ -1,342 +1,147 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
-import 'package:workaxis/core/widgets/status_chip.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/empty_state.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attention_item.dart';
+import 'package:workaxis/features/organization_dashboard/presentation/attention_item_presentation.dart';
+import 'package:workaxis/features/organization_dashboard/presentation/screens/widgets/attention_item_card.dart';
+import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
-/// Needs Attention column section adhering strictly to Stitch layout geometry.
+/// "Needs Attention" section shared by the organization and branch dashboards.
 class AttentionItemsSection extends StatelessWidget {
+  const AttentionItemsSection({
+    super.key,
+    required this.items,
+    required this.branchScope,
+    this.onViewAll,
+    this.onItemAction,
+  });
+
   final List<AttentionItem> items;
+
+  /// True when shown on the branch manager dashboard (affects item routes).
+  final bool branchScope;
+
+  /// Opens the full list; the link is hidden when null.
   final VoidCallback? onViewAll;
 
-  const AttentionItemsSection({super.key, required this.items, this.onViewAll});
+  /// Invoked with an item and its destination route.
+  final void Function(AttentionItem item, String route)? onItemAction;
+
+  static const double _compactCardWidth = 280;
+  static const double _compactListHeight = 190;
 
   @override
   Widget build(BuildContext context) {
-    final isCompact = context.isCompact;
-
-    return Container(
-      padding: EdgeInsets.all(isCompact ? AppSpacing.md : AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.outlineSubtle, width: 1),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A191C20),
-            offset: Offset(0, 1),
-            blurRadius: 3,
-          ),
-        ],
-      ),
+    return DashboardSurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row
-          LayoutBuilder(
-            builder: (context, headerConstraints) {
-              final isCompactHeader = headerConstraints.maxWidth < 320;
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Flexible(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Needs Attention',
-                            style: GoogleFonts.inter(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.onSurface,
-                              letterSpacing: -0.2,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Container(
-                          width: 20,
-                          height: 20,
-                          decoration: const BoxDecoration(
-                            color: AppColors.statusUrgentContainer,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${items.length}',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.statusUrgentText,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  InkWell(
-                    onTap: onViewAll,
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 2,
-                        horizontal: 4,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'View all',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                          if (!isCompactHeader)
-                            Text(
-                              ' • ACTION ITEMS',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.secondary,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 4),
-
-          // Subtitle
+          _Header(count: items.length, onViewAll: onViewAll),
+          const SizedBox(height: AppSpacing.xs),
           Text(
-            'Immediate escalations requiring administrative sign-off or branch follow-up',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: AppColors.secondary,
-            ),
+            'Escalations requiring sign-off or follow-up',
+            style: AppTypography.bodySmall.copyWith(color: AppColors.secondary),
           ),
           const SizedBox(height: AppSpacing.lg),
-
-          // Attention Cards List
           if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  'No items currently require attention.',
-                  style: GoogleFonts.inter(color: AppColors.secondary),
+            const EmptyState(
+              icon: Icons.check_circle_outline,
+              title: 'No items currently require attention.',
+            )
+          else if (context.isCompact)
+            SizedBox(
+              height: _compactListHeight,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.sm),
+                itemBuilder: (_, index) => SizedBox(
+                  width: _compactCardWidth,
+                  child: _card(items[index]),
                 ),
               ),
             )
-          else if (isCompact)
-            // Mobile: Horizontal swipeable cards with next card peek
-            SizedBox(
-              height: 154,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: items.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  return SizedBox(
-                    width: 280,
-                    child: _buildItemCard(context, items[index]),
-                  );
-                },
-              ),
-            )
           else
-            // Tablet & Desktop: Stacked cards
             Column(
-              children: items.map((item) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: _buildItemCard(context, item),
-                );
-              }).toList(),
+              children: [
+                for (final item in items)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _card(item),
+                  ),
+              ],
             ),
         ],
       ),
     );
   }
 
-  Widget _buildItemCard(BuildContext context, AttentionItem item) {
-    // Resolve semantic icon and colors
-    final IconData icon =
-        item.itemIcon ??
-        (item.statusType == StatusType.urgent
-            ? Icons.timer_off
-            : item.statusType == StatusType.pending
-            ? Icons.assignment_return
-            : item.statusType == StatusType.neutral
-            ? Icons.domain_disabled
-            : Icons.swap_horiz);
+  Widget _card(AttentionItem item) {
+    final route = item.routeFor(branchScope: branchScope);
+    return AttentionItemCard(
+      item: item,
+      onAction: route == null || onItemAction == null
+          ? null
+          : () => onItemAction!(item, route),
+    );
+  }
+}
 
-    final Color iconBg = item.statusType == StatusType.urgent
-        ? AppColors.statusUrgentContainer
-        : item.statusType == StatusType.pending
-        ? AppColors.statusPendingContainer
-        : item.statusType == StatusType.neutral
-        ? AppColors.surfaceContainerHigh
-        : AppColors.primaryContainer;
+class _Header extends StatelessWidget {
+  const _Header({required this.count, this.onViewAll});
 
-    final Color iconColor = item.statusType == StatusType.urgent
-        ? AppColors.statusUrgentText
-        : item.statusType == StatusType.pending
-        ? AppColors.statusPendingText
-        : item.statusType == StatusType.neutral
-        ? AppColors.onSurfaceVariant
-        : AppColors.onPrimaryContainer;
+  final int count;
+  final VoidCallback? onViewAll;
 
-    final Color badgeColor = item.statusType == StatusType.urgent
-        ? AppColors.error
-        : item.statusType == StatusType.pending
-        ? AppColors.statusPendingText
-        : item.statusType == StatusType.neutral
-        ? AppColors.secondary
-        : AppColors.primary;
-
-    final String badgeText = item.badgeText ?? item.statusLabel;
-    final String actionLabel = item.actionLabel ?? 'Review';
-    final IconData actionIcon = item.actionIcon ?? Icons.arrow_forward;
-    final bool isPrimaryAction =
-        item.actionLabel == 'Review Returns' || item.actionLabel == 'Review';
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: iconBg,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(child: Icon(icon, size: 18, color: iconColor)),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.onSurface,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Text(
-                          badgeText,
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: badgeColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      item.details,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Flexible(
+          child: Text(
+            'Needs Attention',
+            style: AppTypography.titleLarge.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.onSurface,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: AppSpacing.sm),
-
-          // Bottom Action Button
-          Align(
-            alignment: Alignment.centerRight,
-            child: Material(
-              color: AppColors.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(8),
-              elevation: 0,
-              child: InkWell(
-                onTap: () {},
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppColors.outlineSubtle,
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        actionLabel,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isPrimaryAction
-                              ? AppColors.primary
-                              : AppColors.onSurface,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        actionIcon,
-                        size: 14,
-                        color: isPrimaryAction
-                            ? AppColors.primary
-                            : AppColors.onSurface,
-                      ),
-                    ],
-                  ),
-                ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Semantics(
+          label: '$count items',
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs + 2),
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: AppColors.statusUrgentContainer,
+              borderRadius: BorderRadius.all(
+                Radius.circular(AppSpacing.radiusPill),
+              ),
+            ),
+            child: Text(
+              '$count',
+              style: AppTypography.labelMono.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.statusUrgentText,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+        const Spacer(),
+        if (onViewAll != null)
+          AppButton.outlined(
+            text: 'View all',
+            isFullWidth: false,
+            onPressed: onViewAll,
+          ),
+      ],
     );
   }
 }

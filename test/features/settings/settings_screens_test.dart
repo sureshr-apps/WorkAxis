@@ -7,6 +7,9 @@ import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/settings/data/mock_settings_repository.dart';
+import 'package:workaxis/features/settings/domain/models/organization_settings.dart';
+import 'package:workaxis/features/settings/presentation/controllers/settings_controller.dart';
 import 'package:workaxis/features/settings/presentation/screens/organization_settings_screen.dart';
 import 'package:workaxis/features/settings/presentation/screens/platform_settings_screen.dart';
 
@@ -14,8 +17,12 @@ void main() {
   late MockAccessDataSource accessDataSource;
   late MockAccessRepository accessRepository;
   late AccessController accessController;
+  late SettingsController settingsController;
 
   setUp(() {
+    settingsController = SettingsController(
+      repository: MockSettingsRepository(delay: Duration.zero),
+    );
     accessDataSource = MockAccessDataSource();
     accessRepository = MockAccessRepository(
       dataSource: accessDataSource,
@@ -26,6 +33,7 @@ void main() {
 
   tearDown(() {
     accessController.dispose();
+    settingsController.dispose();
   });
 
   Future<void> pumpPlatformSettingsScreen(
@@ -40,14 +48,33 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: const PlatformSettingsScreen(),
+    await accessController.resolveAccess(
+      const AppUser(
+        id: 'user-po-01',
+        name: 'Platform Owner',
+        username: 'platform.owner',
+        role: UserRole.platformOwner,
       ),
     );
 
-    await tester.pump();
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AccessController>.value(
+            value: accessController,
+          ),
+          ChangeNotifierProvider<SettingsController>.value(
+            value: settingsController,
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: const PlatformSettingsScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
   }
 
   Future<void> pumpOrganizationSettingsScreen(
@@ -75,7 +102,12 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<AccessController>.value(value: accessController),
+          ChangeNotifierProvider<AccessController>.value(
+            value: accessController,
+          ),
+          ChangeNotifierProvider<SettingsController>.value(
+            value: settingsController,
+          ),
         ],
         child: MaterialApp(
           theme: AppTheme.light,
@@ -84,23 +116,26 @@ void main() {
       ),
     );
 
-    await tester.pump();
+    await tester.pumpAndSettle();
   }
 
   group('Platform Settings Screen Tests', () {
-    testWidgets('renders all configuration sections on desktop', (tester) async {
+    testWidgets('renders all configuration sections on desktop', (
+      tester,
+    ) async {
       await pumpPlatformSettingsScreen(tester, width: 1200);
 
       expect(find.text('Platform Settings'), findsOneWidget);
       expect(find.text('Platform Environment & Topology'), findsOneWidget);
       expect(find.text('Authentication & Session Policies'), findsOneWidget);
       expect(find.text('Maintenance Window'), findsOneWidget);
-      expect(find.text('Recent System Audit Trail'), findsOneWidget);
       expect(find.text('Save Changes'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('renders cleanly on smartphone (390x844) with zero overflow', (tester) async {
+    testWidgets('renders cleanly on smartphone (390x844) with zero overflow', (
+      tester,
+    ) async {
       await pumpPlatformSettingsScreen(tester, width: 390, height: 844);
 
       expect(find.text('Platform Settings'), findsOneWidget);
@@ -108,7 +143,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('renders cleanly on tablet (768x1024) with zero overflow', (tester) async {
+    testWidgets('renders cleanly on tablet (768x1024) with zero overflow', (
+      tester,
+    ) async {
       await pumpPlatformSettingsScreen(tester, width: 768, height: 1024);
 
       expect(find.text('Platform Settings'), findsOneWidget);
@@ -120,15 +157,17 @@ void main() {
 
       final saveButton = find.text('Save Changes');
       await tester.tap(saveButton);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
 
-      expect(find.text('Platform configuration saved successfully.'), findsOneWidget);
+      expect(find.text('Platform configuration saved.'), findsOneWidget);
+      expect(settingsController.lastSaveSucceeded, isTrue);
     });
   });
 
   group('Organization Settings Screen Tests', () {
-    testWidgets('renders all organization settings sections on desktop', (tester) async {
+    testWidgets('renders all organization settings sections on desktop', (
+      tester,
+    ) async {
       await pumpOrganizationSettingsScreen(tester, width: 1200);
 
       expect(find.text('Organization Settings'), findsOneWidget);
@@ -139,7 +178,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('renders cleanly on smartphone (390x844) with zero overflow', (tester) async {
+    testWidgets('renders cleanly on smartphone (390x844) with zero overflow', (
+      tester,
+    ) async {
       await pumpOrganizationSettingsScreen(tester, width: 390, height: 844);
 
       expect(find.text('Organization Settings'), findsOneWidget);
@@ -147,22 +188,32 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('renders cleanly on tablet (768x1024) with zero overflow', (tester) async {
+    testWidgets('renders cleanly on tablet (768x1024) with zero overflow', (
+      tester,
+    ) async {
       await pumpOrganizationSettingsScreen(tester, width: 768, height: 1024);
 
       expect(find.text('Organization Settings'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('saving organization settings displays success snackbar', (tester) async {
+    testWidgets('saving organization settings displays success snackbar', (
+      tester,
+    ) async {
       await pumpOrganizationSettingsScreen(tester, width: 1200);
 
       final saveButton = find.text('Save Changes');
       await tester.tap(saveButton);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
 
-      expect(find.text('Organization operational settings saved successfully.'), findsOneWidget);
+      expect(
+        find.text('Organization operational settings saved.'),
+        findsOneWidget,
+      );
+      expect(
+        settingsController.organizationSettings,
+        OrganizationSettings.defaults,
+      );
     });
   });
 }

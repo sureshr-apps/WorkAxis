@@ -1,10 +1,18 @@
-import 'package:flutter/material.dart';
-import 'package:workaxis/core/widgets/status_chip.dart';
-
 enum ReturnStatus {
   pending,
   approved,
   rejected;
+
+  /// Parses the server's status vocabulary (`pending`, `approved`,
+  /// `rejected`; case-insensitive). Returns null for anything else so callers
+  /// never silently treat an unknown status as another one.
+  static ReturnStatus? tryParse(String? raw) {
+    final value = raw?.trim().toLowerCase();
+    for (final status in ReturnStatus.values) {
+      if (status.name == value) return status;
+    }
+    return null;
+  }
 
   String get label {
     switch (this) {
@@ -16,17 +24,6 @@ enum ReturnStatus {
         return 'Rejected';
     }
   }
-
-  StatusType get chipType {
-    switch (this) {
-      case ReturnStatus.pending:
-        return StatusType.pending;
-      case ReturnStatus.approved:
-        return StatusType.active;
-      case ReturnStatus.rejected:
-        return StatusType.urgent;
-    }
-  }
 }
 
 enum ReturnReason {
@@ -35,6 +32,16 @@ enum ReturnReason {
   wrongItem,
   customerReturned,
   other;
+
+  /// Parses the stored reason (the enum name; case-insensitive). Unknown
+  /// legacy values map to [ReturnReason.other], which is a real category.
+  static ReturnReason parse(String? raw) {
+    final value = raw?.trim().toLowerCase();
+    for (final reason in ReturnReason.values) {
+      if (reason.name.toLowerCase() == value) return reason;
+    }
+    return ReturnReason.other;
+  }
 
   String get label {
     switch (this) {
@@ -48,21 +55,6 @@ enum ReturnReason {
         return 'Customer Return';
       case ReturnReason.other:
         return 'Other Reason';
-    }
-  }
-
-  IconData get icon {
-    switch (this) {
-      case ReturnReason.damaged:
-        return Icons.broken_image_outlined;
-      case ReturnReason.expired:
-        return Icons.event_busy_outlined;
-      case ReturnReason.wrongItem:
-        return Icons.swap_horiz_outlined;
-      case ReturnReason.customerReturned:
-        return Icons.assignment_return_outlined;
-      case ReturnReason.other:
-        return Icons.help_outline;
     }
   }
 }

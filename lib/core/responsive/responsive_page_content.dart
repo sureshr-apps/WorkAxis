@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
+import 'package:workaxis/core/responsive/content_width_scope.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 
 /// Standard page wrapper providing consistent maximum width (1440dp matching Home page)
@@ -38,7 +39,7 @@ class ResponsivePageContent extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: Padding(
           padding: effectivePadding,
-          child: child,
+          child: ContentWidthProvider(child: child),
         ),
       ),
     );

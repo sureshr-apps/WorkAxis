@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
+import 'package:workaxis/app/session/session_controller.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -9,10 +10,8 @@ import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_container.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
-import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/access/presentation/screens/widgets/branch_list_tile.dart';
-import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 
 /// Branch Selection screen for Branch Managers with multiple assigned branches.
 ///
@@ -43,13 +42,7 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
   }
 
   Future<void> _handleSignOut() async {
-    final authController = context.read<AuthController>();
-    final accessController = context.read<AccessController>();
-    final branchController = context.read<BranchContextController>();
-
-    await authController.signOut();
-    accessController.clear();
-    branchController.clear();
+    await context.read<SessionController>().signOut();
 
     if (mounted) {
       context.go(AppRoutes.signIn);

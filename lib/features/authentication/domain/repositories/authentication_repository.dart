@@ -16,6 +16,16 @@ abstract interface class AuthenticationRepository {
   /// Terminates the current authenticated session.
   Future<void> signOut();
 
+  /// Changes the signed-in user's own password.
+  ///
+  /// Implementations must verify [currentPassword] before applying
+  /// [newPassword] and throw an `AppException` (with a safe `userMessage`)
+  /// when the change cannot be completed.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
+
   /// Retrieves the currently cached/signed-in user, or null if unauthenticated.
   Future<AppUser?> getCurrentUser();
 

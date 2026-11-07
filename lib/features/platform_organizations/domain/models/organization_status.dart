@@ -15,12 +15,11 @@ enum OrganizationStatus {
     }
   }
 
-  static OrganizationStatus fromString(String? value) {
-    if (value == null) return OrganizationStatus.active;
-    final normalized = value.toLowerCase().trim();
-    if (normalized == 'suspended') {
-      return OrganizationStatus.suspended;
-    }
-    return OrganizationStatus.active;
-  }
+  /// Parses a stored status. Anything other than ctive (including a
+  /// missing or unknown value) is treated as suspended: malformed data must
+  /// never grant access.
+  static OrganizationStatus fromString(String? value) =>
+      value?.toLowerCase().trim() == 'active'
+      ? OrganizationStatus.active
+      : OrganizationStatus.suspended;
 }

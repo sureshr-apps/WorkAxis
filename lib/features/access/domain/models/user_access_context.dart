@@ -1,4 +1,5 @@
 import 'package:workaxis/features/access/domain/models/active_branch_context.dart';
+import 'package:workaxis/features/access/domain/models/app_permission.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/organization_summary.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
@@ -18,7 +19,10 @@ class UserAccessContext {
   final OrganizationSummary? organization;
   final List<BranchSummary> assignedBranches;
   final ActiveBranchContext? activeBranch;
-  final Set<String> permissions;
+  final Set<AppPermission> permissions;
+
+  bool hasPermission(AppPermission permission) =>
+      permissions.contains(permission);
 
   /// Active (non-disabled) assigned branches for the user.
   List<BranchSummary> get activeAssignedBranches =>
@@ -39,7 +43,7 @@ class UserAccessContext {
     OrganizationSummary? organization,
     List<BranchSummary>? assignedBranches,
     ActiveBranchContext? activeBranch,
-    Set<String>? permissions,
+    Set<AppPermission>? permissions,
   }) {
     return UserAccessContext(
       user: user ?? this.user,

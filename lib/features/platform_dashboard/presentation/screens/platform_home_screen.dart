@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
-import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/controllers/platform_dashboard_controller.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/platform_kpi_carousel.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/platform_overview_hero_banner.dart';
@@ -23,9 +23,9 @@ class _PlatformHomeScreenState extends State<PlatformHomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = context.read<PlatformDashboardController>();
-      if (controller.status == PlatformDashboardStatus.initial) {
-        controller.loadDashboard();
-      }
+      // Reload on every entry so counts reflect organization or administrator
+      // changes made elsewhere; loaded content stays visible while refreshing.
+      if (!controller.isLoading) controller.loadDashboard();
     });
   }
 
@@ -47,19 +47,19 @@ class _PlatformHomeScreenState extends State<PlatformHomeScreen> {
                 const PlatformOverviewHeroBanner(),
                 const SizedBox(height: AppSpacing.xl),
 
-                if (controller.isLoading)
+                if (controller.isLoading && controller.summary == null)
                   const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 64.0),
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.xxl * 2),
                     child: Center(child: CircularProgressIndicator()),
                   )
-                else if (controller.hasError) ...[
-                  ErrorBanner(
+                else if (controller.hasError && controller.summary == null)
+                  ErrorState(
                     message:
                         controller.errorMessage ??
                         'An error occurred loading the dashboard.',
                     onRetry: () => controller.loadDashboard(),
-                  ),
-                ] else if (controller.summary != null) ...[
+                  )
+                else if (controller.summary != null) ...[
                   // KPI Section with top border accents and progress telemetry
                   PlatformKpiCarousel(summary: controller.summary!),
                   const SizedBox(height: AppSpacing.xl),
