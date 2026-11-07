@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "162576663525",
+    "project_id": "workaxis-cloud",
+    "storage_bucket": "workaxis-cloud.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:162576663525:android:90a57a4c50067ee73b250c",
+        "android_client_info": {
+          "package_name": "com.workaxis.workaxis"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6kQyDw3ysNuIQKRSkzMiV-WAq5U2rT-E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

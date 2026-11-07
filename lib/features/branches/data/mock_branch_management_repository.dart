@@ -10,7 +10,8 @@ import 'package:workaxis/features/branches/domain/repositories/branch_management
 /// Mock implementation. Branch identity and membership remain in the shared
 /// access data source; this repository stores only branch-specific operations.
 class MockBranchManagementRepository implements BranchManagementRepository {
-  MockBranchManagementRepository({required this.accessDataSource}) {
+  MockBranchManagementRepository({MockAccessDataSource? accessDataSource})
+      : accessDataSource = accessDataSource ?? MockAccessDataSource() {
     _settings.addAll({
       'br-01': const _BranchSettings(125, 40.7128, -74.0060, true),
       'br-02': const _BranchSettings(180, 40.7359, -74.0036, false),

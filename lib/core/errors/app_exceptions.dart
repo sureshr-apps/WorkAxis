@@ -22,3 +22,18 @@ class AccessResolutionException extends AppException {
 class BranchAuthorizationException extends AppException {
   const BranchAuthorizationException(super.message);
 }
+
+/// Thrown when an operation is denied due to role or scope boundaries.
+class AccessDeniedException extends AppException {
+  const AccessDeniedException(super.message);
+}
+
+/// Thrown when a requested entity is not found in the persistence store.
+class NotFoundException extends AppException {
+  const NotFoundException(super.message);
+}
+
+/// Thrown when a database or network query fails.
+class DatabaseException extends AppException {
+  const DatabaseException(super.message);
+}

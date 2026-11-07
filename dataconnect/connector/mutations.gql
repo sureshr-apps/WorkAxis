@@ -1,0 +1,123 @@
+# WorkAxis Mutations
+
+mutation CreateOrganization(
+  $id: String!
+  $name: String!
+  $code: String!
+  $category: String
+  $country: String
+  $status: String
+  $currency: String
+) @auth(level: USER) {
+  organization_insert(data: {
+    id: $id
+    name: $name
+    code: $code
+    category: $category
+    country: $country
+    status: $status
+    currency: $currency
+  })
+}
+
+mutation UpdateOrganization(
+  $id: String!
+  $name: String
+  $status: String
+  $category: String
+  $country: String
+) @auth(level: USER) {
+  organization_update(
+    id: $id
+    data: {
+      name: $name
+      status: $status
+      category: $category
+      country: $country
+    }
+  )
+}
+
+mutation CreateBranch(
+  $id: String!
+  $orgId: String!
+  $name: String!
+  $code: String!
+  $location: String
+  $isMainBranch: Boolean
+  $geofenceRadiusMeters: Int
+  $latitude: Float
+  $longitude: Float
+  $kioskEnabled: Boolean
+) @auth(level: USER) {
+  branch_insert(data: {
+    id: $id
+    organizationId: $orgId
+    name: $name
+    code: $code
+    location: $location
+    isMainBranch: $isMainBranch
+    geofenceRadiusMeters: $geofenceRadiusMeters
+    latitude: $latitude
+    longitude: $longitude
+    kioskEnabled: $kioskEnabled
+  })
+}
+
+mutation CreateOrganizationMember(
+  $id: String!
+  $orgId: String!
+  $fullName: String!
+  $username: String!
+  $email: String!
+  $phone: String
+  $role: String!
+  $status: String
+) @auth(level: USER) {
+  organizationMember_insert(data: {
+    id: $id
+    organizationId: $orgId
+    fullName: $fullName
+    username: $username
+    email: $email
+    phone: $phone
+    role: $role
+    status: $status
+  })
+}
+
+mutation CreateReturnRecord(
+  $id: String!
+  $orgId: String!
+  $branchId: String!
+  $employeeId: String!
+  $employeeName: String!
+  $customerName: String!
+  $invoiceNumber: String!
+  $returnReason: String!
+  $amount: Float!
+) @auth(level: USER) {
+  returnRecord_insert(data: {
+    id: $id
+    organizationId: $orgId
+    branchId: $branchId
+    employeeId: $employeeId
+    employeeName: $employeeName
+    customerName: $customerName
+    invoiceNumber: $invoiceNumber
+    returnReason: $returnReason
+    amount: $amount
+  })
+}
+
+mutation UpdateReturnRecordStatus(
+  $id: String!
+  $status: String!
+) @auth(level: USER) {
+  returnRecord_update(
+    id: $id
+    data: {
+      status: $status
+    }
+  )
+}

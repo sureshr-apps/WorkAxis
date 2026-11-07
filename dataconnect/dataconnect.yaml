@@ -1,0 +1,11 @@
+specVersion: "v1beta"
+serviceId: "workaxis-service"
+location: "us-central1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "workaxis"
+      cloudSql:
+        instanceId: "workaxis-pg-instance"
+connectorDirs: ["./connector"]

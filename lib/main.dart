@@ -1,19 +1,40 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/app.dart';
-import 'package:workaxis/features/access/data/mock_access_repository.dart';
-import 'package:workaxis/features/authentication/data/mock_auth_repository.dart';
+import 'package:workaxis/app/bootstrap/backend_factory.dart';
+import 'package:workaxis/app/config/backend_config.dart';
+import 'package:workaxis/firebase_options.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize mock repositories for the mock-first architecture phase
-  final authRepository = MockAuthenticationRepository();
-  final accessRepository = MockAccessRepository();
+  if (BackendConfig.isFirebase) {
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (e) {
+      debugPrint('Firebase initialization notice: $e');
+    }
+  }
+
+  final repos = BackendFactory.createRepositories();
 
   runApp(
     WorkAxisApp(
-      authRepository: authRepository,
-      accessRepository: accessRepository,
+      authRepository: repos.authRepository,
+      accessRepository: repos.accessRepository,
+      platformRepository: repos.platformRepository,
+      platformOrganizationsRepository: repos.platformOrganizationsRepository,
+      platformUsersRepository: repos.platformUsersRepository,
+      orgRepository: repos.orgRepository,
+      branchRepository: repos.branchRepository,
+      employeeRepository: repos.employeeRepository,
+      branchManagementRepository: repos.branchManagementRepository,
+      organizationMembersRepository: repos.organizationMembersRepository,
+      attendanceRepository: repos.attendanceRepository,
+      returnsRepository: repos.returnsRepository,
+      reportsRepository: repos.reportsRepository,
     ),
   );
 }

@@ -1,0 +1,91 @@
+# WorkAxis Relational Core Schema (Firebase SQL Connect / PostgreSQL)
+
+type Organization @table {
+  id: String! @col(name: "id")
+  name: String!
+  code: String! @unique
+  category: String
+  country: String
+  status: String! @default(value: "active")
+  currency: String @default(value: "INR")
+  logoUrl: String
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type Branch @table {
+  id: String! @col(name: "id")
+  organization: Organization!
+  name: String!
+  code: String!
+  location: String
+  status: String! @default(value: "active")
+  isMainBranch: Boolean! @default(value: false)
+  geofenceRadiusMeters: Int @default(value: 100)
+  latitude: Float
+  longitude: Float
+  kioskEnabled: Boolean @default(value: false)
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type OrganizationMember @table {
+  id: String! @col(name: "id")
+  organization: Organization!
+  fullName: String!
+  username: String! @unique
+  email: String! @unique
+  phone: String
+  role: String! # platformOwner, platformAdmin, orgAdmin, branchManager, employee
+  status: String! @default(value: "active")
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type UserBranchAssignment @table {
+  id: String! @col(name: "id")
+  member: OrganizationMember!
+  branch: Branch!
+  assignedAt: Timestamp! @default(expr: "request.time")
+}
+
+type CommercialAgreement @table {
+  id: String! @col(name: "id")
+  organization: Organization!
+  agreementReference: String! @unique
+  planName: String!
+  planTier: String!
+  negotiatedPrice: Float!
+  annualMaintenancePrice: Float!
+  maxStores: Int!
+  maxUsers: Int!
+  startDate: Date!
+  expiryDate: Date!
+  status: String! @default(value: "active")
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type LicenseEvent @table {
+  id: String! @col(name: "id")
+  organization: Organization!
+  eventType: String! # LICENSE_ASSIGNED, PLAN_CHANGED, TERMS_MODIFIED, RENEWED
+  planName: String!
+  planTier: String!
+  validityPeriod: String!
+  storesCount: Int!
+  usersCount: Int!
+  oneTimePrice: Float!
+  annualMaintenancePrice: Float!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type ReturnRecord @table {
+  id: String! @col(name: "id")
+  organization: Organization!
+  branch: Branch!
+  employeeId: String!
+  employeeName: String!
+  customerName: String!
+  invoiceNumber: String!
+  status: String! @default(value: "pending") # pending, verified, rejected
+  returnReason: String!
+  amount: Float!
+  createdAt: Timestamp! @default(expr: "request.time")
+}

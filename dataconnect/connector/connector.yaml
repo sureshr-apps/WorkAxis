@@ -1,0 +1,7 @@
+connectorId: "workaxis-connector"
+auth:
+  mode: "STRICT"
+generate:
+  dartSdk:
+    outputDir: "../../lib/dataconnect_generated"
+    package: "dataconnect_generated"

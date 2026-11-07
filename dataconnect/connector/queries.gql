@@ -1,0 +1,100 @@
+# WorkAxis Queries
+
+query ListOrganizations @auth(level: USER) {
+  organizations(orderBy: [{ createdAt: DESC }]) {
+    id
+    name
+    code
+    category
+    country
+    status
+    currency
+    createdAt
+  }
+}
+
+query GetOrganizationById($id: String!) @auth(level: USER) {
+  organization(id: $id) {
+    id
+    name
+    code
+    category
+    country
+    status
+    currency
+    logoUrl
+    createdAt
+  }
+}
+
+query ListBranchesByOrg($orgId: String!) @auth(level: USER) {
+  branches(where: { organization: { id: { eq: $orgId } } }, orderBy: [{ name: ASC }]) {
+    id
+    name
+    code
+    location
+    status
+    isMainBranch
+    geofenceRadiusMeters
+    latitude
+    longitude
+    kioskEnabled
+  }
+}
+
+query ListMembersByOrg($orgId: String!) @auth(level: USER) {
+  organizationMembers(where: { organization: { id: { eq: $orgId } } }, orderBy: [{ fullName: ASC }]) {
+    id
+    fullName
+    username
+    email
+    phone
+    role
+    status
+  }
+}
+
+query ListReturnsByBranch($branchId: String!) @auth(level: USER) {
+  returnRecords(where: { branch: { id: { eq: $branchId } } }, orderBy: [{ createdAt: DESC }]) {
+    id
+    employeeId
+    employeeName
+    customerName
+    invoiceNumber
+    status
+    returnReason
+    amount
+    createdAt
+  }
+}
+
+query GetCommercialAgreementByOrg($orgId: String!) @auth(level: USER) {
+  commercialAgreements(where: { organization: { id: { eq: $orgId } } }, limit: 1) {
+    id
+    agreementReference
+    planName
+    planTier
+    negotiatedPrice
+    annualMaintenancePrice
+    maxStores
+    maxUsers
+    startDate
+    expiryDate
+    status
+  }
+}
+
+query ListLicenseEventsByOrg($orgId: String!) @auth(level: USER) {
+  licenseEvents(where: { organization: { id: { eq: $orgId } } }, orderBy: [{ createdAt: DESC }]) {
+    id
+    eventType
+    planName
+    planTier
+    validityPeriod
+    storesCount
+    usersCount
+    oneTimePrice
+    annualMaintenancePrice
+    createdAt
+  }
+}
