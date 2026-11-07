@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 
@@ -185,15 +186,15 @@ class _OrganizationAdminDialogState extends State<OrganizationAdminDialog> {
                     spacing: AppSpacing.sm,
                     runSpacing: AppSpacing.sm,
                     children: [
-                      OutlinedButton(
+                      AppButton.outlined(
+                        text: 'Cancel',
+                        isFullWidth: false,
                         onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cancel'),
                       ),
-                      FilledButton(
+                      AppButton.primary(
+                        text: _isEditing ? 'Save Changes' : 'Add Administrator',
+                        isFullWidth: false,
                         onPressed: _submit,
-                        child: Text(
-                          _isEditing ? 'Save Changes' : 'Add Administrator',
-                        ),
                       ),
                     ],
                   ),

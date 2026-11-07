@@ -11,7 +11,10 @@ import 'package:workaxis/features/platform_organizations/presentation/screens/or
 import 'package:go_router/go_router.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organizations_list_screen.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/organization_admin_dialog.dart';
 
 void main() {
   group('PlatformOrganizations Repository & Controller Unit Tests', () {
@@ -1002,6 +1005,135 @@ void main() {
         find.text('Organization name is required and cannot be empty.'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('OrganizationAdminDialog Widget Tests', () {
+    testWidgets('renders canonical AppButton for Cancel and Add Administrator', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(
+            body: OrganizationAdminDialog(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add Administrator'), findsWidgets);
+      expect(find.text('Cancel'), findsOneWidget);
+
+      final primaryBtn = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, 'Add Administrator'),
+      );
+      expect(primaryBtn.variant, equals(AppButtonVariant.primary));
+
+      final cancelBtn = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, 'Cancel'),
+      );
+      expect(cancelBtn.variant, equals(AppButtonVariant.outlined));
+    });
+
+    testWidgets('renders Save Changes in edit mode with canonical AppButton', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      const admin = OrganizationAdminUser(
+        id: 'admin-1',
+        name: 'Sarah Connor',
+        username: 'sconnor',
+        email: 'sarah@example.com',
+        phone: '+1 555-0100',
+        roleTitle: 'Tenant Administrator',
+        status: 'Active',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(
+            body: OrganizationAdminDialog(existingAdministrator: admin),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Administrator'), findsOneWidget);
+      expect(find.text('Save Changes'), findsOneWidget);
+
+      final saveBtn = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, 'Save Changes'),
+      );
+      expect(saveBtn.variant, equals(AppButtonVariant.primary));
+    });
+
+    testWidgets('validates inputs and submits draft when valid', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      OrganizationAdminDraft? result;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await showDialog<OrganizationAdminDraft>(
+                      context: context,
+                      builder: (_) => const OrganizationAdminDialog(),
+                    );
+                  },
+                  child: const Text('Open Dialog'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pumpAndSettle();
+
+      // Tap submit with empty fields -> error message shown
+      await tester.tap(find.widgetWithText(AppButton, 'Add Administrator'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Enter a name, username, valid email, and phone number.'),
+        findsOneWidget,
+      );
+
+      // Enter valid fields
+      final textFields = find.byType(TextField);
+      await tester.enterText(textFields.at(0), 'John Doe');
+      await tester.enterText(textFields.at(1), 'johndoe');
+      await tester.enterText(textFields.at(2), 'john@example.com');
+      await tester.enterText(textFields.at(3), '+1 555-0199');
+      await tester.enterText(textFields.at(4), 'secret123');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(AppButton, 'Add Administrator'));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result!.administrator.name, 'John Doe');
+      expect(result!.administrator.username, 'johndoe');
+      expect(result!.administrator.email, 'john@example.com');
+      expect(result!.administrator.phone, '+1 555-0199');
+      expect(result!.initialPassword, 'secret123');
     });
   });
 }

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
@@ -158,19 +159,10 @@ class _AdministratorsIntro extends StatelessWidget {
               ),
             ],
           );
-          final addButton = FilledButton.icon(
+          final addButton = AppButton.responsive(
+            text: 'Add Administrator',
+            iconData: Icons.add,
             onPressed: onAddAdministrator,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Administrator'),
-            style: FilledButton.styleFrom(
-              minimumSize: Size(
-                isCompact ? double.infinity : 152,
-                AppSpacing.minTouchTarget,
-              ),
-              foregroundColor: Colors.white,
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: AppSpacing.roundedSm),
-            ),
           );
 
           if (isCompact) {
