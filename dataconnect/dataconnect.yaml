@@ -1,11 +1,12 @@
 specVersion: "v1beta"
 serviceId: "workaxis-service"
-location: "us-central1"
+location: "asia-south1"
 schema:
   source: "./schema"
   datasource:
     postgresql:
       database: "workaxis"
       cloudSql:
-        instanceId: "workaxis-pg-instance"
+        instanceId: "omniretail-sql"
+      schemaValidation: "COMPATIBLE"
 connectorDirs: ["./connector"]
