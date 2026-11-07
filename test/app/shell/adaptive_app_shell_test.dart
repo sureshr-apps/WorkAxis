@@ -160,6 +160,8 @@ void main() {
       expect(find.text('Operations Hub'), findsOneWidget);
       expect(find.text('OPERATIONS CONSOLE'), findsOneWidget);
       expect(find.byIcon(Icons.person), findsOneWidget);
+      expect(find.byIcon(Icons.notifications_outlined), findsNothing);
+      expect(find.byTooltip('Notifications'), findsNothing);
     });
   });
 }

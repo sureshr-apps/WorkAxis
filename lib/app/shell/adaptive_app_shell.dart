@@ -698,74 +698,14 @@ class AdaptiveAppShell extends StatelessWidget {
             ),
           const SizedBox(width: AppSpacing.sm),
 
-          // Right: Notifications + Divider + Profile Menu
+          // Right: Profile Menu
           Padding(
             padding: const EdgeInsets.only(right: AppSpacing.xl),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    IconButton(
-                      tooltip: 'Notifications',
-                      icon: const Icon(
-                        Icons.notifications_outlined,
-                        size: 22,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                      onPressed: () {},
-                    ),
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: AppColors.statusUrgent,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.surfaceContainerLowest,
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  width: 1,
-                  height: 24,
-                  margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                  decoration: const BoxDecoration(
-                    color: AppColors.outlineSubtle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x1A000000),
-                        offset: Offset(1.5, 0),
-                        blurRadius: 3,
-                        spreadRadius: 0,
-                      ),
-                      BoxShadow(
-                        color: Color(0x0F000000),
-                        offset: Offset(0.5, 0),
-                        blurRadius: 1,
-                        spreadRadius: 0,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                _buildUserProfileMenu(
-                  context,
-                  userName: userName,
-                  userRole: userRole,
-                  showNameAndRole: true,
-                ),
-              ],
+            child: _buildUserProfileMenu(
+              context,
+              userName: userName,
+              userRole: userRole,
+              showNameAndRole: true,
             ),
           ),
         ],
