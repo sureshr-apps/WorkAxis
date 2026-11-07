@@ -17,6 +17,7 @@ import 'package:workaxis/features/branch_dashboard/domain/repositories/branch_da
 import 'package:workaxis/features/branches/data/mock_branch_management_repository.dart';
 import 'package:workaxis/features/branches/data/sql_connect_branch_management_repository.dart';
 import 'package:workaxis/features/branches/domain/repositories/branch_management_repository.dart';
+import 'package:workaxis/features/employee_home/data/firestore_employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/data/mock_employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_repository.dart';
 import 'package:workaxis/features/employees/data/mock_organization_members_repository.dart';
@@ -35,6 +36,7 @@ import 'package:workaxis/features/platform_users/data/firestore_platform_users_r
 import 'package:workaxis/features/platform_users/data/mock_platform_users_repository.dart';
 import 'package:workaxis/features/platform_users/domain/repositories/platform_users_repository.dart';
 import 'package:workaxis/features/reports/data/mock_reports_repository.dart';
+import 'package:workaxis/features/reports/data/sql_connect_reports_repository.dart';
 import 'package:workaxis/features/reports/domain/repositories/reports_repository.dart';
 import 'package:workaxis/features/returns/data/mock_returns_repository.dart';
 import 'package:workaxis/features/returns/data/sql_connect_returns_repository.dart';
@@ -100,14 +102,14 @@ class BackendFactory {
             SqlConnectOrganizationDashboardRepository(connector: connector),
         branchRepository:
             SqlConnectBranchDashboardRepository(connector: connector),
-        employeeRepository: MockEmployeeHomeRepository(),
+        employeeRepository: FirestoreEmployeeHomeRepository(firestore: firestore),
         branchManagementRepository:
             SqlConnectBranchManagementRepository(connector: connector),
         organizationMembersRepository:
             SqlConnectOrganizationMembersRepository(connector: connector),
         attendanceRepository: FirestoreAttendanceRepository(firestore: firestore),
         returnsRepository: SqlConnectReturnsRepository(connector: connector),
-        reportsRepository: MockReportsRepository(),
+        reportsRepository: SqlConnectReportsRepository(connector: connector),
       );
     }
 

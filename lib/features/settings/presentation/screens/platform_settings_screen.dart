@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:workaxis/app/config/backend_config.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -154,7 +155,12 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
               runSpacing: AppSpacing.md,
               children: [
                 _buildInfoItem('Console Version', 'WorkAxis v2.4.0 (Build 412)'),
-                _buildInfoItem('Persistence Architecture', 'Mock First · Contract Ready'),
+                _buildInfoItem(
+                  'Persistence Architecture',
+                  BackendConfig.isFirebase
+                      ? 'Firebase & SQL Connect (PostgreSQL)'
+                      : 'Mock First · Contract Ready',
+                ),
                 _buildInfoItem('Tenant Isolation', 'Strict Scoped Authorization'),
                 _buildInfoItem('Audit System', 'Active · Server Authoritative'),
               ],

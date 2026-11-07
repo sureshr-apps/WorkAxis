@@ -11,6 +11,8 @@ import 'package:workaxis/features/branch_dashboard/data/mock_branch_dashboard_re
 import 'package:workaxis/features/branch_dashboard/data/sql_connect_branch_dashboard_repository.dart';
 import 'package:workaxis/features/branches/data/mock_branch_management_repository.dart';
 import 'package:workaxis/features/branches/data/sql_connect_branch_management_repository.dart';
+import 'package:workaxis/features/employee_home/data/firestore_employee_home_repository.dart';
+import 'package:workaxis/features/employee_home/data/mock_employee_home_repository.dart';
 import 'package:workaxis/features/employees/data/mock_organization_members_repository.dart';
 import 'package:workaxis/features/employees/data/sql_connect_organization_members_repository.dart';
 import 'package:workaxis/features/organization_dashboard/data/mock_organization_dashboard_repository.dart';
@@ -21,6 +23,8 @@ import 'package:workaxis/features/platform_organizations/data/mock_platform_orga
 import 'package:workaxis/features/platform_organizations/data/sql_connect_platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_users/data/firestore_platform_users_repository.dart';
 import 'package:workaxis/features/platform_users/data/mock_platform_users_repository.dart';
+import 'package:workaxis/features/reports/data/mock_reports_repository.dart';
+import 'package:workaxis/features/reports/data/sql_connect_reports_repository.dart';
 import 'package:workaxis/features/returns/data/mock_returns_repository.dart';
 import 'package:workaxis/features/returns/data/sql_connect_returns_repository.dart';
 
@@ -48,9 +52,11 @@ void main() {
       expect(repos.platformUsersRepository, isA<MockPlatformUsersRepository>());
       expect(repos.orgRepository, isA<MockOrganizationDashboardRepository>());
       expect(repos.branchRepository, isA<MockBranchDashboardRepository>());
+      expect(repos.employeeRepository, isA<MockEmployeeHomeRepository>());
       expect(repos.branchManagementRepository, isA<MockBranchManagementRepository>());
       expect(repos.organizationMembersRepository, isA<MockOrganizationMembersRepository>());
       expect(repos.returnsRepository, isA<MockReturnsRepository>());
+      expect(repos.reportsRepository, isA<MockReportsRepository>());
     });
 
     test('BackendFactory switches to Firebase and SQL Connect repositories in firebase mode', () {
@@ -66,9 +72,11 @@ void main() {
       expect(repos.platformUsersRepository, isA<FirestorePlatformUsersRepository>());
       expect(repos.orgRepository, isA<SqlConnectOrganizationDashboardRepository>());
       expect(repos.branchRepository, isA<SqlConnectBranchDashboardRepository>());
+      expect(repos.employeeRepository, isA<FirestoreEmployeeHomeRepository>());
       expect(repos.branchManagementRepository, isA<SqlConnectBranchManagementRepository>());
       expect(repos.organizationMembersRepository, isA<SqlConnectOrganizationMembersRepository>());
       expect(repos.returnsRepository, isA<SqlConnectReturnsRepository>());
+      expect(repos.reportsRepository, isA<SqlConnectReportsRepository>());
     });
   });
 }
