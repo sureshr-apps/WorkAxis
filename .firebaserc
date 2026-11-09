@@ -2,5 +2,15 @@
   "projects": {
     "default": "omniretail-60c71",
     "workaxis-cloud": "workaxis-cloud"
-  }
+  },
+  "targets": {
+    "omniretail-60c71": {
+      "hosting": {
+        "workaxis": [
+          "workaxis-portal"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
