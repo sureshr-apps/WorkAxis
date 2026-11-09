@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "162576663525",
-    "project_id": "workaxis-cloud",
-    "storage_bucket": "workaxis-cloud.firebasestorage.app"
+    "project_number": "1039046217091",
+    "project_id": "omniretail-60c71",
+    "storage_bucket": "omniretail-60c71.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:162576663525:android:90a57a4c50067ee73b250c",
+        "mobilesdk_app_id": "1:1039046217091:android:e93d92d54da29fc3823ab6",
         "android_client_info": {
           "package_name": "com.workaxis.workaxis"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB6kQyDw3ysNuIQKRSkzMiV-WAq5U2rT-E"
+          "current_key": "AIzaSyAxPk62KCCs0XX6qrMusplGUAahlN_ufA4"
         }
       ],
       "services": {
