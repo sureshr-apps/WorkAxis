@@ -167,7 +167,7 @@ class BackendFactory {
         branchManagementRepository: SqlConnectBranchManagementRepository(
           branches: SqlConnectBranchesRemoteDataSource(connector: connector),
           members: membersSource,
-          accounts: accounts,
+
           functions: callables,
         ),
         organizationMembersRepository: SqlConnectOrganizationMembersRepository(
@@ -175,6 +175,7 @@ class BackendFactory {
           accounts: accounts,
         ),
         attendanceRepository: FirestoreAttendanceRepository(
+          functions: callables,
           firestore: firestore,
           now: now,
         ),

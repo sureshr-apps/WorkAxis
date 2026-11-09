@@ -283,7 +283,7 @@ class MockAttendanceRepository implements AttendanceRepository {
         ),
         status: request.status,
         reviewStatus: AttendanceReviewStatus.none,
-        checkInAt: _now(),
+        checkInAt: request.checkInAt,
         note: finalNote,
         kioskEntry: false,
       );

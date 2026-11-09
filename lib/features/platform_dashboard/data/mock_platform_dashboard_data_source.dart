@@ -54,8 +54,8 @@ class MockPlatformDashboardDataSource {
         code: org.code,
         adminEmail: email,
         status: org.status.name,
-        branchCount: org.branchCount,
-        employeeCount: org.employeeCount,
+        branchCount: org.branchCount ?? 0,
+        employeeCount: org.employeeCount ?? 0,
         createdAt: org.createdAt,
       );
     }).toList();

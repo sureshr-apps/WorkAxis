@@ -1,0 +1,38 @@
+# Trusted branch-save operations; never executable by client identities.
+mutation SaveBranchWithManagers(
+    $id: String!, $orgId: String!, $creating: Boolean!,
+    $data: Branch_Data! @allow(fields: "id organizationId name code location status isMainBranch geofenceRadiusMeters latitude longitude kioskEnabled creationRequestKey creationFingerprint"),
+    $wanted: [String!]!, $current: [String!]!, $removed: [String!]!,
+    $assignments: [UserBranchAssignment_Data!]! @allow(fields: "memberId branchId", maxCount: 100)
+  ) @transaction @auth(level: NO_ACCESS) {
+    query @check(expr: "vars.creating ? this.existing == null : (this.existing != null && this.existing.organization.id == vars.orgId)", message: "Branch not found.")
+      @check(expr: "this.wanted.size() == vars.wanted.size() && this.wanted.all(m, m.authUid != null)", message: "Invalid manager selection.")
+      @check(expr: "this.current.size() == vars.current.size() && this.current.all(a, a.member.id in vars.current)", message: "Assignments changed. Reload the branch.")
+      @check(expr: "this.removed.all(m, m.userBranchAssignments_on_member.exists(a, a.branch.id != vars.id))", message: "A manager must keep at least one branch.") {
+      existing: branch(id: $id) { organization { id } }
+      wanted: organizationMembers(where: { id: { in: $wanted }, organization: { id: { eq: $orgId } }, role: { eq: "branchManager" } }) { id authUid }
+      current: userBranchAssignments(where: { branch: { id: { eq: $id } }, member: { role: { eq: "branchManager" } } }) { member { id } }
+      removed: organizationMembers(where: { id: { in: $removed } }) { userBranchAssignments_on_member { branch { id } } }
+    }
+    branch_upsert(data: $data)
+    userBranchAssignment_deleteMany(where: { branch: { id: { eq: $id } }, member: { role: { eq: "branchManager" } } })
+    userBranchAssignment_insertMany(data: $assignments)
+  }
+
+mutation SaveBranchWithoutManagers(
+    $id: String!, $orgId: String!, $creating: Boolean!,
+    $data: Branch_Data! @allow(fields: "id organizationId name code location status isMainBranch geofenceRadiusMeters latitude longitude kioskEnabled creationRequestKey creationFingerprint"),
+    $wanted: [String!]!, $current: [String!]!, $removed: [String!]!
+  ) @transaction @auth(level: NO_ACCESS) {
+    query @check(expr: "vars.creating ? this.existing == null : (this.existing != null && this.existing.organization.id == vars.orgId)", message: "Branch not found.")
+      @check(expr: "this.wanted.size() == vars.wanted.size() && this.wanted.all(m, m.authUid != null)", message: "Invalid manager selection.")
+      @check(expr: "this.current.size() == vars.current.size() && this.current.all(a, a.member.id in vars.current)", message: "Assignments changed. Reload the branch.")
+      @check(expr: "this.removed.all(m, m.userBranchAssignments_on_member.exists(a, a.branch.id != vars.id))", message: "A manager must keep at least one branch.") {
+      existing: branch(id: $id) { organization { id } }
+      wanted: organizationMembers(where: { id: { in: $wanted }, organization: { id: { eq: $orgId } }, role: { eq: "branchManager" } }) { id authUid }
+      current: userBranchAssignments(where: { branch: { id: { eq: $id } }, member: { role: { eq: "branchManager" } } }) { member { id } }
+      removed: organizationMembers(where: { id: { in: $removed } }) { userBranchAssignments_on_member { branch { id } } }
+    }
+    branch_upsert(data: $data)
+    userBranchAssignment_deleteMany(where: { branch: { id: { eq: $id } }, member: { role: { eq: "branchManager" } } })
+  }

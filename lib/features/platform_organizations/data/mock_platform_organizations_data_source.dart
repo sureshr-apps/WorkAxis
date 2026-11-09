@@ -236,10 +236,10 @@ class MockPlatformOrganizationsDataSource {
     final expiry = DateTime(start.year + 1, start.month, start.day);
     final maximumStores = organization.branchCount == 0
         ? 1
-        : organization.branchCount;
-    final maximumUsers = organization.employeeCount < 15
+        : organization.branchCount ?? 1;
+    final maximumUsers = (organization.employeeCount ?? 0) < 15
         ? 15
-        : organization.employeeCount;
+        : organization.employeeCount ?? 15;
     final agreementId = 'AGR-${organization.code}';
     final historyDate = DateTime(start.year, start.month, start.day, 10, 45);
 

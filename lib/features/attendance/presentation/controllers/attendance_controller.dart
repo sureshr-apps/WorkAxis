@@ -104,12 +104,13 @@ class AttendanceController extends ChangeNotifier
         activeBranchId: activeBranchId,
         decision: decision,
       );
-      if (epoch != _epoch) return false;
+      if (epoch != _epoch || isDisposed) return false;
       _entries = _entries
           .map((entry) => entry.id == updated.id ? updated : entry)
           .toList(growable: false);
       return true;
     } catch (e, st) {
+      if (epoch != _epoch || isDisposed) return false;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -117,8 +118,10 @@ class AttendanceController extends ChangeNotifier
       );
       return false;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (epoch == _epoch && !isDisposed) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -135,7 +138,7 @@ class AttendanceController extends ChangeNotifier
         access: access,
         request: request,
       );
-      if (epoch != _epoch) return false;
+      if (epoch != _epoch || isDisposed) return false;
       if (_sameDate(_selectedDate, request.workDate)) {
         final map = {for (final e in _entries) e.id: e};
         for (final e in updatedEntries) {
@@ -150,6 +153,7 @@ class AttendanceController extends ChangeNotifier
       }
       return true;
     } catch (e, st) {
+      if (epoch != _epoch || isDisposed) return false;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -157,8 +161,10 @@ class AttendanceController extends ChangeNotifier
       );
       return false;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (epoch == _epoch && !isDisposed) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 

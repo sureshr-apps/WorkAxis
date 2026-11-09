@@ -133,6 +133,7 @@ class _OrganizationSettingsScreenState
       eyebrow: 'Enterprise Administration',
       title: 'Organization Settings',
       subtitle: 'Manage operational parameters, geofence radius defaults, and notification digests.',
+      notice: 'Policy controls are read-only until these features are available. You can update the operations contact details.',
       controller: settings,
       status: settings.organizationStatus,
       hasLoaded: loaded != null,
@@ -195,6 +196,7 @@ class _OrganizationSettingsScreenState
               SettingsFieldPair(
                 first: AppTextField(
                   controller: _geofenceRadiusController,
+                  enabled: false,
                   label: 'Default Geofence Radius (Meters)',
                   errorText: errors[SettingsField.geofenceRadius],
                   keyboardType: TextInputType.number,
@@ -202,6 +204,7 @@ class _OrganizationSettingsScreenState
                 ),
                 second: AppTextField(
                   controller: _gracePeriodController,
+                  enabled: false,
                   label: 'Check-in Grace Period (Minutes)',
                   errorText: errors[SettingsField.gracePeriod],
                   keyboardType: TextInputType.number,
@@ -211,10 +214,7 @@ class _OrganizationSettingsScreenState
               const SizedBox(height: AppSpacing.md),
               SettingsSwitchTile(
                 value: _requireGeolocation,
-                onChanged: (v) {
-                  setState(() => _requireGeolocation = v);
-                  _edited();
-                },
+                onChanged: null,
                 title: 'Require Device GPS Fix for Check-in',
                 subtitle: 'Rejects punches when employee device is outside designated branch boundary',
               ),
@@ -225,10 +225,7 @@ class _OrganizationSettingsScreenState
               ),
               SettingsSwitchTile(
                 value: _allowBreaks,
-                onChanged: (v) {
-                  setState(() => _allowBreaks = v);
-                  _edited();
-                },
+                onChanged: null,
                 title: 'Allow Mid-Shift Break Recording',
                 subtitle: 'Enables breakfast, tea, and meal break logs in the employee app',
               ),
@@ -243,10 +240,7 @@ class _OrganizationSettingsScreenState
             children: [
               SettingsSwitchTile(
                 value: _dailyDigest,
-                onChanged: (v) {
-                  setState(() => _dailyDigest = v);
-                  _edited();
-                },
+                onChanged: null,
                 title: 'Daily Morning Attendance Digest',
                 subtitle: 'Summarizes shift roster, late arrivals, and absent staff at 09:00 AM',
               ),
@@ -257,10 +251,7 @@ class _OrganizationSettingsScreenState
               ),
               SettingsSwitchTile(
                 value: _returnAlerts,
-                onChanged: (v) {
-                  setState(() => _returnAlerts = v);
-                  _edited();
-                },
+                onChanged: null,
                 title: 'High-Value Product Return Alerts',
                 subtitle: 'Immediate alert when a return request exceeds standard batch limits',
               ),

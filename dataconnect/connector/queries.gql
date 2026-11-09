@@ -106,7 +106,7 @@ query GetPlatformStats
 # ---------------------------------------------------------------------------
 
 query ListBranchesByOrg($orgId: String!)
-@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || auth.token.organizationId == vars.orgId)") {
+@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId))") {
   branches(where: { organization: { id: { eq: $orgId } } }, orderBy: [{ name: ASC }]) {
     id
     name
@@ -378,7 +378,7 @@ query ListReturnsByBranchPaged(
   }
   returnRecords(
     where: { branch: { id: { eq: $branchId } }, status: { eq: $status } }
-    orderBy: [{ createdAt: DESC }]
+    orderBy: [{ createdAt: DESC }, { id: DESC }]
     limit: $limit
     offset: $offset
   ) {
@@ -425,7 +425,7 @@ query ListReturnsByOrgPaged(
       branch: { id: { eq: $branchId } }
       status: { eq: $status }
     }
-    orderBy: [{ createdAt: DESC }]
+    orderBy: [{ createdAt: DESC }, { id: DESC }]
     limit: $limit
     offset: $offset
   ) {
@@ -465,7 +465,7 @@ query ListMyReturns($limit: Int!, $offset: Int!, $status: String)
 @auth(expr: "auth.token.status == 'active'") {
   returnRecords(
     where: { employeeUid: { eq_expr: "auth.uid" }, status: { eq: $status } }
-    orderBy: [{ createdAt: DESC }]
+    orderBy: [{ createdAt: DESC }, { id: DESC }]
     limit: $limit
     offset: $offset
   ) {
@@ -554,7 +554,7 @@ query GetBranchStats($branchId: String!, $from: Timestamp, $to: Timestamp)
     id
     organization { id }
   }
-  memberCount: userBranchAssignments(where: { branch: { id: { eq: $branchId } } }) {
+  memberCount: userBranchAssignments(where: { branch: { id: { eq: $branchId } }, member: { role: { eq: "employee" }, status: { eq: "active" } } }) {
     _count
   }
   returnsByStatus: returnRecords(

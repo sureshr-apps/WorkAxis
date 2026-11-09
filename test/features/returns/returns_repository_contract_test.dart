@@ -33,6 +33,7 @@ class FakeReturnsRemote implements ReturnsRemote {
     required String organizationId,
     required String employeeUid,
     required int limit,
+    int offset = 0,
     ReturnStatus? status,
   }) async {
     calls.add('listMine');
@@ -40,6 +41,8 @@ class FakeReturnsRemote implements ReturnsRemote {
     return rows
         .where((r) => r.employeeId == employeeUid)
         .where((r) => status == null || r.status == status)
+        .skip(offset)
+        .take(limit)
         .toList();
   }
 
@@ -48,6 +51,7 @@ class FakeReturnsRemote implements ReturnsRemote {
     required String organizationId,
     required BranchSummary branch,
     required int limit,
+    int offset = 0,
     ReturnStatus? status,
   }) async {
     calls.add('listByBranch:${branch.id}');
@@ -55,6 +59,8 @@ class FakeReturnsRemote implements ReturnsRemote {
     return rows
         .where((r) => r.branchId == branch.id)
         .where((r) => status == null || r.status == status)
+        .skip(offset)
+        .take(limit)
         .toList();
   }
 
@@ -62,6 +68,7 @@ class FakeReturnsRemote implements ReturnsRemote {
   Future<List<ReturnItem>> listByOrganization({
     required String organizationId,
     required int limit,
+    int offset = 0,
     String? branchId,
     ReturnStatus? status,
   }) async {
@@ -71,6 +78,8 @@ class FakeReturnsRemote implements ReturnsRemote {
         .where((r) => r.organizationId == organizationId)
         .where((r) => branchId == null || r.branchId == branchId)
         .where((r) => status == null || r.status == status)
+        .skip(offset)
+        .take(limit)
         .toList();
   }
 
@@ -299,6 +308,35 @@ void _contract(String name, ReturnsRepository Function() create) {
 }
 
 void main() {
+  for (final access in [
+    employeeAccess(),
+    branchManagerAccess(),
+    orgAdminAccess(),
+  ]) {
+    test('all 201 returns are read for ${access.user.role.name}', () async {
+      final seed = MockReturnsDataSource().returns.first;
+      final remote = FakeReturnsRemote([
+        for (var i = 0; i < 201; i++)
+          seed.copyWith(
+            id: 'ret-$i',
+            organizationId: 'org-acme',
+            employeeId: 'user-emp-01',
+            branchId: 'br-01',
+          ),
+      ]);
+      final repo = SqlConnectReturnsRepository(remote: remote);
+      final rows = await repo.getReturns(
+        access: access,
+        activeBranchId: access.user.role.name == 'branchManager'
+            ? 'br-01'
+            : null,
+      );
+      expect(rows, hasLength(201));
+      expect(rows.map((r) => r.id).toSet(), hasLength(201));
+      expect(remote.calls, hasLength(3));
+    });
+  }
+
   _contract(
     'mock',
     () => MockReturnsRepository(

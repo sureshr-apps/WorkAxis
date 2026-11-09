@@ -130,6 +130,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
               summary: summary,
               isProcessing: controller.isActionProcessing,
               onPrimaryAction: () => _handlePrimaryAction(controller),
+              onCheckOut: () =>
+                  _handlePrimaryAction(controller, checkOut: true),
             ),
             const SizedBox(height: AppSpacing.lg),
             ActiveGeofenceCard(summary: summary),
@@ -177,8 +179,13 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     );
   }
 
-  Future<void> _handlePrimaryAction(EmployeeHomeController controller) async {
-    final recorded = await controller.performNextAttendanceAction();
+  Future<void> _handlePrimaryAction(
+    EmployeeHomeController controller, {
+    bool checkOut = false,
+  }) async {
+    final recorded = await (checkOut
+        ? controller.performCheckOut()
+        : controller.performNextAttendanceAction());
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

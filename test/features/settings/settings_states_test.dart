@@ -86,56 +86,29 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('invalid values show per-field errors and clear on edit', (
+  testWidgets('unsupported platform policy controls are read-only', (
     tester,
   ) async {
     await pump(tester);
-
-    await tester.enterText(find.byType(TextField).first, '1');
-    await tester.tap(find.text('Save Changes'));
-    await tester.pumpAndSettle();
-
     expect(
-      find.text('Session timeout must be between 5 and 1440 min.'),
-      findsWidgets,
+      tester
+          .widgetList<TextField>(find.byType(TextField))
+          .every((field) => field.enabled == false),
+      isTrue,
     );
     expect(
-      find.text('Fix the highlighted fields, then save again.'),
+      tester
+          .widgetList<SwitchListTile>(find.byType(SwitchListTile))
+          .every((tile) => tile.onChanged == null),
+      isTrue,
+    );
+    await tester.tap(find.text('Save Changes'));
+    await tester.pumpAndSettle();
+    expect(settings.lastSaveSucceeded, isFalse);
+    expect(
+      find.textContaining('Policy changes are not available yet'),
       findsOneWidget,
     );
-
-    await tester.enterText(find.byType(TextField).first, '30');
-    await tester.pumpAndSettle();
-    expect(settings.validationErrors, isEmpty);
-    expect(
-      find.text('Fix the highlighted fields, then save again.'),
-      findsNothing,
-    );
-  });
-
-  testWidgets('a successful save shows the saved banner', (tester) async {
-    await pump(tester);
-
-    await tester.tap(find.text('Save Changes'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Changes saved.'), findsOneWidget);
-    expect(settings.lastSaveSucceeded, isTrue);
-  });
-
-  testWidgets('a failed save keeps the form and shows the server error', (
-    tester,
-  ) async {
-    await pump(tester);
-    repository.failSave = true;
-
-    await tester.enterText(find.byType(TextField).first, '45');
-    await tester.tap(find.text('Save Changes'));
-    await tester.pumpAndSettle();
-
-    expect(settings.saveErrorMessage, isNotNull);
-    expect(find.text(settings.saveErrorMessage!), findsWidgets);
-    expect(find.widgetWithText(TextField, '45'), findsOneWidget);
   });
 
   testWidgets('a failed load shows an error state with retry', (tester) async {

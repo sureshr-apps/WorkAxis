@@ -4,7 +4,7 @@
   "description": "WorkAxis trusted backend: user provisioning, claims, attendance, kiosk pairing",
   "main": "lib/index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

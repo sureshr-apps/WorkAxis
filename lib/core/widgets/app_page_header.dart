@@ -34,10 +34,14 @@ class AppPageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     // Decide from the content width (after the sidebar), not the screen.
     final width = ContentWidthScope.of(context);
-    return _buildHeader(isCompact: width < AppBreakpoints.mediumMin);
+    final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    return _buildHeader(
+      isCompact: width < AppBreakpoints.mediumMin,
+      stackActions: width < AppBreakpoints.mediumMin * scale,
+    );
   }
 
-  Widget _buildHeader({required bool isCompact}) {
+  Widget _buildHeader({required bool isCompact, required bool stackActions}) {
     final effectiveActions = <Widget>[?action, ...?actions];
 
     return Column(
@@ -88,7 +92,7 @@ class AppPageHeader extends StatelessWidget {
                 ],
               ),
             ),
-            if (!isCompact && effectiveActions.isNotEmpty) ...[
+            if (!stackActions && effectiveActions.isNotEmpty) ...[
               const SizedBox(width: AppSpacing.lg),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -104,7 +108,7 @@ class AppPageHeader extends StatelessWidget {
             ],
           ],
         ),
-        if (isCompact && effectiveActions.isNotEmpty) ...[
+        if (stackActions && effectiveActions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

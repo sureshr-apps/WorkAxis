@@ -10,6 +10,7 @@ import 'package:workaxis/features/attendance/domain/models/group_attendance_requ
 
 import '../../helpers/access_fixtures.dart';
 import '../../helpers/fixed_clock.dart';
+import '../../helpers/fake_group_attendance_functions.dart';
 
 /// Pins the documents the repository writes to what `firestore.rules`
 /// accept: server timestamps, the `manager-group` source, only allowed
@@ -20,7 +21,18 @@ void main() {
 
   setUp(() {
     firestore = FakeFirebaseFirestore();
-    repo = FirestoreAttendanceRepository(firestore: firestore, now: fixedNow);
+    repo = FirestoreAttendanceRepository(
+      firestore: firestore,
+      functions: FakeGroupAttendanceFunctions(
+        firestore,
+        organizationId: 'org-acme',
+        employeeNames: const {
+          'emp-101': 'Alice Worker',
+          'emp-102': 'Bob Builder',
+        },
+      ),
+      now: fixedNow,
+    );
   });
 
   GroupAttendanceRequest request({
@@ -30,8 +42,8 @@ void main() {
   }) => GroupAttendanceRequest(
     branchId: 'br-01',
     workDate: workDate ?? BusinessTime.today(fixedNow),
-    // A device-chosen time must be ignored: the server stamps check-in.
-    checkInAt: DateTime.utc(2020, 1, 1),
+    checkInAt: BusinessTime.startOfDay(workDate ?? BusinessTime.today(fixedNow))
+        .add(const Duration(hours: 8)),
     status: status,
     note: 'Bus arrival',
     attendees: [
@@ -52,41 +64,42 @@ void main() {
     'status',
     'reviewStatus',
     'checkInAt',
+    'shiftName',
     'note',
     'kioskEntry',
     'source',
     'createdAt',
   };
 
-  test(
-    'manager entries use server timestamps and only rule-allowed fields',
-    () async {
-      final recorded = await repo.markGroupAttendance(
-        access: branchManagerAccess(),
-        request: request(),
-      );
+  test('trusted callable preserves validated effective time and server audit fields', () async {
+    final recorded = await repo.markGroupAttendance(
+      access: branchManagerAccess(),
+      request: request(),
+    );
 
-      expect(recorded.first.id, 'emp-1_2026-11-07');
-      final doc = await firestore
-          .collection('attendance_entries')
-          .doc('emp-1_2026-11-07')
-          .get();
-      final data = doc.data()!;
-      expect(data.keys.toSet().difference(allowedEntryFields), isEmpty);
-      expect(data['source'], 'manager-group');
-      expect(data['workDateString'], '2026-11-07');
-      expect(data['organizationId'], 'org-acme');
-      // The fake resolves FieldValue.serverTimestamp(); a device value of 2020
-      // would mean the client time leaked through.
-      expect((data['checkInAt'] as Timestamp).toDate().year, isNot(2020));
-      expect(data['createdAt'], isA<Timestamp>());
-      // workDate is the start of the business day (IST midnight).
-      expect(
-        (data['workDate'] as Timestamp).toDate().toUtc(),
-        DateTime.utc(2026, 11, 6, 18, 30),
-      );
-    },
-  );
+    expect(recorded.first.id, 'emp-1_2026-11-07');
+    final doc = await firestore
+        .collection('attendance_entries')
+        .doc('emp-1_2026-11-07')
+        .get();
+    final data = doc.data()!;
+    expect(data.keys.toSet().difference(allowedEntryFields), isEmpty);
+    expect(data['source'], 'manager-group');
+    expect(data['workDateString'], '2026-11-07');
+    expect(data['organizationId'], 'org-acme');
+    // The fake resolves FieldValue.serverTimestamp(); a device value of 2020
+    // would mean the client time leaked through.
+    expect(
+      (data['checkInAt'] as Timestamp).toDate().toUtc(),
+      request().checkInAt,
+    );
+    expect(data['createdAt'], isA<Timestamp>());
+    // workDate is the start of the business day (IST midnight).
+    expect(
+      (data['workDate'] as Timestamp).toDate().toUtc(),
+      DateTime.utc(2026, 11, 6, 18, 30),
+    );
+  });
 
   test('the audit batch record matches the rule schema', () async {
     await repo.markGroupAttendance(

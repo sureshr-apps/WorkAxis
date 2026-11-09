@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:workaxis/core/ids/request_ids.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -38,6 +39,7 @@ class BranchEditorDialog extends StatefulWidget {
 }
 
 class _BranchEditorDialogState extends State<BranchEditorDialog> {
+  final String _requestId = RequestIds.uuidV4();
   late final TextEditingController _nameController;
   late final TextEditingController _codeController;
   late final TextEditingController _locationController;
@@ -279,6 +281,7 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
 
     final previous = widget.branch;
     final draft = BranchRecord(
+      requestId: _requestId,
       summary: BranchSummary(
         id: previous?.id ?? '',
         organizationId: previous?.organizationId ?? widget.organizationId,

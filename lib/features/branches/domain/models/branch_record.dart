@@ -19,9 +19,11 @@ class BranchRecord {
     this.latitude,
     this.longitude,
     this.isMainBranch = false,
+    this.requestId,
   });
 
   final BranchSummary summary;
+  final String? requestId;
   final int geofenceRadiusMeters;
 
   /// Null until a geofence centre is configured. Never defaulted: a branch
@@ -51,8 +53,10 @@ class BranchRecord {
     double? latitude,
     double? longitude,
     bool? isMainBranch,
+    String? requestId,
   }) => BranchRecord(
     summary: summary ?? this.summary,
+    requestId: requestId ?? this.requestId,
     geofenceRadiusMeters: geofenceRadiusMeters ?? this.geofenceRadiusMeters,
     managerIds: managerIds ?? this.managerIds,
     kioskStatus: kioskStatus ?? this.kioskStatus,

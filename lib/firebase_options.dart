@@ -50,19 +50,20 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAtPxzDAW-BoqYKHlVA-PlL0y_d24TJVyk',
-    appId: '1:162576663525:web:f3115eed84ad3da43b250c',
-    messagingSenderId: '162576663525',
-    projectId: 'workaxis-cloud',
-    authDomain: 'workaxis-cloud.firebaseapp.com',
-    storageBucket: 'workaxis-cloud.firebasestorage.app',
+    apiKey: 'AIzaSyAyQboFxYrp5xTLGREny35543ICAqreNYM',
+    appId: '1:1039046217091:web:8d9d6ca14861e4ae823ab6',
+    messagingSenderId: '1039046217091',
+    projectId: 'omniretail-60c71',
+    authDomain: 'omniretail-60c71.firebaseapp.com',
+    storageBucket: 'omniretail-60c71.firebasestorage.app',
+    measurementId: 'G-MC8VCPJPKH',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyB6kQyDw3ysNuIQKRSkzMiV-WAq5U2rT-E',
-    appId: '1:162576663525:android:90a57a4c50067ee73b250c',
-    messagingSenderId: '162576663525',
-    projectId: 'workaxis-cloud',
-    storageBucket: 'workaxis-cloud.firebasestorage.app',
+    apiKey: 'AIzaSyAxPk62KCCs0XX6qrMusplGUAahlN_ufA4',
+    appId: '1:1039046217091:android:e93d92d54da29fc3823ab6',
+    messagingSenderId: '1039046217091',
+    projectId: 'omniretail-60c71',
+    storageBucket: 'omniretail-60c71.firebasestorage.app',
   );
 }

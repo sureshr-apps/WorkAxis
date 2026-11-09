@@ -10,6 +10,7 @@ abstract interface class ReturnsRemote {
     required String organizationId,
     required String employeeUid,
     required int limit,
+    int offset = 0,
     ReturnStatus? status,
   });
 
@@ -18,6 +19,7 @@ abstract interface class ReturnsRemote {
     required String organizationId,
     required BranchSummary branch,
     required int limit,
+    int offset = 0,
     ReturnStatus? status,
   });
 
@@ -26,6 +28,7 @@ abstract interface class ReturnsRemote {
   Future<List<ReturnItem>> listByOrganization({
     required String organizationId,
     required int limit,
+    int offset = 0,
     String? branchId,
     ReturnStatus? status,
   });

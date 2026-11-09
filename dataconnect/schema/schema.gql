@@ -28,6 +28,8 @@ type Organization @table {
 }
 
 type Branch @table @unique(fields: ["organization", "code"]) {
+  creationRequestKey: String @unique
+  creationFingerprint: String
   id: String! @col(name: "id") @default(expr: "uuidV4()")
   organization: Organization!
   name: String!

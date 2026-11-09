@@ -10,3 +10,9 @@ export { resolveLoginIdentifier } from "./handlers/resolveLoginIdentifier";
 export { setOrganizationStatus } from "./handlers/setOrganizationStatus";
 export { setUserStatus } from "./handlers/setUserStatus";
 export { updateUserAccount } from "./handlers/updateUserAccount";
+
+export { recordGroupAttendance } from "./handlers/recordGroupAttendance";
+
+export { reconcileIdentitySync } from "./accounts/identitySync";
+
+export { saveBranch } from "./handlers/saveBranch";

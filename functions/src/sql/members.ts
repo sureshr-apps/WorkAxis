@@ -50,11 +50,15 @@ function toRecord(r: MemberRow): MemberRecord {
     organizationId: r.organization?.id,
     organizationStatus: r.organization?.status,
     branchIds: branches.map((b) => b.id),
-    activeBranchIds: branches.filter((b) => b.status === "active").map((b) => b.id),
+    activeBranchIds: branches
+      .filter((b) => b.status === "active")
+      .map((b) => b.id),
   };
 }
 
-export async function getMemberByAuthUid(uid: string): Promise<MemberRecord | null> {
+export async function getMemberByAuthUid(
+  uid: string,
+): Promise<MemberRecord | null> {
   const data = await sqlQuery<{ organizationMembers: MemberRow[] }>(
     `query MemberByAuthUid($uid: String!) {
        organizationMembers(where: { authUid: { eq: $uid } }, limit: 1) { ${MEMBER_FIELDS} }
@@ -65,7 +69,9 @@ export async function getMemberByAuthUid(uid: string): Promise<MemberRecord | nu
   return row ? toRecord(row) : null;
 }
 
-export async function listMembersOfOrganization(orgId: string): Promise<MemberRecord[]> {
+export async function listMembersOfOrganization(
+  orgId: string,
+): Promise<MemberRecord[]> {
   const data = await sqlQuery<{ organizationMembers: MemberRow[] }>(
     `query MembersOfOrg($orgId: String!) {
        organizationMembers(where: { organization: { id: { eq: $orgId } } }) { ${MEMBER_FIELDS} }
@@ -87,7 +93,10 @@ export interface NewMember {
 }
 
 /** Inserts the member and its branch assignments in one SQL transaction. */
-export async function insertMember(member: NewMember, branchIds: string[]): Promise<void> {
+export async function insertMember(
+  member: NewMember,
+  branchIds: string[],
+): Promise<void> {
   const data: Record<string, unknown> = { ...member, status: "active" };
   for (const k of Object.keys(data)) if (data[k] === undefined) delete data[k];
 
@@ -110,7 +119,10 @@ export async function insertMember(member: NewMember, branchIds: string[]): Prom
      }`,
     {
       member: data,
-      assignments: branchIds.map((branchId) => ({ memberId: member.id, branchId })),
+      assignments: branchIds.map((branchId) => ({
+        memberId: member.id,
+        branchId,
+      })),
     },
   );
 }
@@ -123,7 +135,10 @@ export interface MemberPatch {
   status?: AccountStatus;
 }
 
-export async function updateMember(memberId: string, patch: MemberPatch): Promise<void> {
+export async function updateMember(
+  memberId: string,
+  patch: MemberPatch,
+): Promise<void> {
   const data: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) if (v !== undefined) data[k] = v;
   if (Object.keys(data).length === 0) return;
@@ -154,7 +169,10 @@ export async function replaceBranchAssignments(
        userBranchAssignment_deleteMany(where: { member: { id: { eq: $memberId } } })
        userBranchAssignment_insertMany(data: $assignments)
      }`,
-    { memberId, assignments: branchIds.map((branchId) => ({ memberId, branchId })) },
+    {
+      memberId,
+      assignments: branchIds.map((branchId) => ({ memberId, branchId })),
+    },
   );
 }
 
@@ -166,5 +184,35 @@ export async function deleteMemberByAuthUid(uid: string): Promise<void> {
        organizationMember_deleteMany(where: { authUid: { eq: $uid } })
      }`,
     { uid },
+  );
+}
+
+/** Member fields and assignments commit together, so failed edits leave neither half updated. */
+export async function updateMemberWithAssignments(
+  memberId: string,
+  patch: MemberPatch,
+  branchIds: string[],
+): Promise<void> {
+  const inserts = branchIds.length
+    ? "userBranchAssignment_insertMany(data: $assignments)"
+    : "";
+  const declaration = branchIds.length
+    ? ", $assignments: [UserBranchAssignment_Data!]!"
+    : "";
+  await sqlMutate(
+    `mutation UpdateAccount($id: String!, $data: OrganizationMember_Data!${declaration}) @transaction {
+    organizationMember_update(id: $id, data: $data)
+    userBranchAssignment_deleteMany(where: { member: { id: { eq: $id } } })
+    ${inserts}
+  }`,
+    {
+      id: memberId,
+      data: patch,
+      ...(branchIds.length
+        ? {
+            assignments: branchIds.map((branchId) => ({ memberId, branchId })),
+          }
+        : {}),
+    },
   );
 }

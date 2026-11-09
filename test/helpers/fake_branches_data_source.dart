@@ -76,8 +76,8 @@ class FakeBranchesDataSource implements BranchesRemoteDataSource {
       ),
       geofenceRadiusMeters: branch.geofenceRadiusMeters,
       // Optional values that are omitted keep their stored value.
-      latitude: branch.latitude ?? existing.latitude,
-      longitude: branch.longitude ?? existing.longitude,
+      latitude: branch.latitude,
+      longitude: branch.longitude,
       isMainBranch: branch.isMainBranch,
       managerIds: const [],
       kioskStatus: existing.kioskStatus,

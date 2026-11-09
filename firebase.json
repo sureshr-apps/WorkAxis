@@ -9,7 +9,7 @@
   "functions": [
     {
       "source": "functions",
-      "codebase": "default",
+      "codebase": "workaxis",
       "ignore": [
         "node_modules",
         ".git",

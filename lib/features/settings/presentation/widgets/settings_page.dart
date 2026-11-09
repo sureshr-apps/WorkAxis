@@ -25,6 +25,8 @@ class SettingsPage extends StatelessWidget {
     required this.onRetry,
     required this.onSave,
     required this.children,
+    this.canSave = true,
+    this.notice,
   });
 
   final String eyebrow;
@@ -43,6 +45,8 @@ class SettingsPage extends StatelessWidget {
 
   /// Section cards, shown once the settings have loaded.
   final List<Widget> children;
+  final bool canSave;
+  final String? notice;
 
   @override
   Widget build(BuildContext context) {
@@ -67,10 +71,14 @@ class SettingsPage extends StatelessWidget {
                     text: 'Save Changes',
                     iconData: Icons.check,
                     isLoading: controller.isSaving,
-                    onPressed: hasLoaded ? onSave : null,
+                    onPressed: hasLoaded && canSave ? onSave : null,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                if (notice != null) ...[
+                  Text(notice!, style: AppTypography.bodyMedium),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 if (hasLoaded) ...[
                   _SaveFeedback(controller: controller),
                   for (var i = 0; i < children.length; i++) ...[

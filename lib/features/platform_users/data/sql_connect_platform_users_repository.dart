@@ -92,6 +92,8 @@ class SqlConnectPlatformUsersRepository implements PlatformUsersRepository {
       targetUid: _uid(existing),
       fullName: prepared.fullName,
       email: prepared.email != existing.email ? prepared.email : null,
+      clearEmail:
+          prepared.email.trim().isEmpty && prepared.email != existing.email,
       phone: nextPhone.isNotEmpty && nextPhone != existing.phone
           ? nextPhone
           : null,

@@ -15,6 +15,7 @@ import 'package:workaxis/features/branch_dashboard/presentation/controllers/bran
 import 'package:workaxis/features/branches/presentation/controllers/branch_management_controller.dart';
 import 'package:workaxis/features/employee_home/presentation/controllers/employee_home_controller.dart';
 import 'package:workaxis/features/employees/presentation/controllers/organization_members_controller.dart';
+import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/controllers/organization_dashboard_controller.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/controllers/platform_dashboard_controller.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
@@ -166,6 +167,9 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<OrganizationMembersRepository>.value(
+          value: widget.repositories.organizationMembersRepository,
+        ),
         Provider<SessionController>.value(value: _sessionController),
         ChangeNotifierProvider<AuthController>.value(value: _authController),
         ChangeNotifierProvider<AccessController>.value(

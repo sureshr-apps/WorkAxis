@@ -160,6 +160,23 @@ void runBranchManagementContract(
       expect(reloaded.isMainBranch, isTrue);
     });
 
+    test('clearing an existing geofence persists null coordinates', () async {
+      final existing = (await repo.getBranch(orgAdminAccess(), 'br-02'))!;
+      final cleared = BranchRecord(
+        summary: existing.summary,
+        geofenceRadiusMeters: existing.geofenceRadiusMeters,
+        managerIds: existing.managerIds,
+        kioskStatus: existing.kioskStatus,
+        latitude: null,
+        longitude: null,
+      );
+      await repo.saveBranch(access: orgAdminAccess(), branch: cleared);
+      expect(
+        (await repo.getBranch(orgAdminAccess(), existing.id))!.hasGeofence,
+        isFalse,
+      );
+    });
+
     test('assigns and unassigns branch managers', () async {
       final existing = (await repo.getBranch(orgAdminAccess(), 'br-01'))!;
       final saved = await repo.saveBranch(

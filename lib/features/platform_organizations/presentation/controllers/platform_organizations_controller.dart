@@ -39,6 +39,9 @@ class PlatformOrganizationsController extends ChangeNotifier
   /// Organizations requested per page.
   final int pageSize;
 
+  int _scopeEpoch = 0;
+  bool _isCurrentScope(int epoch) => epoch == _scopeEpoch && !isDisposed;
+
   final RequestGeneration _listRequests = RequestGeneration();
   final RequestGeneration _detailRequests = RequestGeneration();
   final RequestGeneration _countRequests = RequestGeneration();
@@ -270,16 +273,20 @@ class PlatformOrganizationsController extends ChangeNotifier
   Future<CustomerOrganization?> createOrganization(
     CreateOrganizationRequest request,
   ) async {
+    final epoch = _scopeEpoch;
     _isActionLoading = true;
     _actionErrorMessage = null;
     notifyListeners();
 
     try {
       final created = await repository.createOrganization(request);
+      if (!_isCurrentScope(epoch)) return null;
       await loadOrganizations();
+      if (!_isCurrentScope(epoch)) return null;
       _selectedOrganization = created;
       return created;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -287,24 +294,30 @@ class PlatformOrganizationsController extends ChangeNotifier
       );
       return null;
     } finally {
-      _isActionLoading = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isActionLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<CustomerOrganization?> updateOrganization(
     CustomerOrganization updatedOrg,
   ) async {
+    final epoch = _scopeEpoch;
     _isActionLoading = true;
     _actionErrorMessage = null;
     notifyListeners();
 
     try {
       final updated = await repository.updateOrganization(updatedOrg);
+      if (!_isCurrentScope(epoch)) return null;
       await loadOrganizations();
+      if (!_isCurrentScope(epoch)) return null;
       _selectedOrganization = updated;
       return updated;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -312,19 +325,24 @@ class PlatformOrganizationsController extends ChangeNotifier
       );
       return null;
     } finally {
-      _isActionLoading = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isActionLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<bool> updateStatus(String id, OrganizationStatus newStatus) async {
+    final epoch = _scopeEpoch;
     _isActionLoading = true;
     _actionErrorMessage = null;
     notifyListeners();
 
     try {
       final updated = await repository.updateOrganizationStatus(id, newStatus);
+      if (!_isCurrentScope(epoch)) return false;
       await _loadCounts();
+      if (!_isCurrentScope(epoch)) return false;
       _allOrganizations = [
         for (final o in _allOrganizations) o.id == id ? updated : o,
       ];
@@ -334,6 +352,7 @@ class PlatformOrganizationsController extends ChangeNotifier
       }
       return true;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return false;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -341,8 +360,10 @@ class PlatformOrganizationsController extends ChangeNotifier
       );
       return false;
     } finally {
-      _isActionLoading = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isActionLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -428,19 +449,24 @@ class PlatformOrganizationsController extends ChangeNotifier
     required String fallback,
     required Future<CustomerOrganization?> Function() body,
   }) async {
+    final epoch = _scopeEpoch;
     _isActionLoading = true;
     _actionErrorMessage = null;
     notifyListeners();
     try {
       final updated = await body();
+      if (!_isCurrentScope(epoch)) return false;
       if (updated != null) _applyOrganization(updated);
       return true;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return false;
       _actionErrorMessage = userMessageFor(e, st, fallback: fallback);
       return false;
     } finally {
-      _isActionLoading = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isActionLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -464,6 +490,7 @@ class PlatformOrganizationsController extends ChangeNotifier
 
   @override
   void reset() {
+    _scopeEpoch++;
     _debounce?.cancel();
     _listRequests.invalidate();
     _detailRequests.invalidate();

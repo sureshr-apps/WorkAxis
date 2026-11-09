@@ -45,6 +45,12 @@ class FakeIdentityServer implements CallableFunctions {
   Iterable<CallableCall> callsTo(String name) =>
       calls.where((c) => c.name == name);
 
+  void applyBranchAssignments(Map<String, List<String>> changes) {
+    for (final entry in changes.entries) {
+      _rows[entry.key] = _rows[entry.key]!.copyWith(branchIds: entry.value);
+    }
+  }
+
   @override
   Future<Map<String, dynamic>> call(
     String name, [
@@ -113,7 +119,9 @@ class FakeIdentityServer implements CallableFunctions {
 
   Map<String, dynamic> _update(Map<String, dynamic> p) {
     final existing = _byUid(p['targetUid'] as String);
-    final email = p['email'] as String?;
+    final email = p.containsKey('email') && p['email'] == null
+        ? ''
+        : p['email'] as String?;
     final phone = p['phone'] as String?;
     _assertUnique(
       username: null,

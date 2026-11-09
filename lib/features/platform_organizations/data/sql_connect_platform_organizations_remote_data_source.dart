@@ -47,8 +47,8 @@ class SqlConnectPlatformOrganizationsRemoteDataSource
             code: o.code,
             status: _status(o.status),
             // Counts are fetched on the detail page, not for every list row.
-            branchCount: 0,
-            employeeCount: 0,
+            branchCount: null,
+            employeeCount: null,
             createdAt: o.createdAt.toDateTime(),
             category: _blankToNull(o.category),
           ),

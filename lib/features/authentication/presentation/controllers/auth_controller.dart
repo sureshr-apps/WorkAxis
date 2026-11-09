@@ -49,19 +49,24 @@ class AuthController extends ChangeNotifier with SafeNotifier {
 
     try {
       final restored = await authRepository.getCurrentUser();
-      if (restored != null && restored.status == AccountStatus.active) {
+      if (!isDisposed &&
+          restored != null &&
+          restored.status == AccountStatus.active) {
         _currentUser = restored;
       }
     } catch (e, st) {
+      if (isDisposed) return;
       _currentUser = null;
       _errorMessage = mapBackendError(e, st).userMessage;
     } finally {
-      _isInitializing = false;
-      _authSubscription = authRepository.authStateChanges().listen(
-        _onAuthStateChanged,
-        onError: _onAuthStreamError,
-      );
-      notifyListeners();
+      if (!isDisposed) {
+        _isInitializing = false;
+        _authSubscription = authRepository.authStateChanges().listen(
+          _onAuthStateChanged,
+          onError: _onAuthStreamError,
+        );
+        notifyListeners();
+      }
     }
   }
 

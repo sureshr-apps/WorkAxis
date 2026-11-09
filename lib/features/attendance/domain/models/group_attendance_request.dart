@@ -21,6 +21,7 @@ class GroupAttendanceRequest {
     this.shiftName = 'Morning Shift',
     this.status = AttendanceStatus.present,
     this.note,
+    this.requestId,
   });
 
   final String branchId;
@@ -30,4 +31,5 @@ class GroupAttendanceRequest {
   final String shiftName;
   final AttendanceStatus status;
   final String? note;
+  final String? requestId;
 }

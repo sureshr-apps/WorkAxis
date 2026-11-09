@@ -13,6 +13,9 @@ class BranchManagementController extends ChangeNotifier
   BranchManagementController({required this.repository});
 
   final BranchManagementRepository repository;
+  int _scopeEpoch = 0;
+  bool _isCurrentScope(int epoch) => epoch == _scopeEpoch && !isDisposed;
+
   final RequestGeneration _requests = RequestGeneration();
   List<BranchRecord> _branches = const [];
   bool _isLoading = false;
@@ -89,6 +92,7 @@ class BranchManagementController extends ChangeNotifier
 
   @override
   void reset() {
+    _scopeEpoch++;
     _requests.invalidate();
     _branches = const [];
     _filteredBranches = const [];
@@ -103,9 +107,12 @@ class BranchManagementController extends ChangeNotifier
   }
 
   Future<BranchRecord?> getBranch(UserAccessContext access, String id) async {
+    final epoch = _scopeEpoch;
     try {
-      return await repository.getBranch(access, id);
+      final branch = await repository.getBranch(access, id);
+      return _isCurrentScope(epoch) ? branch : null;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -117,10 +124,14 @@ class BranchManagementController extends ChangeNotifier
   }
 
   Future<void> loadManagerOptions(UserAccessContext access) async {
+    final epoch = _scopeEpoch;
     try {
-      _managerOptions = await repository.getBranchManagers(access);
+      final options = await repository.getBranchManagers(access);
+      if (!_isCurrentScope(epoch)) return;
+      _managerOptions = options;
       notifyListeners();
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -134,14 +145,18 @@ class BranchManagementController extends ChangeNotifier
     required UserAccessContext access,
     required BranchRecord branch,
   }) async {
+    final epoch = _scopeEpoch;
     _isSaving = true;
     _actionErrorMessage = null;
     notifyListeners();
     try {
       final saved = await repository.saveBranch(access: access, branch: branch);
+      if (!_isCurrentScope(epoch)) return null;
       await loadBranches(access);
+      if (!_isCurrentScope(epoch)) return null;
       return saved;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -150,8 +165,10 @@ class BranchManagementController extends ChangeNotifier
       );
       return null;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -159,18 +176,23 @@ class BranchManagementController extends ChangeNotifier
     required UserAccessContext access,
     required String branchId,
   }) async {
+    final epoch = _scopeEpoch;
     _isSaving = true;
     _actionErrorMessage = null;
     _pairingToken = null;
     notifyListeners();
     try {
-      _pairingToken = await repository.createKioskPairingToken(
+      final pairingToken = await repository.createKioskPairingToken(
         access: access,
         branchId: branchId,
       );
+      if (!_isCurrentScope(epoch)) return null;
+      _pairingToken = pairingToken;
       await loadBranches(access);
+      if (!_isCurrentScope(epoch)) return null;
       return _pairingToken;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -178,8 +200,10 @@ class BranchManagementController extends ChangeNotifier
       );
       return null;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -187,11 +211,15 @@ class BranchManagementController extends ChangeNotifier
     required UserAccessContext access,
     required String branchId,
   }) async {
+    final epoch = _scopeEpoch;
     try {
       await repository.completeKioskPairing(access: access, branchId: branchId);
+      if (!_isCurrentScope(epoch)) return false;
       await loadBranches(access);
+      if (!_isCurrentScope(epoch)) return false;
       return true;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return false;
       _actionErrorMessage = userMessageFor(
         e,
         st,

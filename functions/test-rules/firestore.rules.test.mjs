@@ -149,8 +149,10 @@ describe("attendance_entries write", () => {
       ...over,
     });
 
-  it("lets a branch manager create group entries only in own branches with server time", async () => {
-    await assertSucceeds(setDoc(doc(db("bm"), "attendance_entries/g1"), managerEntry()));
+  it("denies direct group creates, including forged foreign employees", async () => {
+    await assertFails(setDoc(doc(db("bm"), "attendance_entries/g1"), managerEntry()));
+    await assertFails(setDoc(doc(db("bm"), "attendance_entries/other_2026-11-07"), managerEntry({ employeeId: "other" })));
+    await assertFails(setDoc(doc(db("orgAdmin"), "attendance_entries/g5"), managerEntry()));
     await assertFails(setDoc(doc(db("bm"), "attendance_entries/g2"), managerEntry({ branchId: "b9" })));
     await assertFails(
       setDoc(doc(db("bm"), "attendance_entries/g3"), managerEntry({ checkInAt: Timestamp.fromDate(new Date()) })),
@@ -200,8 +202,8 @@ describe("group_attendance_batches", () => {
     ...over,
   });
 
-  it("lets in-scope managers create with server time; blocks others and updates", async () => {
-    await assertSucceeds(setDoc(doc(db("bm"), "group_attendance_batches/bt1"), batch()));
+  it("denies every direct group audit create and update", async () => {
+    await assertFails(setDoc(doc(db("bm"), "group_attendance_batches/bt1"), batch()));
     await assertFails(setDoc(doc(db("bm"), "group_attendance_batches/bt2"), batch({ branchId: "b9" })));
     await assertFails(
       setDoc(doc(db("bm"), "group_attendance_batches/bt3"), batch({ createdAt: Timestamp.fromDate(new Date()) })),
@@ -221,6 +223,7 @@ describe("legacy and server-only collections", () => {
       "provision_requests/r1",
       "auth_rate_limits/k1",
       "kiosk_pairing_tokens/t1",
+      "identity_sync_jobs/j1",
     ]) {
       await assertFails(setDoc(doc(db("owner"), path), { a: 1 }));
       await assertFails(getDoc(doc(db("owner"), path)));

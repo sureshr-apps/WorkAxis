@@ -174,13 +174,13 @@ class _MetricsRow extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _Metric(
-            value: '${organization.branchCount}',
+            value: organization.branchCount?.toString() ?? '—',
             label: 'hubs',
             icon: Icons.storefront_outlined,
           ),
           divider,
           _Metric(
-            value: '${organization.employeeCount}',
+            value: organization.employeeCount?.toString() ?? '—',
             label: 'staff',
             icon: Icons.people_outline,
           ),

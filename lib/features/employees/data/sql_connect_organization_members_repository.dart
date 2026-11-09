@@ -220,6 +220,7 @@ class SqlConnectOrganizationMembersRepository
       targetUid: uid,
       fullName: next.fullName,
       email: next.email != existing.email ? next.email : null,
+      clearEmail: next.email.trim().isEmpty && next.email != existing.email,
       phone: nextPhone.isNotEmpty && nextPhone != existing.phone
           ? nextPhone
           : null,

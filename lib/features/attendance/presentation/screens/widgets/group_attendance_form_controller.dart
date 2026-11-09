@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:workaxis/core/ids/request_ids.dart';
+import 'package:workaxis/core/time/business_time.dart';
 import 'package:workaxis/core/errors/user_message.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
@@ -49,6 +51,7 @@ class GroupAttendanceFormController extends ChangeNotifier {
   String? _errorMessage;
   String _searchQuery = '';
   int _loadToken = 0;
+  final String _requestId = RequestIds.uuidV4();
   bool _disposed = false;
 
   String? get branchId => _branchId;
@@ -187,13 +190,9 @@ class GroupAttendanceFormController extends ChangeNotifier {
     final request = GroupAttendanceRequest(
       branchId: branch,
       workDate: _selectedDate,
-      checkInAt: DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _time.hour,
-        _time.minute,
-      ),
+      requestId: _requestId,
+      checkInAt: BusinessTime.startOfDay(_selectedDate)
+          .add(Duration(hours: _time.hour, minutes: _time.minute)),
       attendees: attendees,
       shiftName: _shift,
       status: _status,

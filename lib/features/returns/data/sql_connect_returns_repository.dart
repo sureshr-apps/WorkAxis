@@ -41,38 +41,40 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
       final scope = _scope.forRead(access, activeBranchId);
       final orgId = access.organization!.id;
 
-      if (scope.ownOnly) {
-        return await _remote.listMine(
-          organizationId: orgId,
-          employeeUid: access.user.id,
-          limit: pageSize,
-          status: statusFilter,
-        );
-      }
-
-      if (access.user.role == UserRole.orgAdmin) {
-        return await _remote.listByOrganization(
-          organizationId: orgId,
-          limit: pageSize,
-          branchId: scope.branches.length == 1 && activeBranchId != null
-              ? scope.branches.single.id
-              : null,
-          status: statusFilter,
-        );
-      }
-
-      final perBranch = await Future.wait(
-        scope.branches.map(
-          (branch) => _remote.listByBranch(
+      final all = <ReturnItem>[];
+      var offset = 0;
+      while (true) {
+        final List<ReturnItem> page;
+        if (scope.ownOnly) {
+          page = await _remote.listMine(
             organizationId: orgId,
-            branch: branch,
+            employeeUid: access.user.id,
             limit: pageSize,
+            offset: offset,
             status: statusFilter,
-          ),
-        ),
-      );
-      return [for (final rows in perBranch) ...rows]
-        ..sort((a, b) => b.returnDate.compareTo(a.returnDate));
+          );
+        } else if (access.user.role == UserRole.orgAdmin) {
+          page = await _remote.listByOrganization(
+            organizationId: orgId,
+            limit: pageSize,
+            offset: offset,
+            branchId: activeBranchId,
+            status: statusFilter,
+          );
+        } else {
+          page = await _remote.listByBranch(
+            organizationId: orgId,
+            branch: scope.branches.single,
+            limit: pageSize,
+            offset: offset,
+            status: statusFilter,
+          );
+        }
+        all.addAll(page);
+        if (page.length < pageSize) break;
+        offset += page.length;
+      }
+      return all..sort((a, b) => b.returnDate.compareTo(a.returnDate));
     } catch (e, st) {
       throw mapBackendError(e, st);
     }

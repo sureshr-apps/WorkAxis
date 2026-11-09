@@ -293,3 +293,18 @@ DB enums; they are validated in operation auth expressions and in functions.
   must use `ListMembersByBranchPaged` (not `ListMembersByOrg`); Employees must
   use `ListMyReturns`; `CreateOrganizationMember` is gone for clients;
   review/submit operations no longer accept reviewer/submitter identity.
+
+## Trusted group attendance and branch saves
+
+`recordGroupAttendance` accepts `{ requestId, branchId, workDate: "YYYY-MM-DD", checkInAt: ISO-with-timezone, employeeIds, status: "present"|"late", shiftName, note? }` and returns `{ entryIds }`. Only an active Org Admin of the branch organization or its assigned Branch Manager may call it. Every attendee is resolved from SQL and must be an active employee assigned to that branch. The canonical UID/date records and batch fingerprint commit together; replaying an identical request is safe. Client attendance/audit creates are denied.
+
+`saveBranch` accepts branch fields plus `managerIds`; creates also require a stable `requestId`. The authenticated Org Admin's organization is derived server-side. Coordinates may both be null to clear them. Branch fields and manager assignments commit in a SQL transaction with precondition checks; generated creation keys/fingerprints make lost-response retries safe. Response: `{ id, code, projectionPending }`. Direct Add/Create/UpdateBranch mutations are closed to clients. A pending projection is retried by the identity reconciliation worker.
+
+`updateUserAccount` accepts `email: null` to clear a real email alias, matching phone clearing. SQL member/assignment edits are atomic; Auth/alias compensation and durable identity jobs handle cross-store failures. Identity jobs and leases are server-only, contain no passwords, and serialize edits/retries for each UID. `reconcileIdentitySync` runs every minute with delayed first attempt and retry backoff.
+
+Run SQL integration locally from the repository root:
+
+```powershell
+npm --prefix functions run build
+firebase emulators:exec --only dataconnect --project demo-workaxis 'node --test functions/test-sql/*.test.cjs'
+```

@@ -119,10 +119,11 @@ class ReturnsController extends ChangeNotifier
         branchId: branchId,
         input: input,
       );
-      if (epoch != _epoch) return false;
+      if (epoch != _epoch || isDisposed) return false;
       _items = [created, ..._items];
       return true;
     } catch (e, st) {
+      if (epoch != _epoch || isDisposed) return false;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -130,8 +131,10 @@ class ReturnsController extends ChangeNotifier
       );
       return false;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (epoch == _epoch && !isDisposed) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -155,10 +158,11 @@ class ReturnsController extends ChangeNotifier
         decision: decision,
         reviewerNotes: reviewerNotes,
       );
-      if (epoch != _epoch) return false;
+      if (epoch != _epoch || isDisposed) return false;
       _items = [for (final i in _items) i.id == item.id ? updated : i];
       return true;
     } catch (e, st) {
+      if (epoch != _epoch || isDisposed) return false;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -166,8 +170,10 @@ class ReturnsController extends ChangeNotifier
       );
       return false;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (epoch == _epoch && !isDisposed) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 

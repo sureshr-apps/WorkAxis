@@ -152,15 +152,17 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('saving changes shows success snackbar', (tester) async {
+    testWidgets('unsupported platform policy changes cannot be saved', (
+      tester,
+    ) async {
       await pumpPlatformSettingsScreen(tester, width: 1200);
 
       final saveButton = find.text('Save Changes');
       await tester.tap(saveButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('Platform configuration saved.'), findsOneWidget);
-      expect(settingsController.lastSaveSucceeded, isTrue);
+      expect(find.text('Platform configuration saved.'), findsNothing);
+      expect(settingsController.lastSaveSucceeded, isFalse);
     });
   });
 

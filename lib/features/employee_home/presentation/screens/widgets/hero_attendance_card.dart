@@ -18,11 +18,13 @@ class HeroAttendanceCard extends StatelessWidget {
     required this.summary,
     required this.isProcessing,
     required this.onPrimaryAction,
+    this.onCheckOut,
   });
 
   final EmployeeHomeSummary summary;
   final bool isProcessing;
   final VoidCallback onPrimaryAction;
+  final VoidCallback? onCheckOut;
 
   static bool _has(String? value) =>
       value != null &&
@@ -237,6 +239,17 @@ class HeroAttendanceCard extends StatelessWidget {
             isLoading: isProcessing,
             onPressed: canAct ? onPrimaryAction : null,
           ),
+          if (onCheckOut != null &&
+              (status == AttendanceStatus.checkedIn ||
+                  status == AttendanceStatus.onBreak)) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppButton.outlined(
+              text: 'Check Out',
+              iconData: Icons.logout,
+              isLoading: isProcessing,
+              onPressed: onCheckOut,
+            ),
+          ],
           if (summary.locationStatus.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             Row(

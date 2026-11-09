@@ -16,8 +16,8 @@ rules_version = '2';
 //   user_aliases/{normalizedIdentifier} = { userId, email }   no client access
 //   users/{uid}      read-only profile projection              clients read only
 //   attendance_entries/{entryId}   employees' punches are written by the
-//       recordAttendancePunch callable; managers may create group check-ins
-//       (server time enforced) and review entries in their scope
+//       recordAttendancePunch / recordGroupAttendance callables; managers
+//       may only review existing entries in their scope
 //   group_attendance_batches/{batchId}  immutable audit log
 // Server-only (default deny): provision_requests, auth_rate_limits,
 //   kiosk_pairing_tokens.
@@ -159,43 +159,13 @@ service cloud.firestore {
       );
 
       // Employee punches are written by the recordAttendancePunch callable.
-      // Managers may record group check-ins for their scope; timestamps must
-      // be server time.
-      allow create: if canManageBranchData(
-          request.resource.data.organizationId, request.resource.data.branchId) &&
-        isValidManagerEntry(request.resource.data);
+      // Group membership and effective time require authoritative SQL checks.
+      allow create: if false; // Trusted recordGroupAttendance callable only.
 
       allow update: if canManageBranchData(resource.data.organizationId, resource.data.branchId) &&
         isValidAttendanceReviewUpdate();
 
       allow delete: if false;
-    }
-
-    function isValidManagerEntry(data) {
-      return hasOnlyAllowedFields([
-          'id', 'organizationId', 'branchId', 'employeeId', 'employeeName',
-          'workDate', 'workDateString', 'status', 'reviewStatus', 'checkInAt',
-          'note', 'kioskEntry', 'source', 'createdAt'
-        ]) &&
-        hasRequiredFields([
-          'organizationId', 'branchId', 'employeeId', 'workDate',
-          'workDateString', 'status', 'checkInAt', 'createdAt', 'source'
-        ]) &&
-        validStringLength('organizationId', 1, 100) &&
-        validStringLength('branchId', 1, 100) &&
-        validStringLength('employeeId', 1, 128) &&
-        isValidOptionalString('employeeName', 1, 100) &&
-        isValidOptionalString('note', 0, 1000) &&
-        data.source == 'manager-group' &&
-        data.status in ['present', 'late'] &&
-        data.workDate is timestamp &&
-        data.workDate <= request.time &&
-        data.workDate > request.time - duration.value(7, 'd') &&
-        isValidDateString(data.workDateString) &&
-        data.checkInAt == request.time &&
-        data.createdAt == request.time &&
-        (!('reviewStatus' in data) || data.reviewStatus == 'none') &&
-        (!('kioskEntry' in data) || data.kioskEntry == false);
     }
 
     // Review updates may touch only the review fields; reviewedAt must be
@@ -218,9 +188,7 @@ service cloud.firestore {
         canManageBranchData(resource.data.organizationId, resource.data.branchId)
       );
 
-      allow create: if canManageBranchData(
-          request.resource.data.organizationId, request.resource.data.branchId) &&
-        isValidGroupBatch(request.resource.data);
+      allow create: if false; // Audit records are created by the same transaction.
 
       allow update, delete: if false;
     }
@@ -288,27 +256,6 @@ service cloud.firestore {
         data.updatedAt == request.time;
     }
 
-    function isValidGroupBatch(data) {
-      return hasOnlyAllowedFields([
-          'id', 'organizationId', 'branchId', 'workDate', 'shiftName',
-          'attendeeCount', 'createdBy', 'createdById', 'createdAt', 'note'
-        ]) &&
-        hasRequiredFields([
-          'id', 'organizationId', 'branchId', 'workDate', 'shiftName',
-          'attendeeCount', 'createdBy', 'createdById', 'createdAt'
-        ]) &&
-        validStringLength('id', 1, 128) &&
-        validStringLength('organizationId', 1, 100) &&
-        validStringLength('branchId', 1, 100) &&
-        isValidDateString(data.workDate) &&
-        validStringLength('shiftName', 1, 100) &&
-        data.attendeeCount is int &&
-        data.attendeeCount >= 0 &&
-        data.attendeeCount <= 1000 &&
-        validStringLength('createdBy', 1, 100) &&
-        data.createdById == request.auth.uid &&
-        data.createdAt == request.time &&
-        isValidOptionalString('note', 0, 1000);
-    }
+
   }
 }

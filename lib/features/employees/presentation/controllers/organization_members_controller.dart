@@ -29,6 +29,9 @@ class OrganizationMembersController extends ChangeNotifier
   /// Delay applied to [setQuery] so typing does not hit the backend per key.
   final Duration searchDebounce;
 
+  int _scopeEpoch = 0;
+  bool _isCurrentScope(int epoch) => epoch == _scopeEpoch && !isDisposed;
+
   final RequestGeneration _requests = RequestGeneration();
   List<OrganizationMember> _members = const [];
   bool _isLoading = false;
@@ -175,13 +178,16 @@ class OrganizationMembersController extends ChangeNotifier
     required String memberId,
     String? activeBranchId,
   }) async {
+    final epoch = _scopeEpoch;
     try {
-      return await repository.getMember(
+      final member = await repository.getMember(
         access: access,
         memberId: memberId,
         activeBranchId: activeBranchId,
       );
+      return _isCurrentScope(epoch) ? member : null;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -198,6 +204,7 @@ class OrganizationMembersController extends ChangeNotifier
     required String initialPassword,
     String? activeBranchId,
   }) async {
+    final epoch = _scopeEpoch;
     _isSaving = true;
     _actionErrorMessage = null;
     notifyListeners();
@@ -208,9 +215,12 @@ class OrganizationMembersController extends ChangeNotifier
         initialPassword: initialPassword,
         activeBranchId: activeBranchId,
       );
+      if (!_isCurrentScope(epoch)) return null;
       await loadMembers(access: access, activeBranchId: activeBranchId);
+      if (!_isCurrentScope(epoch)) return null;
       return result;
     } catch (error, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = userMessageFor(
         error,
         st,
@@ -218,8 +228,10 @@ class OrganizationMembersController extends ChangeNotifier
       );
       return null;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -231,6 +243,7 @@ class OrganizationMembersController extends ChangeNotifier
     required AccountStatus status,
     String? activeBranchId,
   }) async {
+    final epoch = _scopeEpoch;
     _isSaving = true;
     _actionErrorMessage = null;
     notifyListeners();
@@ -241,9 +254,11 @@ class OrganizationMembersController extends ChangeNotifier
         status: status,
         activeBranchId: activeBranchId,
       );
+      if (!_isCurrentScope(epoch)) return null;
       _members = [for (final m in _members) m.id == saved.id ? saved : m];
       return saved;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -251,8 +266,10 @@ class OrganizationMembersController extends ChangeNotifier
       );
       return null;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -263,6 +280,7 @@ class OrganizationMembersController extends ChangeNotifier
     required String newPassword,
     String? activeBranchId,
   }) async {
+    final epoch = _scopeEpoch;
     _isSaving = true;
     _actionErrorMessage = null;
     notifyListeners();
@@ -273,8 +291,10 @@ class OrganizationMembersController extends ChangeNotifier
         newPassword: newPassword,
         activeBranchId: activeBranchId,
       );
+      if (!_isCurrentScope(epoch)) return false;
       return true;
     } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return false;
       _actionErrorMessage = userMessageFor(
         e,
         st,
@@ -282,8 +302,10 @@ class OrganizationMembersController extends ChangeNotifier
       );
       return false;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -296,6 +318,7 @@ class OrganizationMembersController extends ChangeNotifier
 
   @override
   void reset() {
+    _scopeEpoch++;
     _debounceTimer?.cancel();
     final pending = _pendingSearch;
     if (pending != null && !pending.isCompleted) pending.complete();

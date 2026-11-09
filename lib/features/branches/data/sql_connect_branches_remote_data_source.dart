@@ -86,8 +86,8 @@ class SqlConnectBranchesRemoteDataSource implements BranchesRemoteDataSource {
         .status(branch.isActive ? 'active' : 'suspended')
         .isMainBranch(branch.isMainBranch)
         .geofenceRadiusMeters(branch.geofenceRadiusMeters);
-    if (branch.latitude != null) builder.latitude(branch.latitude);
-    if (branch.longitude != null) builder.longitude(branch.longitude);
+    builder.latitude(branch.latitude);
+    builder.longitude(branch.longitude);
     await builder.execute();
   }
 

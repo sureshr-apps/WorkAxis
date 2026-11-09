@@ -159,6 +159,7 @@ class SqlConnectPlatformOrganizationsRepository
       targetUid: _uid(existing),
       fullName: administrator.name.trim(),
       email: nextEmail != existing.email.toLowerCase() ? nextEmail : null,
+      clearEmail: nextEmail.isEmpty && existing.email.isNotEmpty,
       phone: nextPhone != null && nextPhone != existing.phone
           ? nextPhone
           : null,

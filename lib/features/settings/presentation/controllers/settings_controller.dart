@@ -100,12 +100,12 @@ class SettingsController extends ChangeNotifier
   }) {
     return _save(
       validate: () => SettingsValidators.organization(settings),
-      persist: () async {
+      persist: (isCurrent) async {
         final saved = await repository.saveOrganizationSettings(
           access: access,
           settings: settings,
         );
-        _organization = saved;
+        if (isCurrent()) _organization = saved;
       },
       fallback: 'Could not save organization settings. Please try again.',
     );
@@ -118,12 +118,12 @@ class SettingsController extends ChangeNotifier
   }) {
     return _save(
       validate: () => SettingsValidators.platform(settings),
-      persist: () async {
+      persist: (isCurrent) async {
         final saved = await repository.savePlatformSettings(
           access: access,
           settings: settings,
         );
-        _platform = saved;
+        if (isCurrent()) _platform = saved;
       },
       fallback: 'Could not save platform settings. Please try again.',
     );
@@ -144,7 +144,7 @@ class SettingsController extends ChangeNotifier
 
   Future<bool> _save({
     required Map<SettingsField, String> Function() validate,
-    required Future<void> Function() persist,
+    required Future<void> Function(bool Function() isCurrent) persist,
     required String fallback,
   }) async {
     final token = _saves.next();
@@ -158,16 +158,16 @@ class SettingsController extends ChangeNotifier
     _isSaving = true;
     notifyListeners();
     try {
-      await persist();
-      if (!_saves.isCurrent(token)) return false;
+      await persist(() => _saves.isCurrent(token) && !isDisposed);
+      if (!_saves.isCurrent(token) || isDisposed) return false;
       _lastSaveSucceeded = true;
       return true;
     } catch (e, st) {
-      if (!_saves.isCurrent(token)) return false;
+      if (!_saves.isCurrent(token) || isDisposed) return false;
       _saveErrorMessage = userMessageFor(e, st, fallback: fallback);
       return false;
     } finally {
-      if (_saves.isCurrent(token)) {
+      if (_saves.isCurrent(token) && !isDisposed) {
         _isSaving = false;
         notifyListeners();
       }

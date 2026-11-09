@@ -11,6 +11,7 @@ import 'package:workaxis/features/attendance/domain/repositories/attendance_repo
 
 import '../../helpers/access_fixtures.dart';
 import '../../helpers/fixed_clock.dart';
+import '../../helpers/fake_group_attendance_functions.dart';
 
 final DateTime _today = BusinessTime.today(fixedNow);
 
@@ -257,11 +258,12 @@ void _contract(String name, Future<AttendanceRepository> Function() create) {
 void main() {
   _contract('mock', () async => MockAttendanceRepository(now: fixedNow));
 
-  _contract(
-    'Firestore (fake)',
-    () async => FirestoreAttendanceRepository(
-      firestore: await _seededFirestore(),
+  _contract('Firestore (fake)', () async {
+    final firestore = await _seededFirestore();
+    return FirestoreAttendanceRepository(
+      firestore: firestore,
       now: fixedNow,
-    ),
-  );
+      functions: FakeGroupAttendanceFunctions(firestore),
+    );
+  });
 }

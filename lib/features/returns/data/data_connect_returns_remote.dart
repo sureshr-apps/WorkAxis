@@ -18,9 +18,10 @@ class DataConnectReturnsRemote implements ReturnsRemote {
     required String organizationId,
     required String employeeUid,
     required int limit,
+    int offset = 0,
     ReturnStatus? status,
   }) async {
-    final builder = _c.listMyReturns(limit: limit, offset: 0);
+    final builder = _c.listMyReturns(limit: limit, offset: offset);
     if (status != null) builder.status(status.name);
     final rows = (await builder.execute()).data.returnRecords;
     return [
@@ -38,12 +39,13 @@ class DataConnectReturnsRemote implements ReturnsRemote {
     required String organizationId,
     required BranchSummary branch,
     required int limit,
+    int offset = 0,
     ReturnStatus? status,
   }) async {
     final builder = _c.listReturnsByBranchPaged(
       branchId: branch.id,
       limit: limit,
-      offset: 0,
+      offset: offset,
     );
     if (status != null) builder.status(status.name);
     final rows = (await builder.execute()).data.returnRecords;
@@ -57,13 +59,14 @@ class DataConnectReturnsRemote implements ReturnsRemote {
   Future<List<ReturnItem>> listByOrganization({
     required String organizationId,
     required int limit,
+    int offset = 0,
     String? branchId,
     ReturnStatus? status,
   }) async {
     final builder = _c.listReturnsByOrgPaged(
       orgId: organizationId,
       limit: limit,
-      offset: 0,
+      offset: offset,
     );
     // Optional variables must be omitted, never sent as null.
     if (branchId != null) builder.branchId(branchId);

@@ -10,7 +10,12 @@ import 'package:workaxis/features/reports/domain/repositories/reports_repository
 import '../../helpers/access_fixtures.dart';
 
 class _FakeReportsRemote implements ReportsRemote {
-  Map<String, int> byBranch = {'br-01': 5, 'br-02': 2, 'br-04': 0, 'other': 99};
+  Map<String, int> byBranch = {
+    'br-01': 5,
+    'br-02': 2,
+    'br-04': 0,
+    'suspended-branch': 99,
+  };
   Map<String, int> byReason = {'damaged': 4, 'expired': 2, 'weird-legacy': 1};
   Object? failWith;
   final List<String> calls = [];
@@ -109,7 +114,7 @@ void main() {
     test('uses one aggregate query for the organization (no N+1)', () async {
       final report = await repo.getReportSummary(access: orgAdminAccess());
       expect(remote.calls, ['org:org-acme']);
-      expect(report.returnVolume, 7);
+      expect(report.returnVolume, 106);
       final byId = {for (final m in report.branchMetrics) m.branchId: m};
       expect(byId['br-01']!.returnCount, 5);
       expect(byId['br-04']!.returnCount, 0);

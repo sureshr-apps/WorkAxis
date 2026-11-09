@@ -65,8 +65,6 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
     super.dispose();
   }
 
-  void _edited() => context.read<SettingsController>().clearSaveState();
-
   void _toast(String message, {required bool success}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -111,6 +109,8 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
       eyebrow: 'Operations Hub Administration',
       title: 'Platform Settings',
       subtitle: 'Configure platform parameters, security policies, and maintenance mode.',
+      canSave: false,
+      notice: 'Policy changes are not available yet. The values below are saved preferences and do not change sign-in, session, or maintenance behavior.',
       controller: settings,
       status: settings.platformStatus,
       hasLoaded: loaded != null,
@@ -156,24 +156,21 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
                   controller: _sessionTimeoutController,
                   label: 'Session Inactivity Timeout (Minutes)',
                   errorText: errors[SettingsField.sessionTimeout],
+                  enabled: false,
                   keyboardType: TextInputType.number,
-                  onChanged: (_) => _edited(),
                 ),
                 second: AppTextField(
                   controller: _maxAttemptsController,
                   label: 'Max Failed Sign-In Attempts Before Lockout',
                   errorText: errors[SettingsField.maxLoginAttempts],
+                  enabled: false,
                   keyboardType: TextInputType.number,
-                  onChanged: (_) => _edited(),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               SettingsSwitchTile(
                 value: _enforceStrongPasswords,
-                onChanged: (v) {
-                  setState(() => _enforceStrongPasswords = v);
-                  _edited();
-                },
+                onChanged: null,
                 title: 'Enforce Strong Password Complexity',
                 subtitle: 'Requires at least 8 characters with numbers and special symbols',
               ),
@@ -186,15 +183,12 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
           subtitle: 'Temporarily broadcast maintenance mode across customer organization workspaces',
           child: SettingsSwitchTile(
             value: _maintenanceMode,
-            onChanged: (v) {
-              setState(() => _maintenanceMode = v);
-              _edited();
-            },
+            onChanged: null,
             title: _maintenanceMode
                 ? 'Maintenance Mode Active'
                 : 'Maintenance Mode Disabled',
             titleColor: _maintenanceMode ? AppColors.statusUrgentText : null,
-            subtitle: 'When enabled, non-platform users see a non-blocking scheduled maintenance banner.',
+            subtitle: 'Maintenance announcements are not available yet.',
           ),
         ),
       ],

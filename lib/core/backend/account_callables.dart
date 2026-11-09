@@ -71,13 +71,17 @@ class AccountCallables {
     String? email,
     String? phone,
     bool clearPhone = false,
+    bool clearEmail = false,
     UserRole? role,
     List<String>? branchIds,
   }) async {
     await _functions.call('updateUserAccount', {
       'targetUid': targetUid,
       'fullName': ?fullName,
-      if (email != null && email.isNotEmpty) 'email': email,
+      if (clearEmail)
+        'email': null
+      else if (email != null && email.isNotEmpty)
+        'email': email,
       if (clearPhone) 'phone': null else 'phone': ?phone,
       'role': ?role?.name,
       'branchIds': ?branchIds,

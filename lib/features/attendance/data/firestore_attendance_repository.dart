@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:workaxis/core/backend/callable_functions.dart';
+import 'package:workaxis/core/ids/request_ids.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/core/time/business_time.dart';
@@ -21,9 +23,13 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 /// from the device-local date. Employee punches do not go through here: they
 /// use the `recordAttendancePunch` callable.
 class FirestoreAttendanceRepository implements AttendanceRepository {
-  FirestoreAttendanceRepository({FirebaseFirestore? firestore, Now? now})
-    : _customFirestore = firestore,
-      _now = now ?? systemNow;
+  FirestoreAttendanceRepository({
+    FirebaseFirestore? firestore,
+    Now? now,
+    CallableFunctions? functions,
+  }) : _customFirestore = firestore,
+       _functions = functions ?? FirebaseCallableFunctions(),
+       _now = now ?? systemNow;
 
   /// Upper bound on documents returned by one query.
   static const int maxEntriesPerQuery = 500;
@@ -40,6 +46,7 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
 
   final FirebaseFirestore? _customFirestore;
   final Now _now;
+  final CallableFunctions _functions;
 
   FirebaseFirestore get _firestore =>
       _customFirestore ?? FirebaseFirestore.instance;
@@ -60,12 +67,22 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
         dayKey: BusinessTime.keyOfDate(date),
         requestedBranchId: activeBranchId,
         requestedEmployeeId: employeeId,
-      );
-      final snapshot = await query.limit(maxEntriesPerQuery).get();
-      final entries = [
-        for (final doc in snapshot.docs)
-          AttendanceEntryMapper.fromData(doc.id, doc.data()),
-      ];
+      ).orderBy(FieldPath.documentId);
+      final entries = <AttendanceEntry>[];
+      QueryDocumentSnapshot<Map<String, dynamic>>? cursor;
+      while (true) {
+        final page =
+            await (cursor == null ? query : query.startAfterDocument(cursor))
+                .limit(maxEntriesPerQuery)
+                .get();
+        entries.addAll(
+          page.docs.map(
+            (doc) => AttendanceEntryMapper.fromData(doc.id, doc.data()),
+          ),
+        );
+        if (page.docs.length < maxEntriesPerQuery) break;
+        cursor = page.docs.last;
+      }
       entries.sort(
         (a, b) =>
             (a.checkInAt ?? a.workDate).compareTo(b.checkInAt ?? b.workDate),
@@ -131,7 +148,7 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
     required GroupAttendanceRequest request,
   }) async {
     try {
-      final orgId = _requireManagerOrg(access, 'record group attendance');
+      _requireManagerOrg(access, 'record group attendance');
       _requireAssignedActiveBranch(access, request.branchId);
       _validateGroupRequest(request);
 
@@ -143,65 +160,40 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
       _requireWithinBackdateWindow(workDate);
       final dayKey = BusinessTime.keyOfDate(workDate);
 
-      await _rejectAlreadyRecorded(orgId, request, dayKey);
-
-      final batch = _firestore.batch();
-      final batchLogRef = _firestore
-          .collection('group_attendance_batches')
-          .doc();
-      batch.set(batchLogRef, {
-        'id': batchLogRef.id,
-        'organizationId': orgId,
+      final response = await _functions.call('recordGroupAttendance', {
+        'requestId': request.requestId ?? RequestIds.uuidV4(),
         'branchId': request.branchId,
         'workDate': dayKey,
+        'checkInAt': request.checkInAt.toUtc().toIso8601String(),
+        'employeeIds': request.attendees.map((a) => a.employeeId).toList(),
+        'status': request.status.name,
         'shiftName': request.shiftName,
-        'attendeeCount': request.attendees.length,
-        'createdBy': access.user.name,
-        'createdById': access.user.id,
-        'createdAt': FieldValue.serverTimestamp(),
         'note': request.note,
       });
-
-      final recordedAt = _now();
-      final results = <AttendanceEntry>[];
-      for (final attendee in request.attendees) {
-        // One entry per employee per day, same id scheme as employee punches.
-        final entryId = '${attendee.employeeId}_$dayKey';
-        batch.set(_collection.doc(entryId), {
-          'id': entryId,
-          'organizationId': orgId,
-          'branchId': request.branchId,
-          'employeeId': attendee.employeeId,
-          'employeeName': attendee.employeeName,
-          'workDate': Timestamp.fromDate(BusinessTime.startOfDay(workDate)),
-          'workDateString': dayKey,
-          'status': request.status.name,
-          'reviewStatus': AttendanceReviewStatus.none.name,
-          'checkInAt': FieldValue.serverTimestamp(),
-          'note': request.note,
-          'kioskEntry': false,
-          'source': groupEntrySource,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        results.add(
-          AttendanceEntry(
-            id: entryId,
-            organizationId: orgId,
-            branchId: request.branchId,
-            employeeId: attendee.employeeId,
-            employeeName: attendee.employeeName,
-            workDate: workDate,
-            status: request.status,
-            reviewStatus: AttendanceReviewStatus.none,
-            // Provisional until the next load returns the server timestamp.
-            checkInAt: recordedAt,
-            note: request.note,
-          ),
+      final ids = response['entryIds'];
+      if (ids is! List ||
+          ids.length != request.attendees.length ||
+          ids.any((id) => id is! String)) {
+        throw const DatabaseException(
+          'Group check-in returned invalid entry ids.',
         );
       }
-
-      await batch.commit();
-      return results;
+      final expected = {
+        for (final a in request.attendees) '${a.employeeId}_$dayKey',
+      };
+      if (ids.toSet().difference(expected).isNotEmpty ||
+          ids.toSet().length != expected.length) {
+        throw const DatabaseException(
+          'Group check-in returned unexpected entry ids.',
+        );
+      }
+      final snapshots = await Future.wait(
+        ids.cast<String>().map((id) => _collection.doc(id).get()),
+      );
+      return [
+        for (final doc in snapshots)
+          if (doc.exists) AttendanceEntryMapper.fromData(doc.id, doc.data()!),
+      ];
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -325,33 +317,6 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
         userMessage:
             'Group check-in can only be recorded for today or the last '
             '$maxBackdateDays days.',
-      );
-    }
-  }
-
-  /// One entry per employee per day: refuse to overwrite existing ones.
-  Future<void> _rejectAlreadyRecorded(
-    String orgId,
-    GroupAttendanceRequest request,
-    String dayKey,
-  ) async {
-    final existing = await _collection
-        .where('organizationId', isEqualTo: orgId)
-        .where('branchId', isEqualTo: request.branchId)
-        .where('workDateString', isEqualTo: dayKey)
-        .limit(maxEntriesPerQuery)
-        .get();
-    final recorded = {
-      for (final doc in existing.docs) doc.data()['employeeId'] as String?,
-    };
-    final duplicates = request.attendees.where(
-      (a) => recorded.contains(a.employeeId),
-    );
-    if (duplicates.isNotEmpty) {
-      throw const DatabaseException(
-        'Group attendance includes employees already recorded.',
-        userMessage:
-            'Some selected employees already have attendance for this day.',
       );
     }
   }

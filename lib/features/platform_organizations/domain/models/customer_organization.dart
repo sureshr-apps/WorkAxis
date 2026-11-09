@@ -7,8 +7,8 @@ class CustomerOrganization {
   final String name;
   final String code;
   final OrganizationStatus status;
-  final int branchCount;
-  final int employeeCount;
+  final int? branchCount;
+  final int? employeeCount;
   final DateTime createdAt;
   final String? description;
   final String? category;

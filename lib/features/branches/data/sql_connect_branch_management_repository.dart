@@ -1,10 +1,8 @@
-import 'package:workaxis/core/backend/account_callables.dart';
 import 'package:workaxis/core/backend/callable_functions.dart';
+import 'package:workaxis/core/ids/request_ids.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/core/errors/validation_exception.dart';
-import 'package:workaxis/core/ids/request_ids.dart';
-import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/branches/data/branches_remote_data_source.dart';
@@ -12,7 +10,6 @@ import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 import 'package:workaxis/features/branches/domain/policies/branch_management_policy.dart';
 import 'package:workaxis/features/branches/domain/repositories/branch_management_repository.dart';
 import 'package:workaxis/features/employees/data/organization_members_remote_data_source.dart';
-import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 
 /// Production [BranchManagementRepository].
 ///
@@ -25,15 +22,14 @@ class SqlConnectBranchManagementRepository
   SqlConnectBranchManagementRepository({
     required this._branches,
     required this._members,
-    required this._accounts,
     required this._functions,
   });
 
   static const int _managerPageSize = 100;
+  final Expando<String> _createRequests = Expando<String>();
 
   final BranchesRemoteDataSource _branches;
   final OrganizationMembersRemoteDataSource _members;
-  final AccountCallables _accounts;
   final CallableFunctions _functions;
 
   @override
@@ -92,40 +88,41 @@ class SqlConnectBranchManagementRepository
     }
     BranchManagementPolicy.validate(branch);
 
-    final String id;
-    if (branch.id.isEmpty) {
-      final code = branch.code.trim().isEmpty
-          ? 'BR-${RequestIds.shortCode(5)}'
-          : branch.code.trim();
-      id = await _branches.add(
-        branch.copyWith(
-          summary: BranchSummary(
-            id: branch.id,
-            organizationId: branch.organizationId,
-            name: branch.name,
-            code: code,
-            location: branch.location,
-            isActive: branch.isActive,
-          ),
-        ),
-        organizationId: orgId,
-      );
-    } else {
-      final existing = await _branches.getById(branch.id);
-      if (existing == null || existing.organizationId != orgId) {
-        throw const NotFoundException(
-          'Branch not found in caller organization',
-        );
-      }
-      await _branches.update(branch);
-      id = branch.id;
+    final response = await _functions.call('saveBranch', {
+      if (branch.id.isEmpty)
+        'requestId':
+            branch.requestId ??
+            (_createRequests[branch] ??= RequestIds.uuidV4()),
+      if (branch.id.isNotEmpty) 'id': branch.id,
+      'name': branch.name.trim(),
+      'code': branch.code.trim(),
+      'location': branch.location.trim(),
+      'status': branch.isActive ? 'active' : 'suspended',
+      'isMainBranch': branch.isMainBranch,
+      'geofenceRadiusMeters': branch.geofenceRadiusMeters,
+      'latitude': branch.latitude,
+      'longitude': branch.longitude,
+      'managerIds': branch.managerIds,
+    });
+    final id = response['id'];
+    if (id is! String || id.isEmpty) {
+      throw const DatabaseException('saveBranch returned no id.');
     }
-
-    final saved = await _branches.getById(id);
-    if (saved == null) throw const NotFoundException('Branch not found');
-    await _syncManagers(saved, branch.managerIds);
-    return saved.copyWith(
-      managerIds: (await _currentManagerIds(saved)).toList(),
+    // The callable committed the business change. Use its known values rather
+    // than turning a subsequent read/projection outage into a false save failure.
+    return BranchRecord(
+      summary: branch.summary.copyWith(
+        id: id,
+        code: branch.code.isEmpty
+            ? (response['code'] as String? ?? '')
+            : branch.code,
+      ),
+      geofenceRadiusMeters: branch.geofenceRadiusMeters,
+      latitude: branch.latitude,
+      longitude: branch.longitude,
+      isMainBranch: branch.isMainBranch,
+      managerIds: List.unmodifiable(branch.managerIds),
+      kioskStatus: branch.kioskStatus,
     );
   });
 
@@ -181,53 +178,6 @@ class SqlConnectBranchManagementRepository
       if (!page.hasMore) return ids;
       offset = page.nextOffset;
     }
-  }
-
-  /// Aligns the branch's managers with [desired] by editing each manager's
-  /// branch assignments (the server preserves their other branches).
-  Future<void> _syncManagers(BranchRecord branch, List<String> desired) async {
-    final current = await _currentManagerIds(branch);
-    final wanted = desired.toSet();
-    for (final id in wanted.difference(current)) {
-      final manager = await _requireManager(id, branch.organizationId);
-      await _accounts.update(
-        targetUid: _uid(manager),
-        branchIds: {...manager.branchIds, branch.id}.toList(),
-      );
-    }
-    for (final id in current.difference(wanted)) {
-      final manager = await _requireManager(id, branch.organizationId);
-      final remaining = manager.branchIds.where((b) => b != branch.id).toList();
-      if (remaining.isEmpty) {
-        throw ValidationException(
-          '${manager.fullName} must keep at least one branch. '
-          'Assign another branch first.',
-        );
-      }
-      await _accounts.update(targetUid: _uid(manager), branchIds: remaining);
-    }
-  }
-
-  Future<OrganizationMember> _requireManager(String id, String orgId) async {
-    final member = await _members.getById(id);
-    if (member == null ||
-        member.organizationId != orgId ||
-        member.role != UserRole.branchManager) {
-      throw ValidationException(
-        'A selected branch manager is outside your organization.',
-      );
-    }
-    return member;
-  }
-
-  String _uid(OrganizationMember member) {
-    final uid = member.authUid;
-    if (uid == null || uid.isEmpty) {
-      throw ValidationException(
-        '${member.fullName} has no sign-in identity yet.',
-      );
-    }
-    return uid;
   }
 
   Future<T> _guard<T>(Future<T> Function() body) async {

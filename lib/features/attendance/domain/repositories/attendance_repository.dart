@@ -21,8 +21,8 @@ abstract interface class AttendanceRepository {
     required AttendanceReviewDecision decision,
   });
 
-  /// Records a manager group check-in. The server stamps the check-in time;
-  /// [GroupAttendanceRequest.checkInAt] is advisory only.
+  /// Records a manager group check-in. The server validates the selected
+  /// effective time and records a separate server audit timestamp.
   Future<List<AttendanceEntry>> markGroupAttendance({
     required UserAccessContext access,
     required GroupAttendanceRequest request,

@@ -14,6 +14,7 @@ import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
 import '../../helpers/fixed_clock.dart';
+import '../../helpers/fake_group_attendance_functions.dart';
 
 void main() {
   group('FirestoreAttendanceRepository Tests', () {
@@ -84,6 +85,14 @@ void main() {
       fakeFirestore = FakeFirebaseFirestore();
       repository = FirestoreAttendanceRepository(
         firestore: fakeFirestore,
+        functions: FakeGroupAttendanceFunctions(
+          fakeFirestore,
+          organizationId: 'org-test-1',
+          employeeNames: const {
+            'emp-101': 'Alice Worker',
+            'emp-102': 'Bob Builder',
+          },
+        ),
         now: fixedNow,
       );
     });

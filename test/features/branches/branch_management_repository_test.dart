@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:workaxis/core/backend/account_callables.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/domain/models/organization_summary.dart';
@@ -11,6 +10,7 @@ import 'package:workaxis/features/branches/domain/policies/branch_management_pol
 import '../../contracts/acme_scenario.dart';
 import '../../contracts/branch_management_contract.dart';
 import '../../helpers/fake_branches_data_source.dart';
+import '../../helpers/fake_branch_save.dart';
 import '../../helpers/fake_callable_functions.dart';
 import '../../helpers/fake_identity_server.dart';
 
@@ -19,6 +19,7 @@ class _Wiring {
     server = FakeIdentityServer(acmeMemberSeed());
     branches = FakeBranchesDataSource();
     functions = FakeCallableFunctions({
+      'saveBranch': (p) => fakeBranchSave(branches, server, p),
       'createKioskPairingToken': (payload) async {
         _tokens++;
         return {
@@ -31,7 +32,7 @@ class _Wiring {
     repo = SqlConnectBranchManagementRepository(
       branches: branches,
       members: FakeMembersDataSource(server),
-      accounts: AccountCallables(server),
+
       functions: functions,
     );
   }
@@ -90,11 +91,8 @@ void main() {
         expect(sophia.branchIds.toSet(), {'br-04', 'br-01'});
         final marcus = w.server.byId('user-bm-multi-01')!;
         expect(marcus.branchIds.toSet(), {'br-02', 'br-03'});
-        final payloads = w.server
-            .callsTo('updateUserAccount')
-            .map((c) => c.payload);
-        expect(payloads.every((p) => p.containsKey('branchIds')), isTrue);
-        expect(payloads.any((p) => p.containsKey('role')), isFalse);
+        final payload = w.functions.payloadsOf('saveBranch').single;
+        expect(payload['managerIds'], ['user-bm-single-01']);
       },
     );
 

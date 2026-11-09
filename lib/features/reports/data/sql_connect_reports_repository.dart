@@ -83,7 +83,10 @@ class SqlConnectReportsRepository implements ReportsRepository {
       ];
       return OperationalReportSummary(
         period: period,
-        returnVolume: metrics.fold(0, (sum, m) => sum + m.returnCount),
+        returnVolume: stats.byBranch.values.fold(
+          0,
+          (sum, count) => sum + count,
+        ),
         returnCountsCoverPeriod: true,
         branchMetrics: metrics,
         returnCategories: _categories(stats.byReason),

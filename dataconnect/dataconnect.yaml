@@ -9,4 +9,4 @@ schema:
       cloudSql:
         instanceId: "omniretail-sql"
       schemaValidation: "COMPATIBLE"
-connectorDirs: ["./connector"]
+connectorDirs: ["./connector", "./admin"]

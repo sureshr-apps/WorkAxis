@@ -29,6 +29,9 @@ class PlatformUsersController extends ChangeNotifier
   final Duration searchDebounce;
   final int pageSize;
 
+  int _scopeEpoch = 0;
+  bool _isCurrentScope(int epoch) => epoch == _scopeEpoch && !isDisposed;
+
   final RequestGeneration _listRequests = RequestGeneration();
   final RequestGeneration _detailRequests = RequestGeneration();
   final RequestGeneration _countRequests = RequestGeneration();
@@ -180,6 +183,7 @@ class PlatformUsersController extends ChangeNotifier
     required PlatformAdministrator administrator,
     required String initialPassword,
   }) async {
+    final epoch = _scopeEpoch;
     _isSaving = true;
     _actionErrorMessage = null;
     notifyListeners();
@@ -188,34 +192,44 @@ class PlatformUsersController extends ChangeNotifier
         administrator: administrator,
         initialPassword: initialPassword,
       );
+      if (!_isCurrentScope(epoch)) return null;
       _refreshAfterMutation(created, isNew: true);
       await _loadCounts();
+      if (!_isCurrentScope(epoch)) return null;
       return created;
     } catch (error, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = _friendlyError(error, st);
       return null;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<PlatformAdministrator?> updateAdministrator(
     PlatformAdministrator administrator,
   ) async {
+    final epoch = _scopeEpoch;
     _isSaving = true;
     _actionErrorMessage = null;
     notifyListeners();
     try {
       final updated = await repository.updateAdministrator(administrator);
+      if (!_isCurrentScope(epoch)) return null;
       _refreshAfterMutation(updated);
       return updated;
     } catch (error, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = _friendlyError(error, st);
       return null;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -223,20 +237,26 @@ class PlatformUsersController extends ChangeNotifier
     String id,
     AccountStatus status,
   ) async {
+    final epoch = _scopeEpoch;
     _isSaving = true;
     _actionErrorMessage = null;
     notifyListeners();
     try {
       final updated = await repository.updateAdministratorStatus(id, status);
+      if (!_isCurrentScope(epoch)) return null;
       _refreshAfterMutation(updated);
       await _loadCounts();
+      if (!_isCurrentScope(epoch)) return null;
       return updated;
     } catch (error, st) {
+      if (!_isCurrentScope(epoch)) return null;
       _actionErrorMessage = _friendlyError(error, st);
       return null;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -246,6 +266,7 @@ class PlatformUsersController extends ChangeNotifier
     required String id,
     required String newPassword,
   }) async {
+    final epoch = _scopeEpoch;
     _isSaving = true;
     _actionErrorMessage = null;
     notifyListeners();
@@ -254,13 +275,17 @@ class PlatformUsersController extends ChangeNotifier
         id: id,
         newPassword: newPassword,
       );
+      if (!_isCurrentScope(epoch)) return false;
       return true;
     } catch (error, st) {
+      if (!_isCurrentScope(epoch)) return false;
       _actionErrorMessage = _friendlyError(error, st);
       return false;
     } finally {
-      _isSaving = false;
-      notifyListeners();
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -272,6 +297,7 @@ class PlatformUsersController extends ChangeNotifier
 
   @override
   void reset() {
+    _scopeEpoch++;
     _debounce?.cancel();
     _listRequests.invalidate();
     _detailRequests.invalidate();

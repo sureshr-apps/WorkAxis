@@ -398,7 +398,7 @@ class _OrganizationMetrics extends StatelessWidget {
       cards: [
         AppKpiCard(
           title: 'Stores Active',
-          value: '${organization.branchCount}',
+          value: organization.branchCount?.toString() ?? '—',
           accentColor: AppColors.primaryDark,
           icon: Icons.storefront_outlined,
           iconColor: AppColors.primary,

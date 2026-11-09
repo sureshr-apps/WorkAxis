@@ -180,7 +180,7 @@ mutation CreateBranch(
   $longitude: Float
   $kioskEnabled: Boolean
 )
-@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId)) && (!has(vars.geofenceRadiusMeters) || (vars.geofenceRadiusMeters >= 10 && vars.geofenceRadiusMeters <= 5000)) && (!has(vars.latitude) || (vars.latitude >= -90.0 && vars.latitude <= 90.0)) && (!has(vars.longitude) || (vars.longitude >= -180.0 && vars.longitude <= 180.0))") {
+@auth(level: NO_ACCESS) {
   branch_insert(data: {
     id: $id
     organizationId: $orgId
@@ -207,7 +207,7 @@ mutation AddBranch(
   $longitude: Float
   $kioskEnabled: Boolean
 )
-@auth(expr: "auth.token.status == 'active' && (auth.token.role in ['platformOwner','platformAdmin'] || (auth.token.role == 'orgAdmin' && auth.token.organizationId == vars.orgId)) && (!has(vars.geofenceRadiusMeters) || (vars.geofenceRadiusMeters >= 10 && vars.geofenceRadiusMeters <= 5000)) && (!has(vars.latitude) || (vars.latitude >= -90.0 && vars.latitude <= 90.0)) && (!has(vars.longitude) || (vars.longitude >= -180.0 && vars.longitude <= 180.0))") {
+@auth(level: NO_ACCESS) {
   branch_insert(data: {
     organizationId: $orgId
     name: $name
@@ -233,7 +233,7 @@ mutation UpdateBranch(
   $longitude: Float
   $kioskEnabled: Boolean
 )
-@auth(expr: "auth.token.status == 'active' && auth.token.role in ['platformOwner','platformAdmin','orgAdmin'] && (!has(vars.status) || vars.status in ['active','suspended']) && (!has(vars.geofenceRadiusMeters) || (vars.geofenceRadiusMeters >= 10 && vars.geofenceRadiusMeters <= 5000)) && (!has(vars.latitude) || (vars.latitude >= -90.0 && vars.latitude <= 90.0)) && (!has(vars.longitude) || (vars.longitude >= -180.0 && vars.longitude <= 180.0))")
+@auth(level: NO_ACCESS)
 @transaction {
   query @redact {
     existing: branch(id: $id)

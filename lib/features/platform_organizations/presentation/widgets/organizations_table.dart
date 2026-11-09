@@ -243,7 +243,7 @@ class _CodeBadge extends StatelessWidget {
 class _CountCell extends StatelessWidget {
   const _CountCell({required this.count, required this.unit});
 
-  final int count;
+  final int? count;
   final String unit;
 
   @override
@@ -253,7 +253,7 @@ class _CountCell extends StatelessWidget {
         style: AppTypography.bodyMedium,
         children: [
           TextSpan(
-            text: AppFormatters.formatNumber(count),
+            text: count == null ? '—' : AppFormatters.formatNumber(count!),
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
           TextSpan(

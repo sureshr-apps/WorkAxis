@@ -168,11 +168,14 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     final controller = context.read<BranchManagementController>()
       ..clearActionError();
     await controller.loadManagerOptions(access);
-    if (!mounted) return;
+    final editable = branch == null
+        ? null
+        : await controller.getBranch(access, branch.id);
+    if (!mounted || (branch != null && editable == null)) return;
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => BranchEditorDialog(
-        branch: branch,
+        branch: editable,
         organizationId: organizationId,
         managerOptions: controller.managerOptions,
         isSaving: controller.isSaving,
@@ -191,12 +194,15 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     if (access == null) return;
     final controller = context.read<BranchManagementController>()
       ..clearActionError();
+    final details = await controller.getBranch(access, branch.id);
+    await controller.loadManagerOptions(access);
+    if (!mounted || details == null) return;
     await showDialog<void>(
       context: context,
       builder: (context) => BranchDetailsDialog(
-        branch: branch,
+        branch: details,
         managerNames: controller.managerOptions
-            .where((option) => branch.managerIds.contains(option.id))
+            .where((option) => details.managerIds.contains(option.id))
             .map((option) => option.name)
             .toList(growable: false),
         onGenerateToken: () =>
