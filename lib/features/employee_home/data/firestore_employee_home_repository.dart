@@ -203,6 +203,11 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       }
     }
 
+    const standardShiftSeconds = 8 * 3600;
+    final progress = worked == null
+        ? 0.0
+        : (worked.inSeconds / standardShiftSeconds).clamp(0.0, 1.0);
+
     return EmployeeHomeSummary(
       employeeId: access.user.id,
       employeeName: access.user.name,
@@ -211,12 +216,13 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       organizationName: access.organization!.name,
       shiftName: EmployeeHomeSummary.unavailable,
       shiftHours: EmployeeHomeSummary.unavailable,
+      standardDuration: '8h 00m',
       currentStatus: status,
       checkInTime: AppFormatters.formatTime(checkIn, placeholder: '-- : --'),
       checkInNote: recordedByManager ? 'Recorded by your manager' : null,
       checkOutTime: AppFormatters.formatTime(checkOut, placeholder: '-- : --'),
       workingDuration: worked == null ? '0h 00m' : _formatDuration(worked),
-      shiftProgress: 0,
+      shiftProgress: progress,
       locationStatus: locationStatus,
       isWithinGeofence: isWithinGeofence,
       latitude: branch?.latitude,
