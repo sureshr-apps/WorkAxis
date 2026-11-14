@@ -11,6 +11,7 @@ import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/branches/domain/branch_geofence_validator.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
+import 'package:workaxis/features/branches/presentation/screens/widgets/branch_location_picker.dart';
 
 /// Create/edit dialog for a branch. Coordinates start empty for new branches;
 /// geofence rules (including rejecting 0, 0) live in [BranchGeofenceValidator].
@@ -72,10 +73,22 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
     );
     _selectedManagers = {...?branch?.managerIds};
     _isActive = branch?.isActive ?? true;
+    _latitudeController.addListener(_onFieldSync);
+    _longitudeController.addListener(_onFieldSync);
+    _radiusController.addListener(_onFieldSync);
+    _nameController.addListener(_onFieldSync);
+  }
+
+  void _onFieldSync() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _latitudeController.removeListener(_onFieldSync);
+    _longitudeController.removeListener(_onFieldSync);
+    _radiusController.removeListener(_onFieldSync);
+    _nameController.removeListener(_onFieldSync);
     _nameController.dispose();
     _codeController.dispose();
     _locationController.dispose();
@@ -86,6 +99,11 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
   }
 
   Widget _buildForm() {
+    final lat = double.tryParse(_latitudeController.text.trim());
+    final lng = double.tryParse(_longitudeController.text.trim());
+    final radius = int.tryParse(_radiusController.text.trim()) ??
+        BranchGeofenceValidator.defaultRadiusMeters;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -116,6 +134,20 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
         _CoordinatesRow(
           latitude: _latitudeController,
           longitude: _longitudeController,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        BranchLocationPicker(
+          latitude: lat,
+          longitude: lng,
+          geofenceRadiusMeters: radius,
+          branchName: _nameController.text.trim(),
+          onLocationSelected: (pickedLat, pickedLng) {
+            setState(() {
+              _latitudeController.text = pickedLat.toStringAsFixed(6);
+              _longitudeController.text = pickedLng.toStringAsFixed(6);
+              _error = null;
+            });
+          },
         ),
         if (widget.managerOptions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),

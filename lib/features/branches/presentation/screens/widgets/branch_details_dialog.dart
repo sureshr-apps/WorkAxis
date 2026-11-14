@@ -6,6 +6,7 @@ import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
+import 'package:workaxis/features/employee_home/presentation/screens/widgets/geofence_real_map_view.dart';
 
 /// Read-only branch details with kiosk pairing actions.
 class BranchDetailsDialog extends StatefulWidget {
@@ -196,6 +197,25 @@ class _Details extends StatelessWidget {
               ? '${branch.latitude}, ${branch.longitude}'
               : 'Geofence not configured',
         ),
+        if (branch.hasGeofence) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Container(
+            height: 140,
+            decoration: BoxDecoration(
+              borderRadius: AppSpacing.roundedSm,
+              border: Border.all(color: AppColors.kpiBorder),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: GeofenceRealMapView(
+              latitude: branch.latitude,
+              longitude: branch.longitude,
+              geofenceRadiusMeters: branch.geofenceRadiusMeters,
+              isWithinGeofence: true,
+              branchName: branch.name,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         _DetailRow(label: 'Kiosk terminal', value: kioskLabel),
         _DetailRow(
           label: 'Branch managers',
