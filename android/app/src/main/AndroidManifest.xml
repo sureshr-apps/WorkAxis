@@ -5,6 +5,10 @@
         android:label="workaxis"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Specifies the Google Maps API Key for Android -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyBJizdRG-OiiAgtXQY9BvOicAxkd5_GmKg" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

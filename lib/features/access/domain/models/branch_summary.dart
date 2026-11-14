@@ -6,6 +6,9 @@ class BranchSummary {
     required this.name,
     required this.code,
     required this.location,
+    this.latitude,
+    this.longitude,
+    this.geofenceRadiusMeters,
     this.activeEmployeeCount = 0,
     this.isActive = true,
   });
@@ -15,6 +18,9 @@ class BranchSummary {
   final String name;
   final String code;
   final String location;
+  final double? latitude;
+  final double? longitude;
+  final int? geofenceRadiusMeters;
   final int activeEmployeeCount;
   final bool isActive;
 
@@ -24,6 +30,9 @@ class BranchSummary {
     String? name,
     String? code,
     String? location,
+    double? latitude,
+    double? longitude,
+    int? geofenceRadiusMeters,
     int? activeEmployeeCount,
     bool? isActive,
   }) => BranchSummary(
@@ -32,6 +41,9 @@ class BranchSummary {
     name: name ?? this.name,
     code: code ?? this.code,
     location: location ?? this.location,
+    latitude: latitude ?? this.latitude,
+    longitude: longitude ?? this.longitude,
+    geofenceRadiusMeters: geofenceRadiusMeters ?? this.geofenceRadiusMeters,
     activeEmployeeCount: activeEmployeeCount ?? this.activeEmployeeCount,
     isActive: isActive ?? this.isActive,
   );

@@ -6,7 +6,7 @@ import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
-import 'package:workaxis/features/employee_home/presentation/screens/widgets/geofence_map_painter.dart';
+import 'package:workaxis/features/employee_home/presentation/screens/widgets/geofence_real_map_view.dart';
 
 /// Geofence card: location status, a schematic map and the telemetry tiles the
 /// backend actually provided. Tiles without data are omitted, never invented.
@@ -100,7 +100,7 @@ class ActiveGeofenceCard extends StatelessWidget {
   Widget _map() {
     final hasFence = _has(summary.geofenceId) || _has(summary.geofenceZone);
     return Semantics(
-      label: 'Schematic geofence map',
+      label: 'Geofence location map',
       child: Container(
         height: 176,
         decoration: BoxDecoration(
@@ -111,7 +111,13 @@ class ActiveGeofenceCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            const CustomPaint(painter: GeofenceMapPainter()),
+            GeofenceRealMapView(
+              latitude: summary.latitude,
+              longitude: summary.longitude,
+              geofenceRadiusMeters: summary.geofenceRadiusMeters,
+              isWithinGeofence: summary.isWithinGeofence,
+              branchName: summary.branchName,
+            ),
             if (hasFence)
               Align(
                 alignment: Alignment.bottomCenter,

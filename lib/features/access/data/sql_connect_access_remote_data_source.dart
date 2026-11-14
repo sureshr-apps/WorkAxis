@@ -72,6 +72,9 @@ class SqlConnectAccessRemoteDataSource implements AccessRemoteDataSource {
             name: b.name,
             code: b.code,
             location: b.location ?? '',
+            latitude: b.latitude,
+            longitude: b.longitude,
+            geofenceRadiusMeters: b.geofenceRadiusMeters,
             isActive: b.status == 'active',
           ),
         )

@@ -165,6 +165,9 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
           ? 'Location verified at check-in'
           : 'Location is verified when you check in',
       isWithinGeofence: checkIn != null,
+      latitude: _displayBranch(access)?.latitude,
+      longitude: _displayBranch(access)?.longitude,
+      geofenceRadiusMeters: _displayBranch(access)?.geofenceRadiusMeters,
     );
   }
 

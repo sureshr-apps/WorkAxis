@@ -28,6 +28,9 @@ class EmployeeHomeSummary {
   final String elapsedActivePercentText;
   final String locationStatus;
   final bool isWithinGeofence;
+  final double? latitude;
+  final double? longitude;
+  final int? geofenceRadiusMeters;
   final String geofenceId;
   final String geofenceZone;
   final String networkMac;
@@ -73,6 +76,9 @@ class EmployeeHomeSummary {
     this.elapsedActivePercentText = unavailable,
     required this.locationStatus,
     required this.isWithinGeofence,
+    this.latitude,
+    this.longitude,
+    this.geofenceRadiusMeters,
     this.geofenceId = unavailable,
     this.geofenceZone = unavailable,
     this.networkMac = unavailable,
@@ -106,6 +112,9 @@ class EmployeeHomeSummary {
     double? shiftProgress,
     String? elapsedActive,
     String? elapsedActivePercentText,
+    double? latitude,
+    double? longitude,
+    int? geofenceRadiusMeters,
     int? pendingReturnsCount,
     int? approvedReturnsCount,
     String? recentReturnTitle,
@@ -135,6 +144,9 @@ class EmployeeHomeSummary {
           elapsedActivePercentText ?? this.elapsedActivePercentText,
       locationStatus: locationStatus,
       isWithinGeofence: isWithinGeofence,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      geofenceRadiusMeters: geofenceRadiusMeters ?? this.geofenceRadiusMeters,
       geofenceId: geofenceId,
       geofenceZone: geofenceZone,
       networkMac: networkMac,
