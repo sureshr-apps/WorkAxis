@@ -134,7 +134,10 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                   _handlePrimaryAction(controller, checkOut: true),
             ),
             const SizedBox(height: AppSpacing.lg),
-            ActiveGeofenceCard(summary: summary),
+            ActiveGeofenceCard(
+              summary: summary,
+              onRefreshLocation: _load,
+            ),
           ],
         );
         final rightColumn = Column(

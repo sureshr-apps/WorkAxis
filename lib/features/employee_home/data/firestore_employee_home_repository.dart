@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:workaxis/core/backend/callable_functions.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
@@ -53,7 +55,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     try {
       _requireEmployee(access);
       final entry = await _todayEntry(access.user.id);
-      return _summarize(access, entry);
+      return await _summarize(access, entry);
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -125,10 +127,31 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     return snapshot.docs.isEmpty ? null : snapshot.docs.first.data();
   }
 
-  EmployeeHomeSummary _summarize(
+  static const double _earthRadiusMeters = 6371000.0;
+
+  static double _distanceMeters(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    double toRad(double deg) => (deg * math.pi) / 180.0;
+    final dLat = toRad(lat2 - lat1);
+    final dLon = toRad(lon2 - lon1);
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(toRad(lat1)) *
+            math.cos(toRad(lat2)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+    final c = 2 * math.asin(math.min(1.0, math.sqrt(a)));
+    return _earthRadiusMeters * c;
+  }
+
+  Future<EmployeeHomeSummary> _summarize(
     UserAccessContext access,
     Map<String, dynamic>? entry,
-  ) {
+  ) async {
     final checkIn = AttendanceEntryMapper.instant(entry?['checkInAt']);
     final checkOut = AttendanceEntryMapper.instant(entry?['checkOutAt']);
     final breaks = _breaks(entry?['breaks']);
@@ -147,11 +170,44 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         : _worked(checkIn, checkOut ?? _now(), breaks);
     final recordedByManager = entry?['source'] == 'manager-group';
 
+    final branch = _displayBranch(access);
+    bool isWithinGeofence = checkIn != null;
+    String locationStatus = checkIn != null
+        ? 'Location verified at check-in'
+        : 'Location is verified when you check in';
+
+    if (checkIn == null &&
+        branch != null &&
+        branch.latitude != null &&
+        branch.longitude != null) {
+      try {
+        final fix = await _location
+            .currentLocation()
+            .timeout(const Duration(seconds: 4));
+        final distance = _distanceMeters(
+          fix.latitude,
+          fix.longitude,
+          branch.latitude!,
+          branch.longitude!,
+        );
+        final radius = branch.geofenceRadiusMeters ?? 150;
+        isWithinGeofence = distance <= radius;
+        if (isWithinGeofence) {
+          locationStatus = 'Inside geofence • Ready to check in';
+        } else {
+          locationStatus =
+              'Outside geofence (${distance.round()}m away, radius: ${radius}m)';
+        }
+      } catch (_) {
+        // Location permission denied, service disabled, or timed out.
+      }
+    }
+
     return EmployeeHomeSummary(
       employeeId: access.user.id,
       employeeName: access.user.name,
       branchName:
-          _displayBranch(access)?.name ?? EmployeeHomeSummary.unavailable,
+          branch?.name ?? EmployeeHomeSummary.unavailable,
       organizationName: access.organization!.name,
       shiftName: EmployeeHomeSummary.unavailable,
       shiftHours: EmployeeHomeSummary.unavailable,
@@ -161,13 +217,11 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       checkOutTime: AppFormatters.formatTime(checkOut, placeholder: '-- : --'),
       workingDuration: worked == null ? '0h 00m' : _formatDuration(worked),
       shiftProgress: 0,
-      locationStatus: checkIn != null
-          ? 'Location verified at check-in'
-          : 'Location is verified when you check in',
-      isWithinGeofence: checkIn != null,
-      latitude: _displayBranch(access)?.latitude,
-      longitude: _displayBranch(access)?.longitude,
-      geofenceRadiusMeters: _displayBranch(access)?.geofenceRadiusMeters,
+      locationStatus: locationStatus,
+      isWithinGeofence: isWithinGeofence,
+      latitude: branch?.latitude,
+      longitude: branch?.longitude,
+      geofenceRadiusMeters: branch?.geofenceRadiusMeters,
     );
   }
 

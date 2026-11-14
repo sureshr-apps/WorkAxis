@@ -11,9 +11,14 @@ import 'package:workaxis/features/employee_home/presentation/screens/widgets/geo
 /// Geofence card: location status, a schematic map and the telemetry tiles the
 /// backend actually provided. Tiles without data are omitted, never invented.
 class ActiveGeofenceCard extends StatelessWidget {
-  const ActiveGeofenceCard({super.key, required this.summary});
+  const ActiveGeofenceCard({
+    super.key,
+    required this.summary,
+    this.onRefreshLocation,
+  });
 
   final EmployeeHomeSummary summary;
+  final VoidCallback? onRefreshLocation;
 
   static bool _has(String value) =>
       value.isNotEmpty && value != EmployeeHomeSummary.unavailable;
@@ -84,14 +89,29 @@ class ActiveGeofenceCard extends StatelessWidget {
             ),
           ],
         ),
-        StatusChip(
-          label: summary.isWithinGeofence
-              ? 'Inside geofence'
-              : 'Outside geofence',
-          type: summary.isWithinGeofence
-              ? StatusType.active
-              : StatusType.urgent,
-          width: null,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            StatusChip(
+              label: summary.isWithinGeofence
+                  ? 'Inside geofence'
+                  : 'Outside geofence',
+              type: summary.isWithinGeofence
+                  ? StatusType.active
+                  : StatusType.urgent,
+              width: null,
+            ),
+            if (onRefreshLocation != null) ...[
+              const SizedBox(width: AppSpacing.xs),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 18),
+                tooltip: 'Recheck geofence',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                onPressed: onRefreshLocation,
+              ),
+            ],
+          ],
         ),
       ],
     );

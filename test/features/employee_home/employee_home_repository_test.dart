@@ -3,7 +3,10 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/core/backend/callable_functions.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/features/access/domain/models/active_branch_context.dart';
+import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employee_home/data/firestore_employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/data/mock_employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/models/device_location.dart';
@@ -166,6 +169,55 @@ void main() {
         }
       },
     );
+
+    test('evaluates live geofence when branch has coordinates', () async {
+      final geofenceBranch = BranchSummary(
+        id: 'br-geo-01',
+        organizationId: acmeOrg.id,
+        name: 'Geofence Test Branch',
+        code: 'GEO-01',
+        location: 'City',
+        latitude: 12.9716,
+        longitude: 77.5946,
+        geofenceRadiusMeters: 150,
+      );
+      final geofenceAccess = UserAccessContext(
+        user: fixtureUser(UserRole.employee, id: 'user-emp-01', name: 'Sarah Connor'),
+        organization: acmeOrg,
+        assignedBranches: [geofenceBranch],
+        activeBranch: ActiveBranchContext.fromBranch(geofenceBranch),
+      );
+
+      final summary = await repo.getEmployeeHomeSummary(access: geofenceAccess);
+
+      // _FixedLocation is at (12.9716, 77.5946), exactly at branch center
+      expect(summary.isWithinGeofence, isTrue);
+      expect(summary.locationStatus, contains('Inside geofence'));
+    });
+
+    test('evaluates outside geofence when device is far from branch', () async {
+      final farBranch = BranchSummary(
+        id: 'br-geo-02',
+        organizationId: acmeOrg.id,
+        name: 'Far Test Branch',
+        code: 'GEO-02',
+        location: 'City',
+        latitude: 13.5000,
+        longitude: 78.5000,
+        geofenceRadiusMeters: 100,
+      );
+      final farAccess = UserAccessContext(
+        user: fixtureUser(UserRole.employee, id: 'user-emp-01', name: 'Sarah Connor'),
+        organization: acmeOrg,
+        assignedBranches: [farBranch],
+        activeBranch: ActiveBranchContext.fromBranch(farBranch),
+      );
+
+      final summary = await repo.getEmployeeHomeSummary(access: farAccess);
+
+      expect(summary.isWithinGeofence, isFalse);
+      expect(summary.locationStatus, contains('Outside geofence'));
+    });
 
     test('only employees may load it', () async {
       await expectLater(
