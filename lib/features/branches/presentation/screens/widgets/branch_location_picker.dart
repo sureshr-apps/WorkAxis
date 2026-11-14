@@ -51,6 +51,22 @@ class BranchLocationPicker extends StatefulWidget {
 class _BranchLocationPickerState extends State<BranchLocationPicker> {
   GoogleMapController? _mapController;
   bool _isLocating = false;
+  bool _hasLocationPermission = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialPermission();
+  }
+
+  Future<void> _checkInitialPermission() async {
+    try {
+      final p = await Geolocator.checkPermission();
+      if (p == LocationPermission.always || p == LocationPermission.whileInUse) {
+        if (mounted) setState(() => _hasLocationPermission = true);
+      }
+    } catch (_) {}
+  }
 
   @override
   void didUpdateWidget(covariant BranchLocationPicker oldWidget) {
@@ -89,6 +105,7 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
         }
         return;
       }
+      setState(() => _hasLocationPermission = true);
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -202,7 +219,7 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
                   zoomGesturesEnabled: true,
                   rotateGesturesEnabled: true,
                   tiltGesturesEnabled: false,
-                  myLocationEnabled: true,
+                  myLocationEnabled: _hasLocationPermission,
                   myLocationButtonEnabled: false,
                   zoomControlsEnabled: true,
                   mapToolbarEnabled: false,
