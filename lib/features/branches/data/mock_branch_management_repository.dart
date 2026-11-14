@@ -103,6 +103,9 @@ class MockBranchManagementRepository implements BranchManagementRepository {
           ? existing?.code ?? _nextBranchCode()
           : branch.code.trim(),
       location: branch.location.trim(),
+      latitude: branch.latitude,
+      longitude: branch.longitude,
+      geofenceRadiusMeters: branch.geofenceRadiusMeters,
       activeEmployeeCount: existing?.activeEmployeeCount ?? 0,
       isActive: branch.isActive,
     );

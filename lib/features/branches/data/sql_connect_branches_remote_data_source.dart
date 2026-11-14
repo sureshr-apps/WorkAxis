@@ -111,6 +111,9 @@ class SqlConnectBranchesRemoteDataSource implements BranchesRemoteDataSource {
         name: name,
         code: code,
         location: location ?? '',
+        latitude: latitude,
+        longitude: longitude,
+        geofenceRadiusMeters: radius,
         isActive: status == 'active',
       ),
       geofenceRadiusMeters:

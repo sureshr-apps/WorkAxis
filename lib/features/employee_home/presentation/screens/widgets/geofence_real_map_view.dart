@@ -3,6 +3,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -13,7 +14,7 @@ import 'package:workaxis/features/employee_home/presentation/screens/widgets/geo
 ///
 /// In compliance with user requirements, map dragging/panning is disabled
 /// ([scrollGesturesEnabled: false]) to keep focus fixed on the authorized geofence.
-class GeofenceRealMapView extends StatelessWidget {
+class GeofenceRealMapView extends StatefulWidget {
   const GeofenceRealMapView({
     super.key,
     this.latitude,
@@ -54,6 +55,32 @@ class GeofenceRealMapView extends StatelessWidget {
     return WidgetsBinding.instance.runtimeType.toString().contains('Test');
   }
 
+  @override
+  State<GeofenceRealMapView> createState() => _GeofenceRealMapViewState();
+}
+
+class _GeofenceRealMapViewState extends State<GeofenceRealMapView> {
+  bool _hasLocationPermission = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermission();
+  }
+
+  Future<void> _checkPermission() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (mounted &&
+          (permission == LocationPermission.always ||
+              permission == LocationPermission.whileInUse)) {
+        setState(() => _hasLocationPermission = true);
+      }
+    } catch (_) {
+      // Platform channel unavailable or during headless tests.
+    }
+  }
+
   double _computeZoom(int radiusMeters) {
     if (radiusMeters <= 100) return 17.0;
     if (radiusMeters <= 250) return 16.0;
@@ -64,24 +91,27 @@ class GeofenceRealMapView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lat = latitude ?? defaultLatitude;
-    final lng = longitude ?? defaultLongitude;
-    final radius = geofenceRadiusMeters ?? defaultRadiusMeters;
+    final lat = widget.latitude ?? GeofenceRealMapView.defaultLatitude;
+    final lng = widget.longitude ?? GeofenceRealMapView.defaultLongitude;
+    final radius =
+        widget.geofenceRadiusMeters ?? GeofenceRealMapView.defaultRadiusMeters;
     final center = LatLng(lat, lng);
 
     // Provide a reliable rendering fallback on Windows desktop or headless tests
     // where Google Maps platform views are not available.
-    if (forceFallback || isHeadlessTest || !isPlatformSupported) {
+    if (widget.forceFallback ||
+        GeofenceRealMapView.isHeadlessTest ||
+        !GeofenceRealMapView.isPlatformSupported) {
       return _FallbackMapView(
         latitude: lat,
         longitude: lng,
         radiusMeters: radius,
-        isWithinGeofence: isWithinGeofence,
-        branchName: branchName,
+        isWithinGeofence: widget.isWithinGeofence,
+        branchName: widget.branchName,
       );
     }
 
-    final fenceColor = isWithinGeofence
+    final fenceColor = widget.isWithinGeofence
         ? AppColors.primary
         : AppColors.error;
 
@@ -95,6 +125,7 @@ class GeofenceRealMapView extends StatelessWidget {
       zoomGesturesEnabled: false,
       tiltGesturesEnabled: false,
       rotateGesturesEnabled: false,
+      myLocationEnabled: _hasLocationPermission,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
       mapToolbarEnabled: false,
@@ -115,7 +146,7 @@ class GeofenceRealMapView extends StatelessWidget {
           markerId: const MarkerId('branch_center'),
           position: center,
           infoWindow: InfoWindow(
-            title: branchName ?? 'Branch Geofence',
+            title: widget.branchName ?? 'Branch Geofence',
             snippet: '${radius}m perimeter',
           ),
         ),
