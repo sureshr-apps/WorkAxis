@@ -170,10 +170,11 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          BUILD_NUMBER=$((100 + GITHUB_RUN_NUMBER))
           flutter build apk --release --dart-define=BACKEND_MODE=firebase \
-            --build-number=${{ github.run_number }}
+            --build-number="$BUILD_NUMBER"
           flutter build appbundle --release --dart-define=BACKEND_MODE=firebase \
-            --build-number=${{ github.run_number }}
+            --build-number="$BUILD_NUMBER"
 
       - name: Remove keystore
         if: always()
