@@ -23,33 +23,39 @@ class PageBreadcrumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Semantics(
-          button: true,
-          label: 'Back to $backLabel',
-          child: InkWell(
-            onTap: onBack,
-            borderRadius: AppSpacing.roundedXs,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minHeight: AppSpacing.minTouchTarget,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.arrow_back,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    backLabel,
-                    style: AppTypography.bodySmall.copyWith(
-                      fontWeight: FontWeight.w500,
+        // Long names (e.g. an organization) shorten rather than overflow the row.
+        Flexible(
+          child: Semantics(
+            button: true,
+            label: 'Back to $backLabel',
+            child: InkWell(
+              onTap: onBack,
+              borderRadius: AppSpacing.roundedXs,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: AppSpacing.minTouchTarget,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.arrow_back,
+                      size: 16,
                       color: AppColors.primary,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: AppSpacing.xs),
+                    Flexible(
+                      child: Text(
+                        backLabel,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall.copyWith(
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

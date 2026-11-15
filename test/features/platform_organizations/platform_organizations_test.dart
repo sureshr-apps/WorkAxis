@@ -9,6 +9,8 @@ import 'package:workaxis/features/platform_organizations/presentation/controller
 import 'package:workaxis/features/platform_organizations/presentation/screens/add_organization_screen.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/edit_organization_screen.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organization_details_screen.dart';
+import 'package:workaxis/features/platform_organizations/presentation/screens/organization_license_route.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/pages/assign_license_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
@@ -323,6 +325,37 @@ void main() {
       );
     }
 
+    /// Like [buildDetailsTestWidget], but routed, so license actions can open
+    /// their pages.
+    Widget buildDetailsRouterWidget({
+      required PlatformOrganizationsController controller,
+      required String orgId,
+    }) {
+      final router = GoRouter(
+        initialLocation: AppRoutes.platformOrganizationDetailsPath(orgId),
+        routes: [
+          GoRoute(
+            path: AppRoutes.platformOrganizationDetails,
+            builder: (context, state) => OrganizationDetailsScreen(
+              organizationId: state.pathParameters['id'] ?? '',
+            ),
+          ),
+          GoRoute(
+            path: '/platform/organizations/:id/license/:action',
+            builder: (context, state) => OrganizationLicenseRoute(
+              organizationId: state.pathParameters['id'] ?? '',
+              action: state.pathParameters['action'] ?? '',
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      return ChangeNotifierProvider<PlatformOrganizationsController>.value(
+        value: controller,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      );
+    }
+
     testWidgets('renders organization details, KPI cards, and admins list', (
       tester,
     ) async {
@@ -424,7 +457,10 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       await tester.pumpWidget(
-        buildDetailsTestWidget(controller: controller, orgId: 'org-crestline'),
+        buildDetailsRouterWidget(
+          controller: controller,
+          orgId: 'org-crestline',
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -438,7 +474,7 @@ void main() {
 
       await tester.tap(find.text('Assign License'));
       await tester.pumpAndSettle();
-      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.byType(AssignLicensePage), findsOneWidget);
       expect(find.text('License plan'), findsOneWidget);
     });
 

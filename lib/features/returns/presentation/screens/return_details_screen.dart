@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:workaxis/core/widgets/attachment_image.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
+import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
+import 'package:workaxis/core/widgets/attachment_image.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/presentation/return_presentation.dart';
+import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
 /// Reviews a return decision. Returns null on success, or the message to show
 /// inline when the decision could not be saved.
@@ -18,23 +23,37 @@ typedef ReturnReviewHandler = Future<String?> Function(
   String notes,
 );
 
-class ReturnDetailsDialog extends StatefulWidget {
-  final ReturnItem item;
-  final bool canReview;
-  final ReturnReviewHandler? onReviewDecision;
-
-  const ReturnDetailsDialog({
+/// Return request page: the proof, product and decision for one return.
+///
+/// The page only reports outcomes: [onClose] for back and close, and
+/// [onReviewed] after a successful decision. The route decides where to go.
+class ReturnDetailsScreen extends StatefulWidget {
+  const ReturnDetailsScreen({
     super.key,
     required this.item,
+    required this.eyebrow,
+    required this.backLabel,
+    required this.onClose,
     this.canReview = false,
     this.onReviewDecision,
+    this.onReviewed,
   });
 
+  final ReturnItem item;
+  final String eyebrow;
+
+  /// Name of the list the page belongs to, shown in the breadcrumb.
+  final String backLabel;
+  final VoidCallback onClose;
+  final bool canReview;
+  final ReturnReviewHandler? onReviewDecision;
+  final VoidCallback? onReviewed;
+
   @override
-  State<ReturnDetailsDialog> createState() => _ReturnDetailsDialogState();
+  State<ReturnDetailsScreen> createState() => _ReturnDetailsScreenState();
 }
 
-class _ReturnDetailsDialogState extends State<ReturnDetailsDialog> {
+class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
   final _notesController = TextEditingController();
   bool _isSubmitting = false;
   String? _errorMessage;
@@ -63,112 +82,145 @@ class _ReturnDetailsDialogState extends State<ReturnDetailsDialog> {
         });
       }
     }
-    if (error == null && mounted) Navigator.of(context).pop();
+    if (error == null && mounted) widget.onReviewed?.call();
   }
 
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
     final isPending = item.status == ReturnStatus.pending;
+    final showReviewActions = widget.canReview && isPending;
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: AppSpacing.roundedLg),
-      backgroundColor: AppColors.surfaceContainerLowest,
-      insetPadding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.lg,
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 620,
-          maxHeight: MediaQuery.sizeOf(context).height * 0.9,
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _Header(item: item),
-              const SizedBox(height: AppSpacing.lg),
-              const Divider(
-                height: 1,
-                thickness: 1,
-                color: AppColors.outlineSubtle,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _ProductBlock(item: item),
-              const SizedBox(height: AppSpacing.md),
-              if (item.remarks != null && item.remarks!.isNotEmpty) ...[
-                const _SectionLabel('Condition Remarks'),
-                const SizedBox(height: AppSpacing.xs),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerLowest,
-                    borderRadius: AppSpacing.roundedSm,
-                    border: Border.all(color: AppColors.outlineSubtle),
-                  ),
-                  child: Text(item.remarks!, style: AppTypography.bodyMedium),
+    // No leaving (system back, browser back) while a decision is in flight.
+    return PopScope(
+      canPop: !_isSubmitting,
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(
+              context.isCompact ? AppSpacing.md : AppSpacing.xl,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: AppBreakpoints.maxContentWidth,
                 ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              const _SectionLabel('Proof Photo / Bill Attachment'),
-              const SizedBox(height: AppSpacing.xs),
-              _BillAttachmentTile(imageUrl: item.billImageUrl),
-              const SizedBox(height: AppSpacing.md),
-              if (!isPending && item.reviewedBy != null) ...[
-                _DecisionSummary(item: item),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              if (_errorMessage != null) ...[
-                ErrorBanner(message: _errorMessage!),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              if (widget.canReview && isPending) ...[
-                const _SectionLabel('Reviewer Decision Remarks'),
-                const SizedBox(height: AppSpacing.xs),
-                AppTextField(
-                  controller: _notesController,
-                  maxLines: 2,
-                  hintText: 'Enter reason or credit approval notes...',
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: AppSpacing.md,
-                  runSpacing: AppSpacing.sm,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    AppButton.outlined(
-                      text: 'Reject Request',
-                      isFullWidth: false,
-                      isLoading: _isSubmitting,
-                      onPressed: () => _handleDecision(ReturnStatus.rejected),
+                    PageBreadcrumb(
+                      backLabel: widget.backLabel,
+                      currentLabel: 'Return #${item.id}',
+                      onBack: widget.onClose,
                     ),
-                    AppButton.primary(
-                      text: 'Approve Return',
-                      isFullWidth: false,
-                      isLoading: _isSubmitting,
-                      onPressed: () => _handleDecision(ReturnStatus.approved),
+                    const SizedBox(height: AppSpacing.md),
+                    AppPageHeader(
+                      eyebrow: widget.eyebrow,
+                      title: 'Return Details',
+                      subtitle: 'Proof of purchase, quantity, reason and decision for this return.',
                     ),
+                    const SizedBox(height: AppSpacing.lg),
+                    DashboardSurfaceCard(
+                      // Text fields need a Material ancestor inside the card's box.
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: _buildContent(
+                          item,
+                          isPending,
+                          showReviewActions,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    _buildFooter(showReviewActions),
+                    const SizedBox(height: AppSpacing.xxl),
                   ],
                 ),
-              ] else ...[
-                const SizedBox(height: AppSpacing.sm),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: AppButton.outlined(
-                    text: 'Close',
-                    isFullWidth: false,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ),
-              ],
-            ],
+              ),
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildContent(
+    ReturnItem item,
+    bool isPending,
+    bool showReviewActions,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_errorMessage != null) ...[
+          ErrorBanner(message: _errorMessage!),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        _Header(item: item),
+        const SizedBox(height: AppSpacing.lg),
+        const Divider(height: 1, thickness: 1, color: AppColors.outlineSubtle),
+        const SizedBox(height: AppSpacing.md),
+        _ProductBlock(item: item),
+        const SizedBox(height: AppSpacing.md),
+        if (item.remarks != null && item.remarks!.isNotEmpty) ...[
+          const _SectionLabel('Condition Remarks'),
+          const SizedBox(height: AppSpacing.xs),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              borderRadius: AppSpacing.roundedSm,
+              border: Border.all(color: AppColors.outlineSubtle),
+            ),
+            child: Text(item.remarks!, style: AppTypography.bodyMedium),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        const _SectionLabel('Proof Photo / Bill Attachment'),
+        const SizedBox(height: AppSpacing.xs),
+        _BillAttachmentTile(imageUrl: item.billImageUrl),
+        const SizedBox(height: AppSpacing.md),
+        if (!isPending && item.reviewedBy != null) ...[
+          _DecisionSummary(item: item),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (showReviewActions) ...[
+          const _SectionLabel('Reviewer Decision Remarks'),
+          const SizedBox(height: AppSpacing.xs),
+          AppTextField(
+            controller: _notesController,
+            maxLines: 2,
+            hintText: 'Enter reason or credit approval notes...',
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// The breadcrumb is the way back, so a page without review actions has no
+  /// footer.
+  Widget _buildFooter(bool showReviewActions) {
+    if (!showReviewActions) return const SizedBox.shrink();
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: AppSpacing.md,
+      runSpacing: AppSpacing.sm,
+      children: [
+        AppButton.outlined(
+          text: 'Reject Request',
+          isFullWidth: false,
+          isLoading: _isSubmitting,
+          onPressed: () => _handleDecision(ReturnStatus.rejected),
+        ),
+        AppButton.primary(
+          text: 'Approve Return',
+          isFullWidth: false,
+          isLoading: _isSubmitting,
+          onPressed: () => _handleDecision(ReturnStatus.approved),
+        ),
+      ],
     );
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_sliver_page.dart';
@@ -12,11 +14,9 @@ import 'package:workaxis/features/access/presentation/controllers/branch_context
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/presentation/controllers/returns_controller.dart';
-import 'package:workaxis/features/returns/presentation/screens/widgets/return_details_dialog.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_filter_bar.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_sliver_body.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_table.dart';
-import 'package:workaxis/features/returns/presentation/screens/widgets/submit_return_dialog.dart';
 
 /// Return review queue for Organization Admins and Branch Managers.
 class ReturnsOperationsScreen extends StatefulWidget {
@@ -57,89 +57,21 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
     );
   }
 
-  void _showDetails(ReturnItem item, bool canReview) {
-    final access = context.read<AccessController>().accessContext;
-    if (access == null) return;
-    final controller = context.read<ReturnsController>();
-    final activeBranchId = _activeBranchId;
-    controller.clearActionError();
-    showDialog<void>(
-      context: context,
-      builder: (_) => ReturnDetailsDialog(
-        item: item,
-        canReview: canReview,
-        onReviewDecision: (decision, notes) async {
-          final saved = await controller.reviewReturn(
-            access: access,
-            activeBranchId: activeBranchId,
-            item: item,
-            decision: decision,
-            reviewerNotes: notes,
-          );
-          if (!saved) {
-            return controller.actionErrorMessage ??
-                'The decision could not be saved.';
-          }
-          if (mounted) {
-            final approved = decision == ReturnStatus.approved;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  approved
-                      ? 'Return request #${item.id} approved.'
-                      : 'Return request #${item.id} rejected.',
-                ),
-                backgroundColor: approved
-                    ? AppColors.statusActive
-                    : AppColors.statusUrgent,
-              ),
-            );
-          }
-          return null;
-        },
-      ),
-    );
+  /// Organization admins and branch managers open the same list, so the page
+  /// is picked by role.
+  void _openDetails(ReturnItem item) {
+    final path = _isManager
+        ? AppRoutes.branchManagerReturnDetailsPath(item.id)
+        : AppRoutes.orgAdminReturnDetailsPath(item.id);
+    context.push(path);
   }
 
-  void _openSubmitDialog() {
-    final access = context.read<AccessController>().accessContext;
-    if (access == null) return;
-    final controller = context.read<ReturnsController>();
-    controller.clearActionError();
+  /// Only branch managers record returns from this list.
+  void _openSubmit() => context.push(AppRoutes.branchManagerReturnAddPath);
 
-    showDialog<bool>(
-      context: context,
-      builder: (_) => SubmitReturnDialog(
-        availableBranches: access.activeAssignedBranches,
-        initialBranchId: _activeBranchId,
-        onSubmitBatch: (batch) async {
-          final saved = await controller.submitReturnBatch(
-            access: access,
-            branchId: batch.branchId ?? _activeBranchId,
-            input: batch,
-          );
-          if (!saved) {
-            return controller.actionErrorMessage ??
-                'The return request could not be submitted.';
-          }
-          if (mounted) {
-            final count = batch.items.length;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  count == 1
-                      ? 'Return recorded successfully.'
-                      : '$count return items recorded successfully.',
-                ),
-                backgroundColor: AppColors.statusActive,
-              ),
-            );
-          }
-          return null;
-        },
-      ),
-    );
-  }
+  bool get _isManager =>
+      context.read<AccessController>().accessContext?.user.role ==
+      UserRole.branchManager;
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +106,7 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
                     ? AppButton.responsive(
                         text: 'Record Return',
                         iconData: Icons.add_circle_outline,
-                        onPressed: _openSubmitDialog,
+                        onPressed: _openSubmit,
                       )
                     : null,
               ),
@@ -233,7 +165,7 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
             SliverReturnsBody(
               controller: controller,
               showReviewAction: canReview,
-              onOpen: (item) => _showDetails(item, canReview),
+              onOpen: _openDetails,
               onRetry: _loadData,
               emptyTitle: 'No return requests found',
               emptyMessage: 'There are no returned products matching your filter criteria.',
@@ -246,7 +178,7 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
                 ReturnsTableColumn.status(),
                 ReturnsTableColumn.action(
                   canReview: canReview,
-                  onOpen: (item) => _showDetails(item, canReview),
+                  onOpen: _openDetails,
                 ),
               ],
             ),

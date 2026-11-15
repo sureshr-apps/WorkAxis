@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -21,7 +23,6 @@ import 'package:workaxis/features/attendance/presentation/controllers/attendance
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_date_selector.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_dialogs.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_records_sliver.dart';
-import 'package:workaxis/features/attendance/presentation/screens/widgets/group_attendance_dialog.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
 class AttendanceOperationsScreen extends StatefulWidget {
@@ -156,7 +157,7 @@ class _AttendanceOperationsScreenState
                     iconData: Icons.group_add_outlined,
                     isFullWidth: false,
                     onPressed: () =>
-                        _openGroupAttendance(context, access, _branchId),
+                        context.push(_groupCheckInPath(access.user.role)),
                   ),
                 ]
               : null,
@@ -276,15 +277,29 @@ class _AttendanceOperationsScreenState
       onReview: canReview
           ? (entry, decision) => _review(entry, access!, decision)
           : null,
-      onDetails: (entry) => showAttendanceDetailsDialog(
-        context,
-        entry: entry,
-        branchName: _branchName(entry.branchId, access),
-      ),
+      onDetails: (entry) {
+        final role = access?.user.role;
+        if (role != null) context.push(_detailsPath(role, entry.id));
+      },
     );
   }
 
   Widget _message(Widget child) => SliverToBoxAdapter(child: child);
+
+  /// Each role reaches attendance under its own route prefix.
+  String _groupCheckInPath(UserRole role) => role == UserRole.branchManager
+      ? AppRoutes.branchManagerAttendanceGroupPath
+      : AppRoutes.orgAdminAttendanceGroupPath;
+
+  String _detailsPath(UserRole role, String id) {
+    if (role == UserRole.employee) {
+      return AppRoutes.employeeAttendanceDetailsPath(id);
+    }
+    if (role == UserRole.branchManager) {
+      return AppRoutes.branchManagerAttendanceDetailsPath(id);
+    }
+    return AppRoutes.orgAdminAttendanceDetailsPath(id);
+  }
 
   String _branchName(String id, UserAccessContext? access) {
     for (final branch in access?.assignedBranches ?? const []) {
@@ -302,34 +317,6 @@ class _AttendanceOperationsScreenState
             : AppColors.statusActiveText,
       ),
     );
-  }
-
-  Future<void> _openGroupAttendance(
-    BuildContext context,
-    UserAccessContext access,
-    String? activeBranchId,
-  ) async {
-    final controller = context.read<AttendanceController>()..clearActionError();
-    final success = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => GroupAttendanceDialog(
-        access: access,
-        initialBranchId: activeBranchId,
-        initialDate: controller.selectedDate,
-        existingEntries: controller.entries,
-        onSubmit: (request) =>
-            controller.markGroupAttendance(access: access, request: request),
-        failureMessage: () => controller.actionErrorMessage,
-      ),
-    );
-
-    if (success == true && mounted) {
-      _showSnack(
-        'Group attendance check-in recorded successfully.',
-        isError: false,
-      );
-    }
   }
 
   Future<void> _review(

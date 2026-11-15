@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_admin_rules.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
+import 'package:workaxis/features/platform_organizations/presentation/screens/organization_admin_form_route.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organization_details_screen.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/organization_admin_dialog.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/organization_admin_form_page.dart';
 
 /// Fails every administrator write, to test error surfacing.
 class _FailingAdminRepository extends MockPlatformOrganizationsRepository {
@@ -22,9 +26,14 @@ class _FailingAdminRepository extends MockPlatformOrganizationsRepository {
   }) => throw const NetworkException('offline');
 }
 
-Widget _dialogHost(OrganizationAdminSubmit onSubmit) => MaterialApp(
+Widget _formHost(OrganizationAdminSubmit onSubmit) => MaterialApp(
   theme: AppTheme.light,
-  home: Scaffold(body: OrganizationAdminDialog(onSubmit: onSubmit)),
+  home: OrganizationAdminFormPage(
+    backLabel: 'Acme Corporation',
+    onSubmit: onSubmit,
+    onClose: () {},
+    onSaved: () {},
+  ),
 );
 
 Widget _detailsHost(PlatformOrganizationsController controller, String id) =>
@@ -144,13 +153,13 @@ void main() {
     });
   });
 
-  group('OrganizationAdminDialog', () {
+  group('OrganizationAdminFormPage', () {
     testWidgets('shows a message under each invalid field', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1280, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       var submitted = false;
       await tester.pumpWidget(
-        _dialogHost((draft) async {
+        _formHost((draft) async {
           submitted = true;
           return null;
         }),
@@ -172,7 +181,7 @@ void main() {
     ) async {
       await tester.binding.setSurfaceSize(const Size(1280, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(_dialogHost((_) async => null));
+      await tester.pumpWidget(_formHost((_) async => null));
       final fields = find.byType(TextField);
       await tester.enterText(fields.at(0), 'John Doe');
       await tester.enterText(fields.at(1), 'johndoe');
@@ -194,7 +203,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       OrganizationAdminDraft? received;
       await tester.pumpWidget(
-        _dialogHost((draft) async {
+        _formHost((draft) async {
           received = draft;
           return null;
         }),
@@ -214,13 +223,13 @@ void main() {
       expect(received!.initialPassword, 'password1');
     });
 
-    testWidgets('a failed save keeps the dialog open with the entries', (
+    testWidgets('a failed save keeps the page open with the entries', (
       tester,
     ) async {
       await tester.binding.setSurfaceSize(const Size(1280, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
-        _dialogHost((_) async => 'That username is already in use.'),
+        _formHost((_) async => 'That username is already in use.'),
       );
       final fields = find.byType(TextField);
       await tester.enterText(fields.at(0), 'John Doe');
@@ -334,5 +343,64 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  });
+
+  group('administrator pages in the router', () {
+    testWidgets(
+      'add opens a page whose breadcrumb returns to the organization',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1280, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final controller = PlatformOrganizationsController(
+          repository: MockPlatformOrganizationsRepository(),
+        );
+        addTearDown(controller.dispose);
+        final router = GoRouter(
+          initialLocation: AppRoutes.platformOrganizationAdminAddPath(
+            'org-acme',
+          ),
+          routes: [
+            GoRoute(
+              path: AppRoutes.platformOrganizationDetails,
+              builder: (context, state) => OrganizationDetailsScreen(
+                organizationId: state.pathParameters['id'] ?? '',
+              ),
+            ),
+            GoRoute(
+              path: '/platform/organizations/:id/administrators/add',
+              builder: (context, state) => OrganizationAdminFormRoute(
+                organizationId: state.pathParameters['id'] ?? '',
+              ),
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
+
+        await tester.pumpWidget(
+          ChangeNotifierProvider<PlatformOrganizationsController>.value(
+            value: controller,
+            child: MaterialApp.router(
+              theme: AppTheme.light,
+              routerConfig: router,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(OrganizationAdminFormPage), findsOneWidget);
+        expect(find.text('Add Administrator'), findsWidgets);
+
+        await tester.tap(
+          find.descendant(
+            of: find.byType(PageBreadcrumb),
+            matching: find.byType(InkWell),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(OrganizationAdminFormPage), findsNothing);
+        expect(find.byType(OrganizationDetailsScreen), findsOneWidget);
+      },
+    );
   });
 }

@@ -33,6 +33,21 @@ abstract final class AppRoutes {
 
   static String platformUserDetailsPath(String id) => '/platform/users/$id';
   static String platformUserEditPath(String id) => '/platform/users/$id/edit';
+  static String platformUserResetPasswordPath(String id) =>
+      '/platform/users/$id/reset-password';
+
+  static String platformOrganizationAdminAddPath(String orgId) =>
+      '/platform/organizations/$orgId/administrators/add';
+  static String platformOrganizationAdminEditPath(
+    String orgId,
+    String adminId,
+  ) => '/platform/organizations/$orgId/administrators/$adminId/edit';
+  static String platformOrganizationAdminPasswordPath(
+    String orgId,
+    String adminId,
+  ) => '/platform/organizations/$orgId/administrators/$adminId/password';
+  static String platformOrganizationLicensePath(String orgId, String action) =>
+      '/platform/organizations/$orgId/license/$action';
   static const String platformSettings = '/platform/settings';
 
   // Organization Admin destinations
@@ -41,6 +56,12 @@ abstract final class AppRoutes {
   static const String orgAdminEmployees = '/organization/employees';
   static const String orgAdminAttendance = '/organization/attendance';
   static const String orgAdminReturns = '/organization/returns';
+  static String orgAdminReturnDetailsPath(String id) =>
+      '/organization/returns/$id';
+  static const String orgAdminAttendanceGroupPath =
+      '/organization/attendance/group';
+  static String orgAdminAttendanceDetailsPath(String id) =>
+      '/organization/attendance/$id';
   static const String orgAdminReports = '/organization/reports';
   static const String orgAdminSettings = '/organization/settings';
 
@@ -68,10 +89,22 @@ abstract final class AppRoutes {
       '/branch-manager/employees/add';
   static String branchManagerEmployeeEditPath(String id) =>
       '/branch-manager/employees/$id/edit';
+  static const String branchManagerReturnAddPath =
+      '/branch-manager/returns/add';
+  static String branchManagerReturnDetailsPath(String id) =>
+      '/branch-manager/returns/$id';
+  static const String branchManagerAttendanceGroupPath =
+      '/branch-manager/attendance/group';
+  static String branchManagerAttendanceDetailsPath(String id) =>
+      '/branch-manager/attendance/$id';
 
   // Employee destinations
   static const String employeeWorkspace = '/employee';
   static const String employeeAttendance = '/employee/attendance';
   static const String employeeReturns = '/employee/returns';
   static const String employeeProfile = '/employee/profile';
+  static const String employeeReturnAddPath = '/employee/returns/add';
+  static String employeeReturnDetailsPath(String id) => '/employee/returns/$id';
+  static String employeeAttendanceDetailsPath(String id) =>
+      '/employee/attendance/$id';
 }

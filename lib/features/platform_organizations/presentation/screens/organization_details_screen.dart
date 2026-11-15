@@ -180,6 +180,12 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
         return OrganizationLicenseTab(
           organization: organization,
           controller: controller.license,
+          onAction: (action) => context.push(
+            AppRoutes.platformOrganizationLicensePath(
+              organization.id,
+              action.routeSegment,
+            ),
+          ),
         );
     }
   }

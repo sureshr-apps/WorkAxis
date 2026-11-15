@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
@@ -13,10 +14,11 @@ import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart
 import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
 import 'package:workaxis/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:workaxis/features/attendance/presentation/controllers/attendance_controller.dart';
+import 'package:workaxis/features/attendance/presentation/screens/attendance_details_screen.dart';
 import 'package:workaxis/features/attendance/presentation/screens/attendance_operations_screen.dart';
+import 'package:workaxis/features/attendance/presentation/screens/group_attendance_screen.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_card_item.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_table.dart';
-import 'package:workaxis/features/attendance/presentation/screens/widgets/group_attendance_dialog.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
@@ -24,6 +26,7 @@ import 'package:workaxis/features/employees/data/mock_organization_members_repos
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 
+import '../../helpers/attendance_router.dart';
 import '../../helpers/fixed_clock.dart';
 
 /// Reads delegate to the mock; every write fails, to exercise error surfacing.
@@ -94,6 +97,7 @@ void main() {
     required UserRole role,
     double width = 1200,
     AttendanceRepository? repository,
+    String userId = 'user-oa-01',
   }) async {
     tester.view.physicalSize = Size(width, 1400);
     tester.view.devicePixelRatio = 1.0;
@@ -111,13 +115,16 @@ void main() {
 
     await accessController.resolveAccess(
       AppUser(
-        id: 'user-oa-01',
+        id: userId,
         name: 'Jordan Lee',
         username: 'jordan.lee',
         role: role,
         organizationId: 'org-acme',
       ),
     );
+
+    final router = buildAttendanceRouter(role);
+    addTearDown(router.dispose);
 
     await tester.pumpWidget(
       MultiProvider(
@@ -135,10 +142,7 @@ void main() {
             value: membersRepository,
           ),
         ],
-        child: MaterialApp(
-          theme: AppTheme.light,
-          home: const AttendanceOperationsScreen(),
-        ),
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
       ),
     );
 
@@ -248,47 +252,92 @@ void main() {
       expect(find.textContaining('raw backend failure'), findsNothing);
     });
 
-    testWidgets('keeps the group dialog open and shows why submit failed', (
+    testWidgets(
+      'keeps the group check-in page open and shows why submit failed',
+      (tester) async {
+        await pumpAttendanceScreen(
+          tester,
+          role: UserRole.orgAdmin,
+          repository: _FailingWritesRepository(
+            MockAttendanceRepository(now: fixedNow),
+          ),
+        );
+        await membersRepository.saveMember(
+          access: accessController.accessContext!,
+          activeBranchId: 'br-01',
+          initialPassword: 'Temporary!123',
+          member: const OrganizationMember(
+            id: '',
+            organizationId: 'org-acme',
+            fullName: 'Nora Fresh',
+            username: 'nora.fresh',
+            email: 'nora.fresh@example.com',
+            role: UserRole.employee,
+            branchIds: ['br-01'],
+            status: AccountStatus.active,
+          ),
+        );
+
+        await tester.tap(find.text('Group Check-In'));
+        await tester.pumpAndSettle();
+        expect(find.byType(GroupAttendanceScreen), findsOneWidget);
+
+        final confirm = find.byWidgetPredicate(
+          (w) => w is AppButton && w.text.startsWith('Confirm Check-In'),
+        );
+        await tester.tap(confirm);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(GroupAttendanceScreen), findsOneWidget);
+        expect(
+          find.text('Could not record group attendance. Try again.'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'details page opens from a record and the breadcrumb returns to the list',
+      (tester) async {
+        await pumpAttendanceScreen(tester, role: UserRole.orgAdmin);
+
+        await tester.tap(find.byTooltip('View details').first);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(AttendanceDetailsScreen), findsOneWidget);
+        expect(find.text('Read-only attendance record.'), findsOneWidget);
+        expect(find.text('Check-in'), findsOneWidget);
+
+        await tester.tap(
+          find.descendant(
+            of: find.byType(PageBreadcrumb),
+            matching: find.byType(InkWell),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(AttendanceDetailsScreen), findsNothing);
+        expect(find.byType(AttendanceOperationsScreen), findsOneWidget);
+        expect(find.text('Showing 6 attendance records'), findsOneWidget);
+      },
+    );
+
+    testWidgets('employee opens details under the employee route', (
       tester,
     ) async {
       await pumpAttendanceScreen(
         tester,
-        role: UserRole.orgAdmin,
-        repository: _FailingWritesRepository(
-          MockAttendanceRepository(now: fixedNow),
-        ),
-      );
-      await membersRepository.saveMember(
-        access: accessController.accessContext!,
-        activeBranchId: 'br-01',
-        initialPassword: 'Temporary!123',
-        member: const OrganizationMember(
-          id: '',
-          organizationId: 'org-acme',
-          fullName: 'Nora Fresh',
-          username: 'nora.fresh',
-          email: 'nora.fresh@example.com',
-          role: UserRole.employee,
-          branchIds: ['br-01'],
-          status: AccountStatus.active,
-        ),
+        role: UserRole.employee,
+        width: 768,
+        userId: 'user-emp-01',
       );
 
-      await tester.tap(find.text('Group Check-In'));
-      await tester.pumpAndSettle();
-      expect(find.byType(GroupAttendanceDialog), findsOneWidget);
-
-      final confirm = find.byWidgetPredicate(
-        (w) => w is AppButton && w.text.startsWith('Confirm Check-In'),
-      );
-      await tester.tap(confirm);
+      await tester.tap(find.text('Details').first);
       await tester.pumpAndSettle();
 
-      expect(find.byType(GroupAttendanceDialog), findsOneWidget);
-      expect(
-        find.text('Could not record group attendance. Try again.'),
-        findsOneWidget,
-      );
+      expect(find.byType(AttendanceDetailsScreen), findsOneWidget);
+      expect(find.text('Check-in'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }
