@@ -22,7 +22,6 @@ import 'package:workaxis/features/employees/domain/policies/organization_member_
 import 'package:workaxis/features/employees/presentation/controllers/organization_members_controller.dart';
 import 'package:workaxis/features/employees/presentation/member_branch_names.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_card.dart';
-import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_editor_dialog.dart';
 
 class EmployeeDirectoryScreen extends StatefulWidget {
   const EmployeeDirectoryScreen({super.key});
@@ -143,10 +142,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                     iconData: Icons.person_add_alt_1,
                                     onPressed: (access == null || needsBranch)
                                         ? null
-                                        : () => _openEditor(
-                                            access,
-                                            branchId: branchId,
-                                          ),
+                                        : () => _openEditor(access),
                                   )
                                 : null,
                           ),
@@ -292,9 +288,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
       member: member,
       branchNames: memberBranchNames(member, access),
       onOpen: () => _openDetails(member, access),
-      onEdit: canEdit
-          ? () => _openEditor(access, branchId: branchId, member: member)
-          : null,
+      onEdit: canEdit ? () => _openEditor(access, member: member) : null,
     );
   }
 
@@ -320,37 +314,21 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     );
   }
 
-  Future<void> _openEditor(
-    UserAccessContext access, {
-    required String? branchId,
-    OrganizationMember? member,
-  }) async {
-    await context.read<AccessController>().refreshAccess();
-    if (!mounted) return;
-    final freshAccess =
-        context.read<AccessController>().accessContext ?? access;
-    final controller = context.read<OrganizationMembersController>();
-    controller.clearActionError();
-    final saved = await showDialog<bool>(
-      context: context,
-      // A long form: a stray tap outside must not discard what was typed.
-      barrierDismissible: false,
-      builder: (context) => OrganizationMemberEditorDialog(
-        access: freshAccess,
-        activeBranchId: branchId,
-        member: member,
-        isSaving: controller.isSaving,
-        saveErrorMessage: () => controller.actionErrorMessage,
-        onSave: (draft, password) => controller.saveMember(
-          access: freshAccess,
-          member: draft,
-          initialPassword: password,
-          activeBranchId: branchId,
-        ),
-      ),
-    );
-    if (saved == true && mounted) await _load();
-  }
+  /// Add and edit are routed pages; the directory reloads when it is shown again.
+  void _openEditor(UserAccessContext access, {OrganizationMember? member}) =>
+      context.push(
+        member == null ? _addPath(access) : _editPath(access, member.id),
+      );
+
+  String _addPath(UserAccessContext access) =>
+      access.user.role == UserRole.branchManager
+      ? AppRoutes.branchManagerEmployeeAddPath
+      : AppRoutes.orgAdminEmployeeAddPath;
+
+  String _editPath(UserAccessContext access, String memberId) =>
+      access.user.role == UserRole.branchManager
+      ? AppRoutes.branchManagerEmployeeEditPath(memberId)
+      : AppRoutes.orgAdminEmployeeEditPath(memberId);
 
   void _openDetails(OrganizationMember member, UserAccessContext? access) {
     if (access == null) return;

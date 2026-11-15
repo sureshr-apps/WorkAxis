@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
-import 'package:workaxis/features/branches/presentation/screens/widgets/branch_editor_dialog.dart';
+import 'package:workaxis/features/branches/presentation/screens/branch_editor_screen.dart';
 
 import '../../helpers/fallback_maps.dart';
 
@@ -12,7 +12,7 @@ void main() {
     WidgetTester tester, {
     BranchRecord? branch,
   }) async {
-    tester.view.physicalSize = const Size(1000, 900);
+    tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
       tester.view.resetPhysicalSize();
@@ -24,11 +24,14 @@ void main() {
         builder: fallbackMapsBuilder,
         theme: AppTheme.light,
         home: Scaffold(
-          body: BranchEditorDialog(
+          body: BranchEditorScreen(
             branch: branch,
             organizationId: 'org-1',
             managerOptions: const [],
             isSaving: false,
+            onClose: () {},
+            onSaved: () {},
+            backLabel: 'Branch Management',
             onSave: (record) async {
               saved.add(record);
               return record;
@@ -100,7 +103,7 @@ void main() {
   });
 
   testWidgets('surfaces the controller error when save fails', (tester) async {
-    tester.view.physicalSize = const Size(1000, 900);
+    tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
       tester.view.resetPhysicalSize();
@@ -111,7 +114,7 @@ void main() {
         builder: fallbackMapsBuilder,
         theme: AppTheme.light,
         home: Scaffold(
-          body: BranchEditorDialog(
+          body: BranchEditorScreen(
             branch: const BranchRecord(
               summary: BranchSummary(
                 id: 'b1',
@@ -129,6 +132,9 @@ void main() {
             organizationId: 'org-1',
             managerOptions: const [],
             isSaving: false,
+            onClose: () {},
+            onSaved: () {},
+            backLabel: 'Branch Management',
             readActionError: () => 'Code already in use.',
             onSave: (_) async => null,
           ),

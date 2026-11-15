@@ -7,8 +7,8 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
-import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/core/widgets/page_breadcrumb.dart';
+import 'package:workaxis/core/widgets/record_not_found_page.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
@@ -208,28 +208,11 @@ class _BranchDetailsScreenState extends State<BranchDetailsScreen> {
     });
   }
 
-  Widget _notFound() {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: ResponsivePageContent(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PageBreadcrumb(
-                backLabel: 'Branch Management',
-                currentLabel: 'Branch',
-                onBack: () => context.go(AppRoutes.orgAdminBranches),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              ErrorState(
-                message: 'This branch could not be found.',
-                onRetry: _load,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _notFound() => RecordNotFoundPage(
+    backLabel: 'Branch Management',
+    currentLabel: 'Branch',
+    onBack: () => context.go(AppRoutes.orgAdminBranches),
+    message: 'This branch could not be found.',
+    onRetry: _load,
+  );
 }

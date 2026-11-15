@@ -5,8 +5,8 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
-import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/core/widgets/page_breadcrumb.dart';
+import 'package:workaxis/core/widgets/record_not_found_page.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
@@ -120,28 +120,11 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
     );
   }
 
-  Widget _notFound() {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: ResponsivePageContent(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PageBreadcrumb(
-                backLabel: widget.listLabel,
-                currentLabel: 'Employee',
-                onBack: () => context.go(widget.listRoute),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              ErrorState(
-                message: 'This account could not be found.',
-                onRetry: _load,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _notFound() => RecordNotFoundPage(
+    backLabel: widget.listLabel,
+    currentLabel: 'Employee',
+    onBack: () => context.go(widget.listRoute),
+    message: 'This account could not be found.',
+    onRetry: _load,
+  );
 }

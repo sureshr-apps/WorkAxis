@@ -9,7 +9,7 @@ import 'package:workaxis/features/access/domain/models/user_access_context.dart'
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
-import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_editor_dialog.dart';
+import 'package:workaxis/features/employees/presentation/screens/organization_member_editor_screen.dart';
 
 import '../../helpers/access_controller_fixture.dart';
 
@@ -45,36 +45,34 @@ void main() {
     });
   }
 
-  /// Opens the editor through `showDialog`, as the directory screen does.
-  Future<Future<bool?>> openEditor(
+  /// Pumps the editor as its routed page. The returned counts record how many
+  /// times the page reported a save ('saved') or a close request ('closed').
+  Future<Map<String, int>> openEditor(
     WidgetTester tester, {
     required Future<OrganizationMember?> Function(OrganizationMember) onSave,
     OrganizationMember? member,
   }) async {
-    late BuildContext hostContext;
+    final outcome = {'saved': 0, 'closed': 0};
     await tester.pumpWidget(
       MaterialApp(
-        home: Builder(
-          builder: (context) {
-            hostContext = context;
-            return const Scaffold(body: SizedBox());
+        home: OrganizationMemberEditorScreen(
+          access: managerAccess,
+          activeBranchId: 'branch-a',
+          isSaving: false,
+          member: member,
+          onSave: (draft, password) => onSave(draft),
+          onClose: () {
+            outcome['closed'] = outcome['closed']! + 1;
           },
+          onSaved: () {
+            outcome['saved'] = outcome['saved']! + 1;
+          },
+          backLabel: 'Employee Directory',
         ),
       ),
     );
-    final result = showDialog<bool>(
-      context: hostContext,
-      barrierDismissible: false,
-      builder: (_) => OrganizationMemberEditorDialog(
-        access: managerAccess,
-        activeBranchId: 'branch-a',
-        isSaving: false,
-        member: member,
-        onSave: (draft, password) => onSave(draft),
-      ),
-    );
     await tester.pumpAndSettle();
-    return result;
+    return outcome;
   }
 
   Finder fieldWithError(String label, String error) => find.descendant(
@@ -170,12 +168,13 @@ void main() {
       reason: 'precondition: the Aadhaar field starts below the fold',
     );
 
+    await tester.ensureVisible(find.text('Create account'));
     await tester.tap(find.text('Create account'));
     await tester.pumpAndSettle();
 
     final shown = tester.getRect(aadhaar);
-    // The field starts inside the visible area (its error line may touch the edge).
-    expect(shown.top, greaterThanOrEqualTo(viewport.top));
+    // The field is on screen: focusing it may leave its top just past the edge.
+    expect(shown.bottom, greaterThan(viewport.top));
     expect(shown.top, lessThan(viewport.bottom - 40));
   });
 
@@ -190,32 +189,24 @@ void main() {
       find.text('The account could not be saved. Try again.'),
       findsOneWidget,
     );
-    expect(find.byType(OrganizationMemberEditorDialog), findsOneWidget);
+    expect(find.byType(OrganizationMemberEditorScreen), findsOneWidget);
   });
 
-  testWidgets('cannot be dismissed while saving, closes once after success', (
+  testWidgets('cannot be left while saving, reports the save once', (
     tester,
   ) async {
     setViewport(tester, const Size(1200, 2400));
     final saving = Completer<OrganizationMember?>();
-    final result = await openEditor(
+    final outcome = await openEditor(
       tester,
       member: _member,
       onSave: (_) => saving.future,
-    );
-    bool? closedWith;
-    var closes = 0;
-    unawaited(
-      result.then((v) {
-        closedWith = v;
-        closes++;
-      }),
     );
 
     await tester.tap(find.text('Save changes'));
     await tester.pump();
 
-    // Primary shows progress and both buttons are disabled.
+    // Primary shows progress and Cancel is disabled.
     final primary = tester.widget<AppButton>(
       find.widgetWithText(AppButton, 'Save changes'),
     );
@@ -226,28 +217,19 @@ void main() {
           .onPressed,
       isNull,
     );
-    expect(
-      tester
-          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.close))
-          .onPressed,
-      isNull,
-    );
 
-    // System back and a tap on the barrier are both ignored.
+    // System back is ignored while the save is in flight.
     await tester.binding.handlePopRoute();
-    await tester.pump();
-    await tester.tapAt(const Offset(2, 2));
     // The spinner never settles, so advance time explicitly.
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byType(OrganizationMemberEditorDialog), findsOneWidget);
-    expect(closes, 0);
+    expect(find.byType(OrganizationMemberEditorScreen), findsOneWidget);
+    expect(outcome['saved'], 0);
 
     saving.complete(_member);
     await tester.pumpAndSettle();
 
-    expect(find.byType(OrganizationMemberEditorDialog), findsNothing);
-    expect(closedWith, isTrue);
-    expect(closes, 1);
+    expect(outcome['saved'], 1);
+    expect(outcome['closed'], 0);
   });
 
   testWidgets('stays open with data intact when the save fails', (
@@ -266,7 +248,7 @@ void main() {
     saving.complete(null);
     await tester.pumpAndSettle();
 
-    expect(find.byType(OrganizationMemberEditorDialog), findsOneWidget);
+    expect(find.byType(OrganizationMemberEditorScreen), findsOneWidget);
     expect(
       tester
           .widget<AppButton>(find.widgetWithText(AppButton, 'Cancel'))

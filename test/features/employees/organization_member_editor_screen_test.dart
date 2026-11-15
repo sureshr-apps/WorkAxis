@@ -6,7 +6,7 @@ import 'package:workaxis/features/authentication/domain/models/account_status.da
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_card.dart';
-import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_editor_dialog.dart';
+import 'package:workaxis/features/employees/presentation/screens/organization_member_editor_screen.dart';
 
 import '../../helpers/access_controller_fixture.dart';
 
@@ -58,10 +58,13 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: OrganizationMemberEditorDialog(
+          body: OrganizationMemberEditorScreen(
             access: managerAccess,
             activeBranchId: 'branch-a',
             isSaving: false,
+            onClose: () {},
+            onSaved: () {},
+            backLabel: 'Employee Directory',
             member: member,
             saveErrorMessage: saveError,
             onSave: (draft, password) {
@@ -106,7 +109,7 @@ void main() {
       find.text('You can only manage employees in your active branch.'),
       findsOneWidget,
     );
-    expect(find.byType(OrganizationMemberEditorDialog), findsOneWidget);
+    expect(find.byType(OrganizationMemberEditorScreen), findsOneWidget);
   });
 
   testWidgets('rejects a malformed email without saving', (tester) async {
@@ -254,10 +257,13 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: OrganizationMemberEditorDialog(
+            body: OrganizationMemberEditorScreen(
               access: adminAccess,
               activeBranchId: null,
               isSaving: false,
+              onClose: () {},
+              onSaved: () {},
+              backLabel: 'Employee Directory',
               member: null,
               onSave: (draft, password) async => draft,
             ),

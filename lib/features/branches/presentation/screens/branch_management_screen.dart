@@ -17,7 +17,6 @@ import 'package:workaxis/features/access/presentation/controllers/access_control
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 import 'package:workaxis/features/branches/presentation/controllers/branch_management_controller.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_card.dart';
-import 'package:workaxis/features/branches/presentation/screens/widgets/branch_editor_dialog.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_summary_strip.dart';
 
 class BranchManagementScreen extends StatefulWidget {
@@ -83,9 +82,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                     action: AppButton.responsive(
                       text: 'Add Branch',
                       iconData: Icons.add,
-                      onPressed: access == null
-                          ? null
-                          : () => _openEditor(access),
+                      onPressed: access == null ? null : () => _openEditor(),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -140,7 +137,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                           text: 'Add Branch',
                           iconData: Icons.add,
                           isFullWidth: false,
-                          onPressed: () => _openEditor(access),
+                          onPressed: () => _openEditor(),
                         )
                       : null,
                 ),
@@ -151,7 +148,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                 onOpen: _openDetails,
                 onEdit: access == null
                     ? null
-                    : (branch) => _openEditor(access, branch: branch),
+                    : (branch) => _openEditor(branch: branch),
                 onToggleActive: access == null
                     ? null
                     : (branch) => _toggleActive(access, branch),
@@ -170,39 +167,12 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
 
-  Future<void> _openEditor(
-    UserAccessContext access, {
-    BranchRecord? branch,
-  }) async {
-    final organizationId = access.organization?.id;
-    if (organizationId == null) return;
-    final controller = context.read<BranchManagementController>()
-      ..clearActionError();
-    await controller.loadManagerOptions(access);
-    final editable = branch == null
-        ? null
-        : await controller.getBranch(access, branch.id);
-    if (!mounted || (branch != null && editable == null)) return;
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (context) => BranchEditorDialog(
-        branch: editable,
-        organizationId: organizationId,
-        managerOptions: controller.managerOptions,
-        isSaving: controller.isSaving,
-        readActionError: () => controller.actionErrorMessage,
-        onSave: (record) =>
-            controller.saveBranch(access: access, branch: record),
-      ),
-    );
-    if (saved == true && mounted) {
-      await context.read<AccessController>().refreshAccess();
-      if (!mounted) return;
-      final freshAccess =
-          context.read<AccessController>().accessContext ?? access;
-      await controller.loadBranches(freshAccess);
-    }
-  }
+  /// Add and edit are routed pages; the list reloads when it is shown again.
+  void _openEditor({BranchRecord? branch}) => context.push(
+    branch == null
+        ? AppRoutes.orgAdminBranchAddPath
+        : AppRoutes.orgAdminBranchEditPath(branch.id),
+  );
 
   /// Suspends an active branch or reactivates a suspended one, by saving the
   /// branch with its flag flipped.

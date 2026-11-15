@@ -1,27 +1,38 @@
 import 'package:flutter/material.dart';
-import 'package:workaxis/core/ids/request_ids.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/errors/validation_exception.dart';
+import 'package:workaxis/core/ids/request_ids.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/form_action_row.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/branches/domain/branch_geofence_validator.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_location_picker.dart';
+import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
-/// Create/edit dialog for a branch. Coordinates start empty for new branches;
-/// geofence rules (including rejecting 0, 0) live in [BranchGeofenceValidator].
-class BranchEditorDialog extends StatefulWidget {
-  const BranchEditorDialog({
+/// Create/edit page for a branch, reached from Branch Management. Coordinates
+/// start empty for new branches; geofence rules (including rejecting 0, 0)
+/// live in [BranchGeofenceValidator].
+///
+/// The page only reports outcomes: [onClose] for back and cancel, and
+/// [onSaved] after a successful save. The route decides where to go next.
+class BranchEditorScreen extends StatefulWidget {
+  const BranchEditorScreen({
     super.key,
     required this.organizationId,
     required this.managerOptions,
     required this.isSaving,
     required this.onSave,
+    required this.onClose,
+    required this.onSaved,
+    required this.backLabel,
     this.readActionError,
     this.branch,
   });
@@ -31,15 +42,20 @@ class BranchEditorDialog extends StatefulWidget {
   final List<BranchManagerOption> managerOptions;
   final bool isSaving;
   final Future<BranchRecord?> Function(BranchRecord branch) onSave;
+  final VoidCallback onClose;
+  final VoidCallback onSaved;
+
+  /// Name of the list the page belongs to, shown in the breadcrumb.
+  final String backLabel;
 
   /// Latest action error from the owning controller, shown when saving fails.
   final String? Function()? readActionError;
 
   @override
-  State<BranchEditorDialog> createState() => _BranchEditorDialogState();
+  State<BranchEditorScreen> createState() => _BranchEditorScreenState();
 }
 
-class _BranchEditorDialogState extends State<BranchEditorDialog> {
+class _BranchEditorScreenState extends State<BranchEditorScreen> {
   final String _requestId = RequestIds.uuidV4();
   late final TextEditingController _nameController;
   late final TextEditingController _codeController;
@@ -190,73 +206,55 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final title = _editing ? 'Edit branch' : 'Add branch';
+    final name = widget.branch?.name ?? 'New branch';
     final footer = FormActionRow(
       submitLabel: _editing ? 'Save changes' : 'Create branch',
-      onCancel: () => Navigator.of(context).pop(false),
+      onCancel: widget.onClose,
       onSubmit: _save,
       isBusy: _saving || widget.isSaving,
     );
 
-    if (context.isCompact) {
-      return Dialog.fullscreen(
-        child: Scaffold(
-          appBar: AppBar(title: Text(title)),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: _buildForm(),
-            ),
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(
+            context.isCompact ? AppSpacing.md : AppSpacing.xl,
           ),
-          bottomNavigationBar: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: footer,
-            ),
-          ),
-        ),
-      );
-    }
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 680,
-          maxHeight: MediaQuery.sizeOf(context).height * 0.9,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.sm,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: AppBreakpoints.maxContentWidth,
               ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  title,
-                  style: AppTypography.headlineMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.onSurface,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PageBreadcrumb(
+                    backLabel: widget.backLabel,
+                    currentLabel: name,
+                    onBack: widget.onClose,
                   ),
-                ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppPageHeader(
+                    eyebrow: 'Organization Operations',
+                    title: _editing ? 'Edit branch' : 'Add branch',
+                    subtitle: 'Name, location, geofence and branch managers.',
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  DashboardSurfaceCard(
+                    // ListTiles need a Material ancestor inside the card's box.
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: _buildForm(),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  footer,
+                  const SizedBox(height: AppSpacing.xxl),
+                ],
               ),
             ),
-            const Divider(height: 1),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: _buildForm(),
-              ),
-            ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: footer,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -330,7 +328,8 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
             'Could not save this branch. Try again.';
       });
     } else {
-      Navigator.of(context).pop(true);
+      setState(() => _saving = false);
+      widget.onSaved();
     }
   }
 }
