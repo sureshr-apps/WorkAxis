@@ -57,4 +57,37 @@ class AttendanceSummary {
   double get presentShare => _share(present);
   double get lateShare => _share(late);
   double get absentShare => _share(absent);
+
+  /// Length of the distribution bar: the scheduled roster plus staff on approved
+  /// leave, who sit outside the scheduled total. Without a roster,
+  /// [distributionTotal] already includes leave, so it is the whole bar.
+  int get barTotal =>
+      totalScheduled > 0 ? totalScheduled + (onLeave ?? 0) : distributionTotal;
+
+  /// How the attendance rate reads, shown as a chip beside the rate.
+  AttendanceLevel get level {
+    final rate = attendanceRate;
+    if (rate >= AttendanceLevel.highFrom) return AttendanceLevel.high;
+    if (rate >= AttendanceLevel.mediumFrom) return AttendanceLevel.medium;
+    return AttendanceLevel.low;
+  }
+}
+
+/// How an attendance rate reads. Thresholds are on the 0..1 rate.
+enum AttendanceLevel {
+  high,
+  medium,
+  low;
+
+  /// Lowest attendance rate that reads as [high].
+  static const double highFrom = 0.8;
+
+  /// Lowest attendance rate that reads as [medium].
+  static const double mediumFrom = 0.6;
+
+  String get label => switch (this) {
+    AttendanceLevel.high => 'High',
+    AttendanceLevel.medium => 'Medium',
+    AttendanceLevel.low => 'Low',
+  };
 }
