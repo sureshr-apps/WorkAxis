@@ -10,15 +10,15 @@ except the Cloud SQL connection used for migrations (see "Database access").
 |---|---|---|
 | `verify.yml` | called by the two below | `dart format` check, `flutter analyze`, `flutter test`; functions `npm test` (tsc + node tests); Firestore rules tests in the emulator |
 | `ci.yml` | pull requests and pushes to any branch except `main` | runs `verify.yml` only. No secrets, nothing deployed |
-| `deploy.yml` | push to `main`, or run manually | verify, then database migrations, then functions + Firestore rules/indexes + Storage rules, then web build and Hosting deploy. In parallel with the backend, a signed Android APK and AAB are built and uploaded as a workflow artifact |
+| `deploy.yml` | push to `main`, or run manually | verify, then database migrations, then functions + Firestore rules/indexes + Storage rules. The web build and Hosting deploy run in parallel with the backend. In parallel with the backend, a signed Android APK and a signed AAB are built as two parallel jobs (`android.yml`) and uploaded as workflow artifacts |
 
 Deployments are serialised (`concurrency: deploy-main`) and are never cancelled
 midway. The Android `versionCode` is `100 + the workflow run number`, so each build
 installs over the previous one (the offset keeps it above early hand-made builds).
 
 Where to find the Android build: the run's page, section Artifacts,
-`workaxis-android-<run number>` (APK for direct install, AAB for the Play
-Store). Artifacts are kept for 30 days. The repository is public, so artifacts
+`workaxis-apk-<run number>` (APK for direct install) and
+`workaxis-appbundle-<run number>` (AAB for the Play Store). Artifacts are kept for 30 days. The repository is public, so artifacts
 are visible to any signed-in GitHub user; add a private release channel (for
 example Firebase App Distribution) before sharing builds more widely.
 
