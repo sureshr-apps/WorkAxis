@@ -1,7 +1,7 @@
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 
-/// Thin seam over SQL Connect return operations so [SqlConnectReturnsRepository]
+/// Thin seam over the data gateway return operations so [SqlConnectReturnsRepository]
 /// can be tested with a fake. Implementations perform no authorization; the
 /// repository decides which operation to call for the caller's role.
 abstract interface class ReturnsRemote {

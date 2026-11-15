@@ -54,28 +54,52 @@ class MockReturnsRepository implements ReturnsRepository {
     String? branchId,
     required CreateReturnInput input,
   }) async {
+    final results = await submitReturnBatch(
+      access: access,
+      branchId: branchId,
+      input: input.toBatch(),
+    );
+    return results.first;
+  }
+
+  @override
+  Future<List<ReturnItem>> submitReturnBatch({
+    required UserAccessContext access,
+    String? branchId,
+    required CreateReturnBatchInput input,
+  }) async {
     final branch = _scope.forSubmit(access, branchId);
     await _latency();
-    final remarks = input.remarks?.trim();
-    final item = ReturnItem(
-      id: 'RET-NEW-${++_created}',
-      organizationId: access.organization!.id,
-      branchId: branch.id,
-      branchName: branch.name,
-      employeeId: access.user.id,
-      employeeName: access.user.name,
-      productTitle: input.productTitle,
-      reason: input.reason,
-      quantity: input.quantity,
-      unit: input.unit,
-      invoiceNumber: input.invoiceNumber,
-      returnDate: _now(),
-      status: ReturnStatus.pending,
-      billImageUrl: input.billImageUrl,
-      remarks: remarks == null || remarks.isEmpty ? null : remarks,
-    );
-    _dataSource.addReturn(item);
-    return item;
+    final items = <ReturnItem>[];
+    for (final line in input.items) {
+      final combinedRemarks = [
+        if (input.remarks != null && input.remarks!.trim().isNotEmpty)
+          input.remarks!.trim(),
+        if (line.remarks != null && line.remarks!.trim().isNotEmpty)
+          line.remarks!.trim(),
+      ].join(' - ');
+      final item = ReturnItem(
+        id: 'RET-NEW-${++_created}',
+        organizationId: access.organization!.id,
+        branchId: branch.id,
+        branchName: branch.name,
+        employeeId: access.user.id,
+        employeeName: access.user.name,
+        productTitle: line.productTitle,
+        reason: line.reason,
+        quantity: line.quantity,
+        unit: line.unit,
+        billNumber: input.billNumber,
+        invoiceNumber: input.invoiceNumber,
+        returnDate: input.returnDate ?? _now(),
+        status: ReturnStatus.pending,
+        billImageUrl: input.billImageUrl,
+        remarks: combinedRemarks.isEmpty ? null : combinedRemarks,
+      );
+      _dataSource.addReturn(item);
+      items.add(item);
+    }
+    return items;
   }
 
   @override

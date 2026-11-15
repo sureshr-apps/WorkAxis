@@ -1,13 +1,12 @@
 {
   "projects": {
-    "default": "omniretail-60c71",
-    "workaxis-cloud": "workaxis-cloud"
+    "default": "workaxis-app"
   },
   "targets": {
-    "omniretail-60c71": {
+    "workaxis-app": {
       "hosting": {
         "workaxis": [
-          "workaxis-portal"
+          "workaxis-app"
         ]
       }
     }

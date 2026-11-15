@@ -52,6 +52,14 @@ void main() {
       });
     });
 
+    test('deleteOrganization uses the deleteOrganization callable and deletes from source', () async {
+      await repo.deleteOrganization('org-acme');
+      expect(functions.payloadsOf('deleteOrganization').single, {
+        'organizationId': 'org-acme',
+      });
+      expect(await source.getById('org-acme'), isNull);
+    });
+
     test('a partially applied suspension is reported, not hidden', () async {
       functions.handlers['setOrganizationStatus'] = (p) async => {
         'organizationId': p['organizationId'],
@@ -167,6 +175,10 @@ FakeCallableFunctions _statusFunctions(
       'membersUpdated': 0,
       'membersFailed': 0,
     };
+  };
+  functions.handlers['deleteOrganization'] = (p) async {
+    await source.delete(p['organizationId'] as String);
+    return {'organizationId': p['organizationId'], 'deleted': true};
   };
   functions.handlers['provisionUser'] = (p) async {
     final id = source.addAdmin(

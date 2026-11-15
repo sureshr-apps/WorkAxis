@@ -1,4 +1,5 @@
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/core/backend/data_gateway.dart';
+import 'package:workaxis/core/backend/json_reader.dart';
 
 /// Aggregate counts for one branch (from `GetBranchStats`).
 class BranchCounts {
@@ -16,31 +17,27 @@ class BranchCounts {
   int returns(String status) => returnsByStatus[status] ?? 0;
 }
 
-/// Thin seam over SQL Connect so the repository can be tested with a fake.
+/// Thin seam over the data gateway so the repository can be tested with a fake.
 abstract interface class BranchDashboardRemote {
   Future<BranchCounts> loadCounts(String branchId);
 }
 
-/// [BranchDashboardRemote] backed by the generated connector.
+/// [BranchDashboardRemote] backed by the data gateway (`GetBranchStats`).
 class DataConnectBranchDashboardRemote implements BranchDashboardRemote {
-  DataConnectBranchDashboardRemote({this._connector});
+  DataConnectBranchDashboardRemote({required this._gateway});
 
-  final WorkaxisConnectorConnector? _connector;
-
-  WorkaxisConnectorConnector get _c =>
-      _connector ?? WorkaxisConnectorConnector.instance;
+  final DataGateway _gateway;
 
   @override
   Future<BranchCounts> loadCounts(String branchId) async {
-    final data = (await _c.getBranchStats(branchId: branchId).execute()).data;
-    final byStatus = <String, int>{};
-    for (final row in data.returnsByStatus) {
-      final key = row.status.toLowerCase();
-      byStatus[key] = (byStatus[key] ?? 0) + row.count_;
-    }
+    final data = await _gateway.call('GetBranchStats', {'branchId': branchId});
     return BranchCounts(
-      memberCount: data.memberCount.fold<int>(0, (sum, r) => sum + r.count_),
-      returnsByStatus: byStatus,
+      memberCount: sumCounts(data.objects('memberCount')),
+      returnsByStatus: groupedCounts(
+        data.objects('returnsByStatus'),
+        'status',
+        lowerCaseKeys: true,
+      ),
     );
   }
 }

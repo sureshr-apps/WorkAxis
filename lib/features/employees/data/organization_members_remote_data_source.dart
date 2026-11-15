@@ -3,7 +3,7 @@ import 'package:workaxis/features/authentication/domain/models/account_status.da
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 
-/// Remote member reads. Thin seam over SQL Connect so the repository can be
+/// Remote member reads. Thin seam over the data gateway so the repository can be
 /// unit-tested with a fake. Filters are applied server-side.
 abstract interface class OrganizationMembersRemoteDataSource {
   Future<PageResult<OrganizationMember>> listByOrganization({

@@ -129,7 +129,7 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
               SettingsReadOnlyValue(
                 label: 'Persistence Architecture',
                 value: BackendConfig.isFirebase
-                    ? 'Firebase & SQL Connect (PostgreSQL)'
+                    ? 'Firebase & PostgreSQL'
                     : 'Mock First · Contract Ready',
               ),
               const SettingsReadOnlyValue(

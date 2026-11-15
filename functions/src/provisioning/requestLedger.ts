@@ -12,6 +12,8 @@ export interface ProvisionResult {
   memberId: string;
   username: string;
   loginEmail: string;
+  /** Assigned or supplied employee ID (customer roles only). */
+  employeeCode?: string;
 }
 
 export type LedgerClaim =

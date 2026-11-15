@@ -10,6 +10,7 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employee_home/data/firestore_employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/data/mock_employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/models/device_location.dart';
+import 'package:workaxis/features/employee_home/domain/models/location_peek.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 import 'package:workaxis/features/employee_home/domain/services/attendance_location_provider.dart';
@@ -38,12 +39,33 @@ class _FakeCallables implements CallableFunctions {
 typedef VoidCallback = void Function();
 
 class _FixedLocation implements AttendanceLocationProvider {
-  @override
-  Future<DeviceLocation> currentLocation() async => const DeviceLocation(
+  _FixedLocation({this.readiness = LocationReadiness.ready});
+
+  /// What a passive read reports; `ready` also yields the fixed fix.
+  LocationReadiness readiness;
+  int currentCalls = 0;
+  int peekCalls = 0;
+
+  static const _fix = DeviceLocation(
     latitude: 12.9716,
     longitude: 77.5946,
     accuracyMeters: 8,
   );
+
+  @override
+  Future<DeviceLocation> currentLocation() async {
+    currentCalls++;
+    return _fix;
+  }
+
+  @override
+  Future<LocationPeek> peekLocation() async {
+    peekCalls++;
+    return LocationPeek(
+      readiness,
+      readiness == LocationReadiness.ready ? _fix : null,
+    );
+  }
 }
 
 Future<void> _entry(
@@ -182,7 +204,11 @@ void main() {
         geofenceRadiusMeters: 150,
       );
       final geofenceAccess = UserAccessContext(
-        user: fixtureUser(UserRole.employee, id: 'user-emp-01', name: 'Sarah Connor'),
+        user: fixtureUser(
+          UserRole.employee,
+          id: 'user-emp-01',
+          name: 'Sarah Connor',
+        ),
         organization: acmeOrg,
         assignedBranches: [geofenceBranch],
         activeBranch: ActiveBranchContext.fromBranch(geofenceBranch),
@@ -194,6 +220,55 @@ void main() {
       expect(summary.isWithinGeofence, isTrue);
       expect(summary.locationStatus, contains('Inside geofence'));
     });
+
+    test(
+      'loading never prompts and shows an inline location-off state',
+      () async {
+        final location = _FixedLocation(
+          readiness: LocationReadiness.permissionNeeded,
+        );
+        final locRepo = FirestoreEmployeeHomeRepository(
+          firestore: db,
+          functions: callables,
+          locationProvider: location,
+          now: fixedNow,
+        );
+        final branch = BranchSummary(
+          id: 'br-geo-03',
+          organizationId: acmeOrg.id,
+          name: 'Prompt Branch',
+          code: 'GEO-03',
+          location: 'City',
+          latitude: 12.9716,
+          longitude: 77.5946,
+          geofenceRadiusMeters: 150,
+        );
+        final geoAccess = UserAccessContext(
+          user: fixtureUser(
+            UserRole.employee,
+            id: 'user-emp-01',
+            name: 'Sarah Connor',
+          ),
+          organization: acmeOrg,
+          assignedBranches: [branch],
+          activeBranch: ActiveBranchContext.fromBranch(branch),
+        );
+
+        final summary = await locRepo.getEmployeeHomeSummary(access: geoAccess);
+
+        expect(location.currentCalls, 0);
+        expect(location.peekCalls, 1);
+        expect(summary.isWithinGeofence, isFalse);
+        expect(summary.locationStatus, contains('Location off'));
+
+        // An explicit user action is the only path that may prompt.
+        await locRepo.getEmployeeHomeSummary(
+          access: geoAccess,
+          requestLocationPermission: true,
+        );
+        expect(location.currentCalls, 1);
+      },
+    );
 
     test('evaluates outside geofence when device is far from branch', () async {
       final farBranch = BranchSummary(
@@ -207,7 +282,11 @@ void main() {
         geofenceRadiusMeters: 100,
       );
       final farAccess = UserAccessContext(
-        user: fixtureUser(UserRole.employee, id: 'user-emp-01', name: 'Sarah Connor'),
+        user: fixtureUser(
+          UserRole.employee,
+          id: 'user-emp-01',
+          name: 'Sarah Connor',
+        ),
         organization: acmeOrg,
         assignedBranches: [farBranch],
         activeBranch: ActiveBranchContext.fromBranch(farBranch),

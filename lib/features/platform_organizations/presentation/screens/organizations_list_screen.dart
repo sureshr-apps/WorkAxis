@@ -18,6 +18,7 @@ import 'package:workaxis/features/platform_organizations/presentation/controller
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_card_list.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organizations_filter_bar.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organizations_table.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_status_dialogs.dart';
 
 /// Catalog of customer organizations with search, filtering and paging.
 class OrganizationsListScreen extends StatefulWidget {
@@ -63,6 +64,34 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
 
   void _openEdit(CustomerOrganization org) =>
       context.push(AppRoutes.platformOrganizationEditPath(org.id));
+
+  void _confirmDelete(
+    CustomerOrganization org,
+    PlatformOrganizationsController controller,
+  ) {
+    controller.clearActionError();
+    final messenger = ScaffoldMessenger.of(context);
+    showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => DeleteOrganizationDialog(
+        organization: org,
+        failureMessage: () => controller.actionErrorMessage,
+        onConfirm: () async {
+          final ok = await controller.deleteOrganization(org.id);
+          if (ok && mounted) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('${org.name} permanently deleted.'),
+                backgroundColor: AppColors.statusUrgent,
+              ),
+            );
+          }
+          return ok;
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +195,7 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
                 organizations: organizations,
                 onSelect: _openDetails,
                 onEdit: _openEdit,
+                onDelete: (org) => _confirmDelete(org, controller),
                 hasMore: controller.hasMore,
                 isLoadingMore: controller.isLoadingMore,
                 onLoadMore: controller.loadMore,
@@ -178,6 +208,7 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
                   columns: width >= AppBreakpoints.mediumMin ? 2 : 1,
                   onSelect: _openDetails,
                   onEdit: _openEdit,
+                  onDelete: (org) => _confirmDelete(org, controller),
                 ),
                 if (controller.hasMore)
                   SliverToBoxAdapter(
@@ -232,13 +263,7 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
                   isFullWidth: false,
                   onPressed: () => _resetFilters(controller),
                 )
-              : AppButton.primary(
-                  text: 'Add Organization',
-                  iconData: Icons.add,
-                  isFullWidth: false,
-                  onPressed: () =>
-                      context.push(AppRoutes.platformOrganizationsAdd),
-                ),
+              : null,
         ),
       ),
     );

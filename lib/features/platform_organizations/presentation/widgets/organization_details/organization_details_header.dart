@@ -81,6 +81,7 @@ class OrganizationDetailsHeader extends StatelessWidget {
     required this.onEdit,
     required this.onToggleStatus,
     required this.onCopyCode,
+    this.onDelete,
   });
 
   final CustomerOrganization organization;
@@ -91,6 +92,7 @@ class OrganizationDetailsHeader extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onToggleStatus;
   final VoidCallback onCopyCode;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +110,7 @@ class OrganizationDetailsHeader extends StatelessWidget {
           isActionLoading: isActionLoading,
           onEdit: onEdit,
           onToggleStatus: onToggleStatus,
+          onDelete: onDelete,
         );
         return _HeaderPanel(
           child: isWide
@@ -219,6 +222,7 @@ class _Actions extends StatelessWidget {
     required this.isActionLoading,
     required this.onEdit,
     required this.onToggleStatus,
+    this.onDelete,
   });
 
   final CustomerOrganization organization;
@@ -226,6 +230,7 @@ class _Actions extends StatelessWidget {
   final bool isActionLoading;
   final VoidCallback onEdit;
   final VoidCallback onToggleStatus;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -233,7 +238,7 @@ class _Actions extends StatelessWidget {
       text: 'Edit Organization',
       iconData: Icons.edit_outlined,
       onPressed: onEdit,
-      isFullWidth: !isWide,
+      isFullWidth: false,
     );
     final status = AppButton.outlined(
       text: organization.isActive ? 'Suspend' : 'Reactivate',
@@ -241,15 +246,32 @@ class _Actions extends StatelessWidget {
           ? Icons.power_settings_new
           : Icons.refresh,
       onPressed: isActionLoading ? null : onToggleStatus,
-      isFullWidth: !isWide,
+      isFullWidth: false,
     );
+    final delete = onDelete != null
+        ? IconButton(
+            tooltip: 'Delete ${organization.name}',
+            icon: const Icon(
+              Icons.delete_outline,
+              color: AppColors.statusUrgentText,
+              size: 20,
+            ),
+            constraints: const BoxConstraints(
+              minWidth: AppSpacing.minTouchTarget,
+              minHeight: AppSpacing.minTouchTarget,
+            ),
+            onPressed: isActionLoading ? null : onDelete,
+          )
+        : null;
+
     if (!isWide) {
-      return Row(
-        children: [
-          Expanded(child: edit),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(child: status),
-        ],
+      // Buttons keep their natural width and wrap onto a second line instead
+      // of squeezing labels (narrow phones, large text scale).
+      return Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.xs,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [edit, status, ?delete],
       );
     }
     return Row(
@@ -258,6 +280,7 @@ class _Actions extends StatelessWidget {
         edit,
         const SizedBox(width: AppSpacing.sm),
         status,
+        if (delete != null) ...[const SizedBox(width: AppSpacing.xs), delete],
       ],
     );
   }

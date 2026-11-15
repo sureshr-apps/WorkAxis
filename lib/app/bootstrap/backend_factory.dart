@@ -1,14 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:workaxis/core/backend/account_callables.dart';
 import 'package:workaxis/core/backend/callable_functions.dart';
+import 'package:workaxis/core/backend/data_gateway.dart';
 import 'package:workaxis/features/access/data/sql_connect_access_remote_data_source.dart';
 import 'package:workaxis/features/branches/data/sql_connect_branches_remote_data_source.dart';
 import 'package:workaxis/features/employees/data/sql_connect_organization_members_remote_data_source.dart';
 import 'package:workaxis/features/platform_organizations/data/sql_connect_platform_organizations_remote_data_source.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:workaxis/app/config/backend_config.dart';
+import 'package:workaxis/core/storage/attachment_storage.dart';
+import 'package:workaxis/core/storage/attachment_uploader.dart';
+import 'package:workaxis/core/storage/firebase_attachment_storage.dart';
+import 'package:workaxis/core/storage/mock_attachment_storage.dart';
 import 'package:workaxis/core/time/clock.dart';
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/data/sql_connect_access_repository.dart';
@@ -76,6 +80,7 @@ class BackendRepositories {
     required this.returnsRepository,
     required this.reportsRepository,
     required this.settingsRepository,
+    required this.attachmentStorage,
   });
 
   final AuthenticationRepository authRepository;
@@ -92,6 +97,7 @@ class BackendRepositories {
   final ReturnsRepository returnsRepository;
   final ReportsRepository reportsRepository;
   final SettingsRepository settingsRepository;
+  final AttachmentStorage attachmentStorage;
 }
 
 /// Factory responsible for instantiating application repositories according to
@@ -103,7 +109,7 @@ class BackendFactory {
   static BackendRepositories createRepositories({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
-    WorkaxisConnectorConnector? connector,
+    DataGateway? gateway,
     CallableFunctions? functions,
     AttendanceLocationProvider? locationProvider,
     Now? now,
@@ -111,9 +117,14 @@ class BackendFactory {
     BackendConfig.assertReleaseSafe();
     if (BackendConfig.isFirebase) {
       final callables = functions ?? FirebaseCallableFunctions();
+      final attachmentStorage = FirebaseAttachmentStorage(
+        bucket: BackendConfig.attachmentsBucket,
+      );
+      final attachments = AttachmentUploader(attachmentStorage);
       final accounts = AccountCallables(callables);
+      final data = gateway ?? CallableDataGateway();
       final membersSource = SqlConnectOrganizationMembersRemoteDataSource(
-        connector: connector,
+        gateway: data,
       );
       return BackendRepositories(
         authRepository: FirebaseAuthRepository(
@@ -122,33 +133,31 @@ class BackendFactory {
           functions: callables,
         ),
         accessRepository: SqlConnectAccessRepository(
-          dataSource: SqlConnectAccessRemoteDataSource(connector: connector),
+          dataSource: SqlConnectAccessRemoteDataSource(gateway: data),
         ),
         platformRepository: SqlConnectPlatformDashboardRepository(
-          connector: connector,
+          gateway: data,
         ),
         platformOrganizationsRepository:
             SqlConnectPlatformOrganizationsRepository(
               dataSource: SqlConnectPlatformOrganizationsRemoteDataSource(
-                connector: connector,
+                gateway: data,
               ),
               functions: callables,
             ),
         platformUsersRepository: SqlConnectPlatformUsersRepository(
-          dataSource: SqlConnectPlatformUsersRemoteDataSource(
-            connector: connector,
-          ),
+          dataSource: SqlConnectPlatformUsersRemoteDataSource(gateway: data),
           accounts: accounts,
         ),
         orgRepository: SqlConnectOrganizationDashboardRepository(
-          connector: connector,
+          gateway: data,
           attendanceCounter: AttendanceDayCounter(
             firestore: firestore,
             now: now,
           ),
         ),
         branchRepository: SqlConnectBranchDashboardRepository(
-          connector: connector,
+          gateway: data,
           attendanceCounter: AttendanceDayCounter(
             firestore: firestore,
             now: now,
@@ -165,14 +174,15 @@ class BackendFactory {
           now: now,
         ),
         branchManagementRepository: SqlConnectBranchManagementRepository(
-          branches: SqlConnectBranchesRemoteDataSource(connector: connector),
+          branches: SqlConnectBranchesRemoteDataSource(gateway: data),
           members: membersSource,
-
           functions: callables,
         ),
         organizationMembersRepository: SqlConnectOrganizationMembersRepository(
           dataSource: membersSource,
           accounts: accounts,
+          firestore: firestore,
+          attachments: attachments,
         ),
         attendanceRepository: FirestoreAttendanceRepository(
           functions: callables,
@@ -180,11 +190,13 @@ class BackendFactory {
           now: now,
         ),
         returnsRepository: SqlConnectReturnsRepository(
-          connector: connector,
+          gateway: data,
           now: now,
+          attachments: attachments,
         ),
-        reportsRepository: SqlConnectReportsRepository(connector: connector),
+        reportsRepository: SqlConnectReportsRepository(gateway: data),
         settingsRepository: FirestoreSettingsRepository(firestore: firestore),
+        attachmentStorage: attachmentStorage,
       );
     }
 
@@ -242,6 +254,7 @@ class BackendFactory {
       settingsRepository: delay == null
           ? MockSettingsRepository()
           : MockSettingsRepository(delay: delay),
+      attachmentStorage: const MockAttachmentStorage(),
     );
   }
 }

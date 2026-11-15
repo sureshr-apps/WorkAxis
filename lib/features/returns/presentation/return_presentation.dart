@@ -15,6 +15,7 @@ extension ReturnStatusPresentation on ReturnStatus {
 extension ReturnReasonPresentation on ReturnReason {
   IconData get icon => switch (this) {
     ReturnReason.damaged => Icons.broken_image_outlined,
+    ReturnReason.rotten => Icons.eco_outlined,
     ReturnReason.expired => Icons.event_busy_outlined,
     ReturnReason.wrongItem => Icons.swap_horiz_outlined,
     ReturnReason.customerReturned => Icons.assignment_return_outlined,
@@ -27,4 +28,12 @@ extension ReturnItemPresentation on ReturnItem {
   /// Quantity without a trailing `.0`, followed by the unit.
   String get quantityLabel =>
       '${quantity % 1 == 0 ? quantity.toInt() : quantity} $unit';
+
+  /// Reference label combining Bill Number and Invoice Number if both exist.
+  String get referenceLabel {
+    if (billNumber != null && billNumber!.isNotEmpty) {
+      return 'Bill #$billNumber · Inv: $invoiceNumber';
+    }
+    return 'Invoice #$invoiceNumber';
+  }
 }

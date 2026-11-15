@@ -1,5 +1,6 @@
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/employees/domain/models/member_field.dart';
 
 class OrganizationMember {
   const OrganizationMember({
@@ -13,6 +14,20 @@ class OrganizationMember {
     required this.status,
     this.phone,
     this.authUid,
+    this.dailyWorkHours = 8.0,
+    this.shiftHours = '09:00 AM - 05:00 PM',
+    this.employeeCode,
+    this.aadhaarNumber,
+    this.aadhaarPhotoUrl,
+    this.dateOfBirth,
+    this.gender,
+    this.address,
+    this.profilePhotoUrl,
+    this.designation,
+    this.joiningDate,
+    this.relievingDate,
+    this.salary,
+    this.assetDetails,
   });
 
   /// SQL member id (assigned by the server).
@@ -29,6 +44,44 @@ class OrganizationMember {
   final UserRole role;
   final List<String> branchIds;
   final AccountStatus status;
+  final double dailyWorkHours;
+  final String? shiftHours;
+
+  /// Human-readable employee code/ID (e.g. 'EMP-10001').
+  final String? employeeCode;
+
+  /// 12-digit Aadhaar number.
+  final String? aadhaarNumber;
+
+  /// Path or remote URL to Aadhaar photo/document.
+  final String? aadhaarPhotoUrl;
+
+  /// Employee's date of birth.
+  final DateTime? dateOfBirth;
+
+  /// Gender ('Male', 'Female', 'Other').
+  final String? gender;
+
+  /// Residential address.
+  final String? address;
+
+  /// Path or URL to profile photo.
+  final String? profilePhotoUrl;
+
+  /// Role / designation (e.g. 'Store Associate', 'Branch Supervisor').
+  final String? designation;
+
+  /// Date when the employee joined.
+  final DateTime? joiningDate;
+
+  /// Optional date when the employee was/will be relieved.
+  final DateTime? relievingDate;
+
+  /// Monthly salary/CTC.
+  final double? salary;
+
+  /// Description of company assets assigned to employee.
+  final String? assetDetails;
 
   String get initials {
     final parts = fullName.trim().split(RegExp(r'\s+'));
@@ -38,6 +91,8 @@ class OrganizationMember {
         : '${parts.first[0]}${parts[1][0]}'.toUpperCase();
   }
 
+  /// Copies with overrides. A null argument keeps the current value; list a
+  /// field in [clear] to set it to null instead.
   OrganizationMember copyWith({
     String? id,
     String? authUid,
@@ -49,6 +104,22 @@ class OrganizationMember {
     UserRole? role,
     List<String>? branchIds,
     AccountStatus? status,
+    double? dailyWorkHours,
+    String? shiftHours,
+    String? employeeCode,
+    String? aadhaarNumber,
+    String? aadhaarPhotoUrl,
+    DateTime? dateOfBirth,
+    String? gender,
+    String? address,
+    String? profilePhotoUrl,
+    String? designation,
+    DateTime? joiningDate,
+    DateTime? relievingDate,
+    bool clearRelievingDate = false,
+    double? salary,
+    String? assetDetails,
+    Set<MemberField> clear = const {},
   }) => OrganizationMember(
     id: id ?? this.id,
     authUid: authUid ?? this.authUid,
@@ -60,5 +131,40 @@ class OrganizationMember {
     role: role ?? this.role,
     branchIds: branchIds ?? this.branchIds,
     status: status ?? this.status,
+    dailyWorkHours: dailyWorkHours ?? this.dailyWorkHours,
+    shiftHours: shiftHours ?? this.shiftHours,
+    employeeCode: clear.contains(MemberField.employeeCode)
+        ? null
+        : employeeCode ?? this.employeeCode,
+    aadhaarNumber: clear.contains(MemberField.aadhaarNumber)
+        ? null
+        : aadhaarNumber ?? this.aadhaarNumber,
+    aadhaarPhotoUrl: clear.contains(MemberField.aadhaarPhoto)
+        ? null
+        : aadhaarPhotoUrl ?? this.aadhaarPhotoUrl,
+    dateOfBirth: clear.contains(MemberField.dateOfBirth)
+        ? null
+        : dateOfBirth ?? this.dateOfBirth,
+    gender: clear.contains(MemberField.gender) ? null : gender ?? this.gender,
+    address: clear.contains(MemberField.address)
+        ? null
+        : address ?? this.address,
+    profilePhotoUrl: clear.contains(MemberField.profilePhoto)
+        ? null
+        : profilePhotoUrl ?? this.profilePhotoUrl,
+    designation: clear.contains(MemberField.designation)
+        ? null
+        : designation ?? this.designation,
+    joiningDate: clear.contains(MemberField.joiningDate)
+        ? null
+        : joiningDate ?? this.joiningDate,
+    relievingDate:
+        clearRelievingDate || clear.contains(MemberField.relievingDate)
+        ? null
+        : relievingDate ?? this.relievingDate,
+    salary: clear.contains(MemberField.salary) ? null : salary ?? this.salary,
+    assetDetails: clear.contains(MemberField.assetDetails)
+        ? null
+        : assetDetails ?? this.assetDetails,
   );
 }

@@ -21,7 +21,18 @@ class BranchContextController extends ChangeNotifier
   /// Initializes branch context from the resolved access context.
   void initFromAccessContext(UserAccessContext context) {
     _assignedBranches = context.assignedBranches;
-    _activeBranch = context.activeBranch;
+    if (_activeBranch != null) {
+      final matching = _assignedBranches.where(
+        (b) => b.id == _activeBranch!.branchId && b.isActive,
+      );
+      if (matching.isNotEmpty) {
+        _activeBranch = ActiveBranchContext.fromBranch(matching.first);
+      } else {
+        _activeBranch = context.activeBranch;
+      }
+    } else {
+      _activeBranch = context.activeBranch;
+    }
     notifyListeners();
   }
 

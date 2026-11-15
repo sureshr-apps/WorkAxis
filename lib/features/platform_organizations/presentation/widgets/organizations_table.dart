@@ -22,6 +22,7 @@ class OrganizationsTable extends StatelessWidget {
     required this.organizations,
     required this.onSelect,
     required this.onEdit,
+    this.onDelete,
     required this.hasMore,
     required this.isLoadingMore,
     required this.onLoadMore,
@@ -30,6 +31,7 @@ class OrganizationsTable extends StatelessWidget {
   final List<CustomerOrganization> organizations;
   final ValueChanged<CustomerOrganization> onSelect;
   final ValueChanged<CustomerOrganization> onEdit;
+  final ValueChanged<CustomerOrganization>? onDelete;
   final bool hasMore;
   final bool isLoadingMore;
   final VoidCallback onLoadMore;
@@ -50,6 +52,9 @@ class OrganizationsTable extends StatelessWidget {
               organization: organizations[index],
               onSelect: () => onSelect(organizations[index]),
               onEdit: () => onEdit(organizations[index]),
+              onDelete: onDelete != null
+                  ? () => onDelete!(organizations[index])
+                  : null,
             ),
           ),
           SliverToBoxAdapter(
@@ -104,11 +109,13 @@ class _OrganizationRow extends StatelessWidget {
     required this.organization,
     required this.onSelect,
     required this.onEdit,
+    this.onDelete,
   });
 
   final CustomerOrganization organization;
   final VoidCallback onSelect;
   final VoidCallback onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -188,6 +195,16 @@ class _OrganizationRow extends StatelessWidget {
                       ),
                       onPressed: onEdit,
                     ),
+                    if (onDelete != null)
+                      IconButton(
+                        tooltip: 'Delete ${org.name}',
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: AppColors.statusUrgentText,
+                        ),
+                        onPressed: onDelete,
+                      ),
                     Text(
                       'Details',
                       style: AppTypography.labelMedium.copyWith(

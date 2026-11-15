@@ -15,7 +15,7 @@ import {
   commitBranchSave,
   loadBranchManagers,
 } from "../sql/branchSave";
-import { isUniqueViolation } from "../sql/client";
+import { isUniqueViolation } from "../db";
 import { listMembersOfOrganization } from "../sql/members";
 
 export const saveBranch = onCall(callableOptions, (request) =>

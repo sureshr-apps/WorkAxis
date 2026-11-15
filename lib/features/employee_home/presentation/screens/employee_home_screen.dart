@@ -37,11 +37,14 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     });
   }
 
-  Future<void> _load() async {
+  /// [requestLocationPermission] is true only for the explicit location
+  /// refresh button; entry and pull-to-refresh never show the OS prompt.
+  Future<void> _load({bool requestLocationPermission = false}) async {
     final access = context.read<AccessController>().accessContext;
     if (access == null) return;
     await context.read<EmployeeHomeController>().loadHomeSummary(
       access: access,
+      requestLocationPermission: requestLocationPermission,
     );
   }
 
@@ -54,7 +57,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       backgroundColor: AppColors.surface,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _load,
+          onRefresh: () => _load(),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: ResponsivePageContent(
@@ -77,7 +80,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                       message:
                           controller.errorMessage ??
                           'An error occurred loading the dashboard.',
-                      onRetry: _load,
+                      onRetry: () => _load(),
                     )
                   else if (summary != null)
                     _body(controller, summary),
@@ -136,7 +139,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             const SizedBox(height: AppSpacing.lg),
             ActiveGeofenceCard(
               summary: summary,
-              onRefreshLocation: _load,
+              onRefreshLocation: () => _load(requestLocationPermission: true),
             ),
           ],
         );

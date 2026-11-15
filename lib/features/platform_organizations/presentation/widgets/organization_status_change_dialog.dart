@@ -6,10 +6,10 @@ import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 
-/// The two status transitions a platform user can request.
-enum OrganizationStatusChange { suspend, reactivate }
+/// The status transitions and destructive actions a platform user can request.
+enum OrganizationStatusChange { suspend, reactivate, delete }
 
-/// Copy and colors that differ between the suspend and reactivate dialogs.
+/// Copy and colors that differ between the suspend, reactivate and delete dialogs.
 class _StatusChangeConfig {
   const _StatusChangeConfig({
     required this.title,
@@ -70,6 +70,23 @@ class _StatusChangeConfig {
               'operations resume.',
           failureMessage:
               'The organization could not be reactivated. Please try again.',
+        ),
+        OrganizationStatusChange.delete => const _StatusChangeConfig(
+          title: 'Delete Organization?',
+          confirmLabel: 'Delete Organization',
+          icon: Icons.delete_forever_outlined,
+          accent: AppColors.statusUrgent,
+          accentContainer: AppColors.statusUrgentContainer,
+          accentBorder: AppColors.statusUrgentBorder,
+          currentStatusLabel: 'Permanent Action',
+          currentStatusIsActive: false,
+          outcome: ' will be permanently deleted from the platform.',
+          detail:
+              'All branch configurations, employee accounts, and operational '
+              'records associated with this organization will be permanently removed. '
+              'This action cannot be undone.',
+          failureMessage:
+              'The organization could not be deleted. Please try again.',
         ),
       };
 }
@@ -187,9 +204,10 @@ class _OrganizationStatusChangeDialogState
                   ),
                   AppButton(
                     text: config.confirmLabel,
-                    variant: widget.change == OrganizationStatusChange.suspend
-                        ? AppButtonVariant.destructive
-                        : AppButtonVariant.primary,
+                    variant:
+                        widget.change == OrganizationStatusChange.reactivate
+                        ? AppButtonVariant.primary
+                        : AppButtonVariant.destructive,
                     isFullWidth: false,
                     isLoading: _isLoading,
                     onPressed: _handleConfirm,

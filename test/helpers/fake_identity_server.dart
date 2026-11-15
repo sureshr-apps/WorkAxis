@@ -90,6 +90,10 @@ class FakeIdentityServer implements CallableFunctions {
     final uid = 'srv-uid-$id';
     final role = UserRole.values.byName(p['role'] as String);
     final loginEmail = email ?? '$username@login.workaxis.invalid';
+    // Mirrors the server: a supplied code is kept, otherwise the next
+    // per-organization sequence number is assigned.
+    final employeeCode =
+        (p['employeeCode'] as String?) ?? 'EMP-${10000 + _nextNumber}';
     _rows[id] = OrganizationMember(
       id: id,
       authUid: uid,
@@ -98,6 +102,7 @@ class FakeIdentityServer implements CallableFunctions {
       username: username,
       email: loginEmail,
       phone: phone,
+      employeeCode: employeeCode,
       role: role,
       branchIds: List<String>.from(p['branchIds'] as List? ?? const []),
       status: AccountStatus.active,
@@ -112,6 +117,7 @@ class FakeIdentityServer implements CallableFunctions {
       'memberId': id,
       'username': username,
       'loginEmail': loginEmail,
+      'employeeCode': employeeCode,
     };
     _provisioned[requestId] = response;
     return response;

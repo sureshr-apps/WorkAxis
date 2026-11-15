@@ -58,6 +58,8 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   }
 
   Future<void> _load() async {
+    await context.read<AccessController>().refreshAccess();
+    if (!mounted) return;
     final access = _access;
     if (access != null) {
       await context.read<OrganizationMembersController>().loadMembers(
@@ -133,9 +135,11 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                 : 'Manage employees assigned to the active branch.',
                             action: canCreate
                                 ? AppButton.responsive(
-                                    text: 'Add Employee',
+                                    text: isAdmin
+                                        ? 'Add Member'
+                                        : 'Add Employee',
                                     iconData: Icons.person_add_alt_1,
-                                    onPressed: access == null
+                                    onPressed: (access == null || needsBranch)
                                         ? null
                                         : () => _openEditor(
                                             access,
@@ -329,18 +333,24 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     required String? branchId,
     OrganizationMember? member,
   }) async {
+    await context.read<AccessController>().refreshAccess();
+    if (!mounted) return;
+    final freshAccess =
+        context.read<AccessController>().accessContext ?? access;
     final controller = context.read<OrganizationMembersController>();
     controller.clearActionError();
     final saved = await showDialog<bool>(
       context: context,
+      // A long form: a stray tap outside must not discard what was typed.
+      barrierDismissible: false,
       builder: (context) => OrganizationMemberEditorDialog(
-        access: access,
+        access: freshAccess,
         activeBranchId: branchId,
         member: member,
         isSaving: controller.isSaving,
         saveErrorMessage: () => controller.actionErrorMessage,
         onSave: (draft, password) => controller.saveMember(
-          access: access,
+          access: freshAccess,
           member: draft,
           initialPassword: password,
           activeBranchId: branchId,

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_data_connect/firebase_data_connect.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 
 /// Converts any backend/infrastructure failure into a typed [AppException]
@@ -27,18 +26,6 @@ AppException mapBackendError(Object error, [StackTrace? stackTrace]) {
 
   if (error is FirebaseAuthException) {
     return _mapAuthCode(error);
-  }
-
-  if (error is DataConnectError) {
-    return switch (error.dataConnectErrorCode) {
-      DataConnectErrorCode.unavailable => NetworkException(
-        'Data Connect unavailable',
-      ),
-      DataConnectErrorCode.unauthorized => AccessDeniedException(
-        'Data Connect unauthorized',
-      ),
-      _ => DatabaseException('Data Connect failure: ${error.code}'),
-    };
   }
 
   if (error is FirebaseException) {

@@ -1,7 +1,7 @@
 import 'package:workaxis/features/access/domain/models/access_member_record.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 
-/// Remote reads needed to resolve access. Thin seam over SQL Connect so the
+/// Remote reads needed to resolve access. Thin seam over the data gateway so the
 /// repository logic can be unit-tested with a fake.
 abstract interface class AccessRemoteDataSource {
   /// The signed-in caller's membership row, or null when none exists.

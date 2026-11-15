@@ -1,0 +1,263 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import type { Actor } from "../auth/roles";
+import { runOperation } from "../data/dispatch";
+import { operations } from "../data/registry";
+import { FakeDb } from "./fakeDb";
+
+const platform: Actor = { uid: "p1", role: "platformAdmin", branchIds: [] };
+const orgAdmin: Actor = { uid: "a1", role: "orgAdmin", organizationId: "o1", branchIds: [] };
+const manager: Actor = {
+  uid: "m1",
+  role: "branchManager",
+  organizationId: "o1",
+  branchIds: ["b1"],
+};
+const employee: Actor = { uid: "e1", role: "employee", organizationId: "o1", branchIds: ["b1"] };
+
+function run(db: FakeDb, actor: Actor, op: string, vars: Record<string, unknown> = {}) {
+  return runOperation(operations, { db, actor }, { op, vars });
+}
+
+const denies = (p: Promise<unknown>) =>
+  assert.rejects(p, (e: { code?: string }) => e.code === "permission-denied");
+
+describe("dispatch", () => {
+  it("rejects unknown and malformed operations", async () => {
+    const db = new FakeDb();
+    await assert.rejects(run(db, platform, "NoSuchOp"), (e: { code?: string }) => e.code === "invalid-argument");
+    await assert.rejects(run(db, platform, "toString"), (e: { code?: string }) => e.code === "invalid-argument");
+    assert.equal(db.calls.length, 0);
+  });
+
+  it("registers every client-facing connector operation", () => {
+    const expected = [
+      "ListOrganizations", "ListOrganizationsPaged", "GetOrganizationById", "GetOrganizationStats",
+      "GetPlatformStats", "ListBranchesByOrg", "GetBranchById", "ListMyBranchAssignments",
+      "GetMyMember", "ListMembersByOrg", "ListMembersByOrgPaged", "ListMembersByBranchPaged",
+      "GetMemberById", "ListReturnsByBranch", "ListReturnsByBranchPaged", "ListReturnsByOrgPaged",
+      "ListMyReturns", "GetOrganizationDashboardCounts", "GetReturnCountsByBranch", "GetBranchStats",
+      "GetCommercialAgreementByOrg", "ListLicenseEventsByOrg", "ListPlatformMembersPaged",
+      "CreateOrganization", "UpdateOrganization", "CreateCommercialAgreement",
+      "UpdateCommercialAgreement", "CreateLicenseEvent", "CreateReturnRecord", "SubmitReturn",
+      "UpdateReturnRecordReview", "UpdateReturnRecordStatus",
+    ];
+    for (const name of expected) assert.ok(operations[name], name);
+  });
+});
+
+describe("organizations ops", () => {
+  it("denies non-platform callers", async () => {
+    await denies(run(new FakeDb(), orgAdmin, "ListOrganizationsPaged", { limit: 10, offset: 0 }));
+    await denies(run(new FakeDb(), employee, "GetOrganizationById", { id: "o2" }));
+    await denies(run(new FakeDb(), platform, "UpdateOrganization", { id: "o1", status: "suspended" }));
+  });
+
+  it("pages with escaped case-insensitive filter and returns total", async () => {
+    const db = new FakeDb()
+      .when("count(*)", [{ _count: 7 }])
+      .when("from organization", [{ id: "o1", name: "Acme" }]);
+    const res = (await run(db, platform, "ListOrganizationsPaged", {
+      limit: 5,
+      offset: 10,
+      nameContains: "50%_off",
+    })) as { organizations: unknown[]; total: unknown };
+    assert.deepEqual(res.total, [{ _count: 7 }]);
+    assert.equal(res.organizations.length, 1);
+    const list = db.calls[1];
+    assert.match(list.sql, /name ILIKE \$1/);
+    assert.deepEqual(list.params, ["%50\\%\\_off%", 5, 10]);
+  });
+
+  it("creates an organization with defaults and maps duplicate codes", async () => {
+    const db = new FakeDb().when("insert into organization", [{ id: "new" }]);
+    const res = await run(db, platform, "CreateOrganization", { name: "N", code: "C" });
+    assert.deepEqual(res, { organization_insert: { id: "new" } });
+    assert.ok(db.calls[0].params.includes("INR") && db.calls[0].params.includes("active"));
+
+    const dup = new FakeDb().whenCall(() => {
+      throw Object.assign(new Error("dup"), { code: "23505" });
+    });
+    await assert.rejects(
+      run(dup, platform, "CreateOrganization", { name: "N", code: "C" }),
+      (e: { code?: string }) => e.code === "already-exists",
+    );
+  });
+});
+
+describe("branches ops", () => {
+  it("scopes GetBranchById by role", async () => {
+    const branch = { id: "b2", name: "B", organizationId: "o1" };
+    const db = () => new FakeDb().when("from branch b where", [branch]);
+    await denies(run(db(), manager, "GetBranchById", { id: "b2" }));
+    await denies(run(db(), { ...orgAdmin, organizationId: "o9" }, "GetBranchById", { id: "b2" }));
+    const res = await run(db(), orgAdmin, "GetBranchById", { id: "b2" });
+    assert.deepEqual(res, { branch: { id: "b2", name: "B", organization: { id: "o1" } } });
+  });
+
+  it("nests the branch in the caller's assignments", async () => {
+    const db = new FakeDb().when("user_branch_assignment", [
+      { assignmentId: "a1", id: "b1", name: "B", organizationId: "o1" },
+    ]);
+    const res = await run(db, employee, "ListMyBranchAssignments");
+    assert.deepEqual(res, {
+      userBranchAssignments: [{ id: "a1", branch: { id: "b1", name: "B", organization: { id: "o1" } } }],
+    });
+    assert.deepEqual(db.calls[0].params, ["e1"]);
+  });
+});
+
+describe("members ops", () => {
+  it("denies member reads outside the caller's scope", async () => {
+    await denies(run(new FakeDb(), orgAdmin, "ListMembersByOrg", { orgId: "o2" }));
+    await denies(run(new FakeDb(), employee, "ListMembersByOrgPaged", { orgId: "o1", limit: 1, offset: 0 }));
+    const db = new FakeDb().when("from organization_member m where", [
+      { id: "m9", authUid: "other", organizationId: "o1", role: "employee" },
+    ]);
+    await denies(run(db, employee, "GetMemberById", { id: "m9" }));
+  });
+
+  it("limits branch member lists to managed branches and nests members", async () => {
+    await denies(run(new FakeDb(), manager, "ListMembersByBranchPaged", { branchId: "b2", limit: 1, offset: 0 }));
+    const db = new FakeDb()
+      .when("select id, organization_id", [{ id: "b1", organizationId: "o1" }])
+      .when("count(*)", [{ _count: 1 }])
+      .when("from user_branch_assignment a join organization_member", [{ id: "m2", fullName: "Zed" }])
+      .when("a.member_id in", [{ memberId: "m2", branchId: "b1", branchName: "B" }]);
+    const res = (await run(db, manager, "ListMembersByBranchPaged", { branchId: "b1", limit: 10, offset: 0 })) as {
+      userBranchAssignments: { member: Record<string, unknown> }[];
+      total: unknown;
+    };
+    assert.deepEqual(res.total, [{ _count: 1 }]);
+    assert.deepEqual(res.userBranchAssignments[0].member.userBranchAssignments_on_member, [
+      { branch: { id: "b1" } },
+    ]);
+  });
+
+  it("lets a member read themselves and returns the nested organization", async () => {
+    const db = new FakeDb()
+      .when("from organization_member m where", [{ id: "m1", authUid: "e1", organizationId: "o1" }])
+      .when("a.member_id in", [{ memberId: "m1", branchId: "b1", branchName: "B" }]);
+    const res = (await run(db, employee, "GetMemberById", { id: "m1" })) as {
+      organizationMember: Record<string, unknown>;
+    };
+    assert.deepEqual(res.organizationMember.organization, { id: "o1" });
+    assert.deepEqual(res.organizationMember.userBranchAssignments_on_member, [
+      { branch: { id: "b1", name: "B" } },
+    ]);
+  });
+});
+
+describe("returns ops", () => {
+  it("only lets employees/managers submit into their own branches", async () => {
+    const vars = { branchId: "b1", productTitle: "P", returnReason: "R", quantity: 2, unit: "pc", invoiceNumber: "I" };
+    await denies(run(new FakeDb(), orgAdmin, "SubmitReturn", vars));
+    await denies(run(new FakeDb(), employee, "SubmitReturn", { ...vars, branchId: "b2" }));
+    await assert.rejects(
+      run(new FakeDb(), employee, "SubmitReturn", { ...vars, quantity: 0 }),
+      (e: { code?: string }) => e.code === "invalid-argument",
+    );
+  });
+
+  it("stamps org, submitter and uid on SubmitReturn", async () => {
+    const db = new FakeDb()
+      .when("from organization_member where auth_uid", [{ id: "mem1", authUid: "e1", fullName: "Eve" }])
+      .when("from branch where id", [{ status: "active", organizationId: "o1" }])
+      .when("insert into return_record", [{ id: "r1" }]);
+    const res = await run(db, employee, "SubmitReturn", {
+      branchId: "b1", productTitle: "Shoe", returnReason: "Torn", quantity: 2, unit: "pc", invoiceNumber: "INV1",
+    });
+    assert.deepEqual(res, { returnRecord_insert: { id: "r1" } });
+    assert.equal(db.transactions, 1);
+    const insert = db.calls.find((c) => /insert into return_record/i.test(c.sql))!;
+    for (const v of ["o1", "b1", "mem1", "e1", "Eve", "Shoe", 2, "pc", "INV1", "pending"]) {
+      assert.ok(insert.params.includes(v), String(v));
+    }
+  });
+
+  it("rejects a review of an already-reviewed or out-of-scope return", async () => {
+    const reviewer = new FakeDb().when("from organization_member where auth_uid", [{ id: "mem", fullName: "Mo" }]);
+    reviewer.when("from return_record where id", [
+      { status: "approved", organizationId: "o1", branchId: "b1" },
+    ]);
+    await denies(run(reviewer, manager, "UpdateReturnRecordReview", { id: "r1", status: "approved" }));
+
+    const other = new FakeDb().when("from organization_member where auth_uid", [{ id: "mem", fullName: "Mo" }]);
+    other.when("from return_record where id", [{ status: "pending", organizationId: "o1", branchId: "b2" }]);
+    await denies(run(other, manager, "UpdateReturnRecordReview", { id: "r1", status: "approved" }));
+    await denies(run(new FakeDb(), employee, "UpdateReturnRecordReview", { id: "r1", status: "approved" }));
+  });
+
+  it("stamps reviewer identity on approval", async () => {
+    const db = new FakeDb()
+      .when("from organization_member where auth_uid", [{ id: "mem", fullName: "Mo" }])
+      .when("from return_record where id", [{ status: "pending", organizationId: "o1", branchId: "b1" }])
+      .when("update return_record", [{ id: "r1" }]);
+    const res = await run(db, manager, "UpdateReturnRecordReview", {
+      id: "r1", status: "rejected", reviewerNotes: "no bill",
+    });
+    assert.deepEqual(res, { returnRecord_update: { id: "r1" } });
+    assert.deepEqual(db.calls.at(-1)!.params, ["r1", "rejected", "no bill", "m1", "Mo"]);
+  });
+
+  it("returns org lists with nested branch and total", async () => {
+    await denies(run(new FakeDb(), manager, "ListReturnsByOrgPaged", { orgId: "o1", limit: 1, offset: 0 }));
+    const db = new FakeDb()
+      .when("count(*)", [{ _count: 3 }])
+      .when("join branch b", [{ id: "r1", branchRefId: "b1", branchRefName: "B" }]);
+    const res = (await run(db, orgAdmin, "ListReturnsByOrgPaged", {
+      orgId: "o1", limit: 5, offset: 0, status: "pending", branchId: "b1",
+    })) as { returnRecords: unknown[]; total: unknown };
+    assert.deepEqual(res.returnRecords, [{ id: "r1", branch: { id: "b1", name: "B" } }]);
+    assert.deepEqual(res.total, [{ _count: 3 }]);
+    assert.deepEqual(db.calls[1].params, ["o1", "b1", "pending", 5, 0]);
+  });
+});
+
+describe("dashboards ops", () => {
+  it("denies foreign organizations and branches", async () => {
+    await denies(run(new FakeDb(), orgAdmin, "GetOrganizationDashboardCounts", { orgId: "o2" }));
+    await denies(run(new FakeDb(), manager, "GetBranchStats", { branchId: "b2" }));
+  });
+
+  it("returns group rows with numeric counts and period filters", async () => {
+    const db = new FakeDb().when("group by branch_id, status", [{ branchId: "b1", status: "pending", _count: "4" }]);
+    const res = (await run(db, orgAdmin, "GetReturnCountsByBranch", {
+      orgId: "o1", from: "2026-01-01T00:00:00Z", to: "2026-02-01T00:00:00Z",
+    })) as { returnRecords: unknown[] };
+    assert.deepEqual(res.returnRecords, [{ branchId: "b1", status: "pending", _count: 4 }]);
+    assert.deepEqual(db.calls[0].params, ["o1", "2026-01-01T00:00:00.000Z", "2026-02-01T00:00:00.000Z"]);
+  });
+});
+
+describe("commercial ops", () => {
+  it("restricts writes to platform roles and validates enums", async () => {
+    const vars = {
+      orgId: "o1", eventType: "RENEWED", planName: "P", planTier: "T", validityPeriod: "1y",
+      storesCount: 1, usersCount: 2, oneTimePrice: 1, annualMaintenancePrice: 1,
+    };
+    await denies(run(new FakeDb(), orgAdmin, "CreateLicenseEvent", vars));
+    await assert.rejects(
+      run(new FakeDb(), platform, "CreateLicenseEvent", { ...vars, eventType: "BOGUS" }),
+      (e: { code?: string }) => e.code === "invalid-argument",
+    );
+    const db = new FakeDb().when("insert into license_event", [{ id: "le1" }]);
+    assert.deepEqual(await run(db, platform, "CreateLicenseEvent", vars), { licenseEvent_insert: { id: "le1" } });
+  });
+
+  it("updates only provided agreement fields and returns null when missing", async () => {
+    const db = new FakeDb();
+    const res = await run(db, platform, "UpdateCommercialAgreement", { id: "c1", planName: "Gold", maxUsers: 9 });
+    assert.deepEqual(res, { commercialAgreement_update: null });
+    assert.match(db.calls[0].sql, /SET plan_name = \$2, max_users = \$3 WHERE id = \$1/);
+    assert.deepEqual(db.calls[0].params, ["c1", "Gold", 9]);
+  });
+
+  it("lets an Org Admin read only their own agreement", async () => {
+    await denies(run(new FakeDb(), orgAdmin, "GetCommercialAgreementByOrg", { orgId: "o2" }));
+    const db = new FakeDb().when("from commercial_agreement", [{ id: "c1" }]);
+    assert.deepEqual(await run(db, orgAdmin, "GetCommercialAgreementByOrg", { orgId: "o1" }), {
+      commercialAgreements: [{ id: "c1" }],
+    });
+  });
+});

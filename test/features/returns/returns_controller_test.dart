@@ -29,6 +29,18 @@ class _ConstListReturnsRepository implements ReturnsRepository {
   }
 
   @override
+  Future<List<ReturnItem>> submitReturnBatch({
+    required UserAccessContext access,
+    String? branchId,
+    required CreateReturnBatchInput input,
+  }) async {
+    if (failSubmit) throw StateError('nope');
+    return input.items
+        .map((_) => _item('created', ReturnStatus.pending))
+        .toList();
+  }
+
+  @override
   Future<ReturnItem> reviewReturn({
     required UserAccessContext access,
     String? activeBranchId,

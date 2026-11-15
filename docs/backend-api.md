@@ -1,12 +1,13 @@
 # WorkAxis Backend API
 
 Server-side contract for the Flutter client. Region everywhere: `asia-south1`.
-Status of this document: describes the code in `dataconnect/`, `functions/`
-and `firestore.rules` as written. Nothing here has been deployed; SQL Connect
-operations were compiled (`firebase dataconnect:compile`, which also validates
-every CEL expression) and Firestore rules and pure function logic are
-unit-tested. Callables and SQL Connect `@auth` expressions have not been
-exercised against a live project.
+Status of this document: describes the code in `functions/`, `functions/db/`
+and `firestore.rules` as written. Relational data lives in plain PostgreSQL and
+is reached only from Cloud Functions (the app calls the single `dataOp`
+callable); Firebase Data Connect is no longer used. Firestore rules and pure
+function logic are unit-tested, and SQL-facing code is tested against an
+in-memory `FakeDb`. The deployment checklist (section 5) targets the separate
+Firebase project `workaxis-app`.
 
 ## 1. Identity model
 
@@ -32,7 +33,7 @@ so seed rows can exist before an Auth identity does. Platform roles have
 - `organizationId`: absent for platform roles
 - `branchIds`: active assigned branches (empty for org-wide roles)
 - `status`: `active | suspended`. Effective status is `suspended` if the member
-  or its organization is suspended. Every SQL Connect operation and Firestore
+  or its organization is suspended. Every `dataOp` operation and Firestore
   rule requires `status == 'active'`.
 
 Claims change only through functions. After a role/branch/status change the
@@ -74,6 +75,16 @@ Errors are `HttpsError` codes; internal details are never returned:
 | `resolveLoginIdentifier` | `{identifier}` | `{email}` | unauthenticated |
 | `recordAttendancePunch` | `{kind: 'checkIn'\|'checkOut'\|'breakStart'\|'breakEnd', branchId, latitude, longitude, accuracyMeters}` | `{entryId, kind, recordedAt, workDate, distanceMeters}` | Employee |
 | `createKioskPairingToken` | `{branchId}` | `{token, expiresAt, branchId}` | Org Admin of the org, Branch Manager of the branch |
+
+#### Optional employee profile fields: omit vs null
+
+`updateUserAccount` treats the optional profile fields (`aadhaarNumber`, `aadhaarPhotoUrl`, `dateOfBirth`, `gender`, `address`, `profilePhotoUrl`, `designation`, `joiningDate`, `relievingDate`, `salary`, `assetDetails`) as a patch:
+
+- key **omitted** (or an empty string): unchanged;
+- explicit **`null`**: clear the stored value (`FieldValue.delete()`; `salary`, `aadhaarNumber` and `aadhaarPhotoUrl` are removed from `employee_private/{uid}`, the rest from `users/{uid}`);
+- a value: set it (validated as before).
+
+`dailyWorkHours`, `shiftHours` and `employeeCode` can never be cleared (`null` is rejected with `invalid-argument`). Clearing an employment-control field counts as editing it, so `assertNoSelfEmploymentEdit` denies it on one's own account. The client sends `null` only for a field the user emptied whose stored value was known and non-empty; values the caller cannot read (e.g. salary/Aadhaar for a Branch Manager) are never cleared. `provisionUser` ignores `null`s. It also rejects creating an `employee` without `aadhaarNumber`, `aadhaarPhotoUrl`, `designation`, `salary`, `dailyWorkHours` and `shiftHours` (same rule as `OrganizationMemberPolicy.requiredFields`).
 
 Authorization matrix (`functions/src/auth/authorization.ts`, unit-tested):
 
@@ -144,73 +155,111 @@ because steps 3-7 are upserts. Clients must generate one `requestId`
 
 No function can create a `platformOwner`. Once, using the Admin SDK or the
 console with a trusted credential: create the Auth user; insert the SQL
-member (`role: "platformOwner"`, no organization, `authUid` = uid) via
-`executeGraphql`; set claims `{role: "platformOwner", branchIds: [], status:
+member (`role: "platformOwner"`, no organization, `authUid` = uid) directly
+in SQL; set claims `{role: "platformOwner", branchIds: [], status:
 "active"}`; write `users/{uid}` and aliases `user_aliases/{username}` =
-`{userId, email}`. Seed members (`dataconnect/seed_data.*`) have
+`{userId, email}`. Seed members (`functions/db/seed/seed_data.sql`) have
 `auth_uid = NULL` and cannot call any function until linked.
 
-## 3. SQL Connect operations
+## 3. dataOp operations
 
-Connector `workaxis-connector`. Claims: `S` = `status == 'active'`,
-`P` = role is platformOwner/platformAdmin. Unset optional variables must be
-omitted (not sent as null). Identity writes (members, assignments, role,
-status) have no client operation: use the callables.
+One callable, `dataOp` (region `asia-south1`): request `{ op, vars }`, response
+`{ data }`. Implementations: `functions/src/data/ops/*.ts`, registered in
+`functions/src/data/registry.ts`. The caller is resolved from SQL on every call
+(role, organization, active branches, status) and each operation authorizes
+itself. Unset optional variables must be omitted (not sent as null). Identity
+writes (members, assignments, role, status) and branch saves have no `dataOp`
+operation: use the callables. Name filters are case-insensitive (`ILIKE`).
+Platform = platformOwner or platformAdmin; Org Admin = own organization only;
+Branch Manager (BM) = assigned branches only. Paged operations take
+`limit`/`offset` and also return `total`.
 
-### Queries
+### Organizations (`ops/organizations.ts`)
 
-| Operation | Variables | Auth |
-|---|---|---|
-| `ListOrganizations` (unchanged) | - | S and P |
-| `ListOrganizationsPaged` (new) | `limit, offset, nameContains?, status?`; also returns `total {_count}` | S and P |
-| `GetOrganizationById` (+`taxIdentification`, `description`, `contactName`, `contactEmail`, `contactPhone`, `address`) | `id` | S and (P or own org) |
-| `GetOrganizationStats` (new) | `orgId` -> `branchCount`, `memberCount` | S and (P or Org Admin of org) |
-| `GetPlatformStats` (new) | - -> `organizationsByStatus`, `platformAdminCount` | S and P |
-| `ListBranchesByOrg` (unchanged vars) | `orgId` | S and (P or own org, any customer role) |
-| `GetBranchById` (new) | `id` | S; P, Org Admin of owning org, or Branch Manager/Employee with `id in branchIds` |
-| `ListMyBranchAssignments` (new) | - -> active assigned branches via `auth.uid` | S |
-| `GetMyMember` (new) | - -> caller's member row (incl. `authUid`) + organization `{id,name,code,status}` | S |
-| `ListMembersByOrg` (unchanged vars) | `orgId` | S and (P or Org Admin of org). Branch Managers: use `ListMembersByBranchPaged` |
-| `ListMembersByOrgPaged` (new) | `orgId, limit, offset, nameContains?, status?, role?`; `total` | S and (P or Org Admin of org) |
-| `ListMembersByBranchPaged` (new) | `branchId, limit, offset, nameContains?, status?`; `total` | S; Org Admin of owning org or Branch Manager of branch |
-| `GetMemberById` (new; incl. `createdAt`) | `id` | S; self, P, Org Admin of org, or Branch Manager sharing a branch |
-| `ListPlatformMembersPaged` (new) | `limit, offset, nameContains?, status?`; `total`; platform administrators only | S and P |
-| `ListReturnsByBranch` (limit 200; extra fields) | `branchId` | S; Org Admin of owning org or Branch Manager of branch (employees use `ListMyReturns`) |
-| `ListReturnsByBranchPaged` (new) | `branchId, limit, offset, status?`; `total` | same |
-| `ListMyReturns` (new) | `limit, offset, status?`; `total` | S; rows where `employeeUid == auth.uid` |
-| `GetOrganizationDashboardCounts` (new) | `orgId` -> `branchesByStatus`, `membersByRole`, `returnsByStatus` | S and (P or Org Admin of org) |
-| `ListReturnsByOrgPaged` (new) | `orgId, limit, offset, status?, branchId?`; rows as `ListReturnsByBranchPaged` plus `branch { id name }`; `total` | S and (P or Org Admin of orgId). Replaces the per-branch fan-out for Org Admins |
-| `GetReturnCountsByBranch` | `orgId, from?, to?` -> grouped `returnRecords (branchId,status,_count)` and `returnsByReason (returnReason,_count)` | same. `from` inclusive, `to` exclusive (`createdAt`); omit both for all time |
-| `GetBranchStats` | `branchId, from?, to?` -> `memberCount`, `returnsByStatus`, `returnsByReason` | S; Org Admin / Branch Manager of branch. Same date semantics |
-| `GetCommercialAgreementByOrg`, `ListLicenseEventsByOrg` | `orgId` | S and (P or Org Admin of org) |
+| Operation | Who may call | Key vars | Response keys |
+| --- | --- | --- | --- |
+| `ListOrganizations` | Platform | none | `organizations` |
+| `ListOrganizationsPaged` | Platform | `nameContains`, `status` | `organizations`, `total` |
+| `GetOrganizationById` | Platform; members of that organization | `id` | `organization` |
+| `GetOrganizationStats` | Platform; Org Admin | `orgId` | `branchCount`, `memberCount` |
+| `GetPlatformStats` | Platform | none | `organizationsByStatus`, `platformAdminCount` |
+| `CreateOrganization` | Platform | `name`, `code`, optional profile fields, `status`, `id` | `organization_insert` |
+| `UpdateOrganization` | Platform (status cannot be changed; use `setOrganizationStatus`) | `id`, profile fields | `organization_update` |
 
-### Mutations
+### Branches (`ops/branches.ts`)
 
-| Operation | Variables | Auth |
-|---|---|---|
-| `CreateOrganization` (+`taxIdentification`, `description`, `contactName`, `contactEmail`, `contactPhone`, `address`; `id` is now optional and server-generated, returned as `organization_insert.id`) | unchanged + optional | S and P; status in active/suspended |
-| `UpdateOrganization` | `id, name?, category?, country?, currency?, logoUrl?, taxIdentification?, description?, contactName?, contactEmail?, contactPhone?, address?` (`status` accepted in the signature but rejected: use `setOrganizationStatus`) | S and P. Writes `category` as its own column |
-| `CreateCommercialAgreement`, `UpdateCommercialAgreement`, `CreateLicenseEvent` (new) | see `mutations.gql` | S and P |
-| `CreateBranch` (legacy, client id) / `AddBranch` (new, server uuid) | `orgId, name, code, ...geofence` | S and (P or Org Admin of orgId); radius 10-5000, lat/long ranges |
-| `UpdateBranch` (new) | `id, name?, code?, location?, status?, isMainBranch?, geofenceRadiusMeters?, latitude?, longitude?, kioskEnabled?` | S; P or Org Admin of owning org (lookup `@check`) |
-| `CreateOrganizationMember` | unchanged | `NO_ACCESS` (use `provisionUser`) |
-| `CreateReturnRecord` (legacy) / `SubmitReturn` (new: `branchId, productTitle, returnReason, quantity, unit, invoiceNumber, billImageUrl?, remarks?`) | | S; Employee/Branch Manager with `branchId in branchIds`; org, submitter id/name, `employeeUid` derived from claims and member lookup |
-| `UpdateReturnRecordReview` (new: `id, status, reviewerNotes?`) / `UpdateReturnRecordStatus` (legacy, same rules) | status in approved/rejected | S; Org Admin of owning org or Branch Manager of the return's branch; only `pending` returns; reviewer uid/name/`reviewedAt` set server-side |
+| Operation | Who may call | Key vars | Response keys |
+| --- | --- | --- | --- |
+| `ListBranchesByOrg` | Platform; Org Admin | `orgId` | `branches` |
+| `GetBranchById` | Platform; Org Admin of its org; BM/Employee assigned to it | `id` | `branch` |
+| `ListMyBranchAssignments` | Any signed-in member (own active branches) | none | `userBranchAssignments` |
 
-Schema changes: `Organization.taxIdentification`, `description`, `contactName`, `contactEmail`, `contactPhone`, `address` (all nullable); `OrganizationMember.authUid`
-(unique, nullable), `organization` nullable, `phone` unique;
-`Branch (organization, code)` unique; `UserBranchAssignment (member, branch)`
-unique; `ReturnRecord` gains `employeeUid, productTitle, quantity, unit,
-billImageUrl, remarks, reviewerNotes, reviewerUid, reviewerName, reviewedAt`
-(legacy `customerName` = product title and `amount` = quantity are still
-written). All `id` columns default to `uuidV4()`. Role/status values are not
-DB enums; they are validated in operation auth expressions and in functions.
+### Members (`ops/members.ts`)
+
+| Operation | Who may call | Key vars | Response keys |
+| --- | --- | --- | --- |
+| `GetMyMember` | Any signed-in member (own record) | none | `organizationMembers` |
+| `ListMembersByOrg` | Platform; Org Admin | `orgId` | `organizationMembers` |
+| `ListMembersByOrgPaged` | Platform; Org Admin | `orgId`, `nameContains`, `status`, `role` | `organizationMembers`, `total` |
+| `ListMembersByBranchPaged` | Org Admin of its org; BM assigned (platform excluded) | `branchId`, `nameContains`, `status` | `userBranchAssignments`, `total` |
+| `GetMemberById` | Self; Platform; Org Admin of its org; BM sharing a branch | `id` | `organizationMember` |
+| `ListPlatformMembersPaged` | Platform | `nameContains`, `status` | `organizationMembers`, `total` |
+
+### Returns (`ops/returns.ts`)
+
+| Operation | Who may call | Key vars | Response keys |
+| --- | --- | --- | --- |
+| `ListReturnsByBranch` | Org Admin of its org; BM assigned (latest 200) | `branchId` | `returnRecords` |
+| `ListReturnsByBranchPaged` | Org Admin; BM assigned | `branchId`, `status` | `returnRecords`, `total` |
+| `ListReturnsByOrgPaged` | Platform; Org Admin | `orgId`, `branchId`, `status` | `returnRecords`, `total` |
+| `ListMyReturns` | Any signed-in member (own submissions) | `status` | `returnRecords`, `total` |
+| `SubmitReturn` | Employee, BM (own active branch) | `branchId`, `productTitle`, `quantity`, `unit`, `invoiceNumber`, `returnReason`, `billImageUrl`, `remarks` | `returnRecord_insert` |
+| `CreateReturnRecord` | Employee, BM (legacy; client-supplied id) | `id`, `orgId`, `branchId`, `employeeId`, `customerName`, `amount`, `invoiceNumber`, `returnReason` | `returnRecord_insert` |
+| `UpdateReturnRecordReview` | Org Admin of its org; BM of the branch (pending only) | `id`, `status` (approved/rejected), `reviewerNotes` | `returnRecord_update` |
+| `UpdateReturnRecordStatus` | Same as review (legacy, no notes) | `id`, `status` | `returnRecord_update` |
+
+Submitter and reviewer identity, organization and timestamps are stamped server-side.
+
+### Dashboards (`ops/dashboards.ts`)
+
+| Operation | Who may call | Key vars | Response keys |
+| --- | --- | --- | --- |
+| `GetOrganizationDashboardCounts` | Platform; Org Admin | `orgId` | `branchesByStatus`, `membersByRole`, `returnsByStatus` |
+| `GetReturnCountsByBranch` | Platform; Org Admin | `orgId`, optional `from`, `to` | `returnRecords`, `returnsByReason` |
+| `GetBranchStats` | Org Admin of its org; BM assigned | `branchId`, optional `from`, `to` | `memberCount`, `returnsByStatus`, `returnsByReason` |
+
+`from` is inclusive and `to` exclusive (business-timezone period).
+
+### Commercial (`ops/commercial.ts`)
+
+| Operation | Who may call | Key vars | Response keys |
+| --- | --- | --- | --- |
+| `GetCommercialAgreementByOrg` | Platform; Org Admin | `orgId` | `commercialAgreements` (latest first) |
+| `ListLicenseEventsByOrg` | Platform; Org Admin | `orgId` | `licenseEvents` |
+| `CreateCommercialAgreement` | Platform | `orgId`, `agreementReference`, plan, price, limit and date fields | `commercialAgreement_insert` |
+| `UpdateCommercialAgreement` | Platform | `id`, plan, price, limit, date and `status` fields | `commercialAgreement_update` |
+| `CreateLicenseEvent` | Platform | `orgId`, `eventType`, plan, validity, count and price fields | `licenseEvent_insert` |
 
 ## 4. Firestore rules summary
 
 - `user_aliases`: no client access (`get, list, write: false`).
 - `users/{uid}`: read own profile; platform roles read all; Org Admin reads
   own org; Branch Manager reads employees sharing a branch. No client writes.
+  Never holds salary or Aadhaar data (see `employee_private`).
+- `employee_private/{uid}` = `{ organizationId, salary?, aadhaarNumber?,
+  aadhaarPhotoUrl?, updatedAt }`: sensitive HR data written only by trusted
+  functions (`writeProfile` / `updateUserAccount`). `get` is allowed only for
+  the active Org Admin of that doc's organization and for the employee
+  themself; Branch Managers and platform roles are denied; `list` and every
+  write are denied. Existing `users/{uid}` docs are scrubbed of these keys the
+  next time their profile is refreshed (no separate migration step).
+- Employee IDs: SQL `organization_member.employee_code` is authoritative
+  (unique per organization). `provisionUser` allocates `EMP-<n>` from
+  `organization.employee_code_seq` in the member-insert transaction when none is
+  supplied, and returns `employeeCode`; `users/{uid}.employeeCode` is a
+  projection of it. Actors cannot change their own employment details
+  (salary, designation, joining/relieving date, employee ID, work hours, shift,
+  assets) through `updateUserAccount`.
 - `attendance_entries`: read by platform roles (read-only), Org Admin (org),
   Branch Manager (`branchIds`), employee (own). Create only by managers for
   group check-ins (`source == 'manager-group'`, `checkInAt` and `createdAt ==
@@ -244,8 +293,8 @@ DB enums; they are validated in operation auth expressions and in functions.
 
 ### Reports and returns notes
 
-- Data Connect supports grouping on a selected column with `_count`, so the
-  per-reason breakdown is a plain `returnsByReason` aggregate field. The
+- The per-reason breakdown is a plain `GROUP BY return_reason` aggregate
+  (`returnsByReason`). The
   client maps stored reasons to categories (unknown legacy values count as
   "Other") and the period to `[from, to)` in the business timezone
   (Asia/Kolkata), so `returnCountsCoverPeriod` is true.
@@ -254,30 +303,57 @@ DB enums; they are validated in operation auth expressions and in functions.
   accuracyMeters` to `recordAttendancePunch`; the server validates the
   geofence. Web requires HTTPS or localhost for geolocation.
 
-## 5. Deployment steps (not executed)
+## 5. Deployment steps
 
-1. `firebase use workaxis-cloud`; enable Cloud Functions, Cloud Build, Artifact
-   Registry, Identity Platform / Auth, and App Check APIs.
-2. Schema: `firebase dataconnect:sql:diff` then `dataconnect:sql:migrate` (the
-   service uses `schemaValidation: COMPATIBLE`; all changes are additive or
-   relax NOT NULL). Review the diff for the new unique indexes against any
-   existing data first.
-3. Functions: `cd functions && npm ci && npm test`. Set
-   `ENFORCE_APP_CHECK` as desired. Grant the functions service account Data
-   Connect access (e.g. `roles/firebasedataconnect.admin` or a narrower role
-   that allows `ExecuteGraphql`).
-4. `firebase deploy --only dataconnect,firestore:rules,firestore:indexes,functions`
-   (this release adds `ListReturnsByOrgPaged`, the `from`/`to` variables and
-   `returnsByReason` on existing aggregates, settings rules, and 3 new
-   attendance indexes; index builds can take minutes, deploy them before
-   clients that need them. Variables are optional, so older clients keep
-   working.)
-   (deploy `firestore:rules` together with functions so clients are never
-   without the callables the new rules assume).
-5. Bootstrap the Platform Owner (section 2), link seed members to Auth uids
-   or re-create them through `provisionUser`, then run `tool/seed_database.py`
-   (requires `PGUSER`) if sample data is wanted.
-6. `firebase dataconnect:sdk:generate` after any connector change.
+Topology: Firebase project `workaxis-app` (Auth, Firestore, Storage bucket
+`workaxis-app-attachments`, Hosting site `workaxis-app`, Cloud Functions in
+`asia-south1`, codebase `workaxis`) is separate from OmniRetail. Functions run
+as `workaxis-sql@workaxis-app.iam.gserviceaccount.com` and reach the shared
+Cloud SQL instance `omniretail-60c71:asia-south1:omniretail-sql` (PostgreSQL 18,
+database `workaxis`) in the `omniretail-60c71` project. Per-project settings
+are in `functions/.env.workaxis-app` (`DB_MODE`, `DB_NAME`, `DB_USER`,
+`DB_INSTANCE_CONNECTION_NAME`, `RUNTIME_SERVICE_ACCOUNT`, `MAX_INSTANCES`).
+
+1. `firebase use workaxis-app`. Enable Cloud Functions, Cloud Build, Artifact
+   Registry, Cloud Run, Eventarc, Identity Platform / Auth, Firestore, Cloud
+   Storage and App Check in `workaxis-app`, and the Cloud SQL Admin API in
+   `omniretail-60c71` (the connector calls it).
+2. Service account and cross-project grants:
+   ```powershell
+   gcloud iam service-accounts create workaxis-sql --project workaxis-app
+   gcloud projects add-iam-policy-binding omniretail-60c71 `
+     --member "serviceAccount:workaxis-sql@workaxis-app.iam.gserviceaccount.com" `
+     --role roles/cloudsql.client
+   gcloud projects add-iam-policy-binding omniretail-60c71 `
+     --member "serviceAccount:workaxis-sql@workaxis-app.iam.gserviceaccount.com" `
+     --role roles/cloudsql.instanceUser
+   gcloud sql users create "workaxis-sql@workaxis-app.iam" `
+     --instance omniretail-sql --project omniretail-60c71 `
+     --type=cloud_iam_service_account
+   ```
+3. Schema and database grants. Run `functions/db/migrate.mjs` as an owner
+   (see `functions/db/README.md`), then as the table owner:
+   ```sql
+   GRANT CONNECT ON DATABASE workaxis TO "workaxis-sql@workaxis-app.iam";
+   GRANT USAGE ON SCHEMA public TO "workaxis-sql@workaxis-app.iam";
+   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public
+     TO "workaxis-sql@workaxis-app.iam";
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public
+     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "workaxis-sql@workaxis-app.iam";
+   ```
+4. Functions: `cd functions && npm ci && npm test`. Set `ENFORCE_APP_CHECK` as
+   desired. Build the web app first: `flutter build web --release
+   --dart-define=BACKEND_MODE=firebase`.
+5. `firebase deploy --only firestore,storage,functions,hosting`. Deploy
+   `firestore` (rules and indexes) together with functions so clients are never
+   without the callables the rules assume; index builds can take minutes.
+6. Bootstrap the Platform Owner (section 2), link seed members to Auth uids or
+   re-create them through `provisionUser`. Sample data, if wanted, is
+   `functions/db/seed/seed_data.sql`.
+
+The instance is a shared `db-f1-micro`, so keep `DB_POOL_MAX` at 3 and
+`MAX_INSTANCES` at 5. To run on a self-hosted PostgreSQL instead, see
+`docs/architecture.md` section 21c.
 
 ## 6. Required Dart-layer changes
 
@@ -302,9 +378,9 @@ DB enums; they are validated in operation auth expressions and in functions.
 
 `updateUserAccount` accepts `email: null` to clear a real email alias, matching phone clearing. SQL member/assignment edits are atomic; Auth/alias compensation and durable identity jobs handle cross-store failures. Identity jobs and leases are server-only, contain no passwords, and serialize edits/retries for each UID. `reconcileIdentitySync` runs every minute with delayed first attempt and retry backoff.
 
-Run SQL integration locally from the repository root:
+Run the SQL-facing tests locally (they use an in-memory `FakeDb`, no database
+or emulator needed) from the repository root:
 
 ```powershell
-npm --prefix functions run build
-firebase emulators:exec --only dataconnect --project demo-workaxis 'node --test functions/test-sql/*.test.cjs'
+npm --prefix functions test
 ```

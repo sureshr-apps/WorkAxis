@@ -111,12 +111,16 @@ class PlatformOrganizationsController extends ChangeNotifier
   String get _filterKey =>
       '${_searchQuery.trim().toLowerCase()}|${_statusFilter?.name ?? ''}';
 
-  Future<void> loadOrganizations() async {
+  /// Loads the first page. A [silent] reload keeps the current rows visible
+  /// (no loading state) and keeps them if the refresh fails.
+  Future<void> loadOrganizations({bool silent = false}) async {
     final token = _listRequests.next();
-    _isListLoading = true;
     _isLoadingMore = false;
-    _listErrorMessage = null;
-    notifyListeners();
+    if (!silent) {
+      _isListLoading = true;
+      _listErrorMessage = null;
+      notifyListeners();
+    }
 
     final key = _filterKey;
     try {
@@ -132,11 +136,13 @@ class PlatformOrganizationsController extends ChangeNotifier
       _applyFilter();
     } catch (e, st) {
       if (!_listRequests.isCurrent(token)) return;
-      _listErrorMessage = userMessageFor(
-        e,
-        st,
-        fallback: 'Could not load customer organizations. Please try again.',
-      );
+      if (!silent) {
+        _listErrorMessage = userMessageFor(
+          e,
+          st,
+          fallback: 'Could not load customer organizations. Please try again.',
+        );
+      }
     }
     _isListLoading = false;
     notifyListeners();
@@ -357,6 +363,60 @@ class PlatformOrganizationsController extends ChangeNotifier
         e,
         st,
         fallback: 'The status could not be changed. Please try again.',
+      );
+      return false;
+    } finally {
+      if (_isCurrentScope(epoch)) {
+        _isActionLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Drops a deleted organization from the list, the selection and the
+  /// summary counts so no screen shows it or a stale total.
+  void _removeLocally(String id) {
+    final removed =
+        _allOrganizations.where((o) => o.id == id).firstOrNull ??
+        (_selectedOrganization?.id == id ? _selectedOrganization : null);
+    _allOrganizations = [
+      for (final o in _allOrganizations)
+        if (o.id != id) o,
+    ];
+    _loadedTotal = (_loadedTotal - 1).clamp(0, 999999);
+    if (removed != null) {
+      final wasActive = removed.status == OrganizationStatus.active;
+      _counts = OrganizationStatusCounts(
+        active: (_counts.active - (wasActive ? 1 : 0)).clamp(0, 999999),
+        suspended: (_counts.suspended - (wasActive ? 0 : 1)).clamp(0, 999999),
+      );
+    }
+    _applyFilter();
+    if (_selectedOrganization?.id == id) {
+      _selectedOrganization = null;
+      _selectedLicenseDetails = null;
+    }
+  }
+
+  Future<bool> deleteOrganization(String id) async {
+    final epoch = _scopeEpoch;
+    _isActionLoading = true;
+    _actionErrorMessage = null;
+    notifyListeners();
+
+    try {
+      await repository.deleteOrganization(id);
+      if (!_isCurrentScope(epoch)) return false;
+      _removeLocally(id);
+      // Reconcile with the server without a loading state or a spinner flash.
+      unawaited(loadOrganizations(silent: true));
+      return true;
+    } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return false;
+      _actionErrorMessage = userMessageFor(
+        e,
+        st,
+        fallback: 'The organization could not be deleted. Please try again.',
       );
       return false;
     } finally {

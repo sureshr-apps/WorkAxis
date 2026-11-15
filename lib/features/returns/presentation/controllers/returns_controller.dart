@@ -107,6 +107,18 @@ class ReturnsController extends ChangeNotifier
     required UserAccessContext access,
     String? branchId,
     required CreateReturnInput input,
+  }) {
+    return submitReturnBatch(
+      access: access,
+      branchId: branchId,
+      input: input.toBatch(),
+    );
+  }
+
+  Future<bool> submitReturnBatch({
+    required UserAccessContext access,
+    String? branchId,
+    required CreateReturnBatchInput input,
   }) async {
     final epoch = _epoch;
     _isSaving = true;
@@ -114,13 +126,13 @@ class ReturnsController extends ChangeNotifier
     notifyListeners();
 
     try {
-      final created = await repository.submitReturn(
+      final createdList = await repository.submitReturnBatch(
         access: access,
         branchId: branchId,
         input: input,
       );
       if (epoch != _epoch || isDisposed) return false;
-      _items = [created, ..._items];
+      _items = [...createdList, ..._items];
       return true;
     } catch (e, st) {
       if (epoch != _epoch || isDisposed) return false;

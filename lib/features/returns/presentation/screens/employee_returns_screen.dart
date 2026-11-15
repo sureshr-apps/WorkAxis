@@ -57,19 +57,29 @@ class _EmployeeReturnsScreenState extends State<EmployeeReturnsScreen> {
     showDialog<bool>(
       context: context,
       builder: (_) => SubmitReturnDialog(
-        onSubmit: (input) async {
-          final saved = await controller.submitReturn(
+        availableBranches: access.activeAssignedBranches,
+        initialBranchId: access.activeAssignedBranches.isNotEmpty
+            ? access.activeAssignedBranches.first.id
+            : null,
+        onSubmitBatch: (batch) async {
+          final saved = await controller.submitReturnBatch(
             access: access,
-            input: input,
+            branchId: batch.branchId,
+            input: batch,
           );
           if (!saved) {
             return controller.actionErrorMessage ??
                 'The return request could not be submitted.';
           }
           if (mounted) {
+            final count = batch.items.length;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Return request submitted for manager review.'),
+              SnackBar(
+                content: Text(
+                  count == 1
+                      ? 'Return request submitted for manager review.'
+                      : '$count return items submitted for manager review.',
+                ),
                 backgroundColor: AppColors.statusActive,
               ),
             );

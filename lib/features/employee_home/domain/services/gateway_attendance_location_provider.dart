@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/employee_home/domain/models/device_location.dart';
+import 'package:workaxis/features/employee_home/domain/models/location_peek.dart';
 import 'package:workaxis/features/employee_home/domain/services/attendance_location_provider.dart';
 import 'package:workaxis/features/employee_home/domain/services/device_location_gateway.dart';
 
@@ -17,6 +18,27 @@ class GatewayAttendanceLocationProvider implements AttendanceLocationProvider {
 
   final DeviceLocationGateway _gateway;
   final Duration timeout;
+
+  @override
+  Future<LocationPeek> peekLocation() async {
+    try {
+      if (!await _gateway.isServiceEnabled()) {
+        return const LocationPeek(LocationReadiness.serviceDisabled);
+      }
+      switch (await _gateway.checkPermission()) {
+        case LocationPermissionState.denied:
+          return const LocationPeek(LocationReadiness.permissionNeeded);
+        case LocationPermissionState.deniedForever:
+          return const LocationPeek(LocationReadiness.permissionBlocked);
+        case LocationPermissionState.granted:
+          break;
+      }
+      final fix = await _gateway.currentFix(timeout: timeout);
+      return LocationPeek(LocationReadiness.ready, fix);
+    } catch (_) {
+      return const LocationPeek(LocationReadiness.unavailable);
+    }
+  }
 
   @override
   Future<DeviceLocation> currentLocation() async {

@@ -1,6 +1,6 @@
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/core/backend/data_gateway.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/attendance/data/attendance_day_counter.dart';
@@ -14,15 +14,18 @@ import 'package:workaxis/features/organization_dashboard/domain/models/attention
 /// Production [BranchDashboardRepository].
 ///
 /// Branch identity comes from the authorized branch in [UserAccessContext]
-/// (never another branch), counts from `GetBranchStats`, and today's
+/// (never another branch), counts from `GetBranchStats` (data gateway), and today's
 /// attendance from Firestore count queries scoped to organization + branch.
 class SqlConnectBranchDashboardRepository implements BranchDashboardRepository {
   SqlConnectBranchDashboardRepository({
-    WorkaxisConnectorConnector? connector,
+    DataGateway? gateway,
     BranchDashboardRemote? remote,
     AttendanceDayCounter? attendanceCounter,
-  }) : _remote =
-           remote ?? DataConnectBranchDashboardRemote(connector: connector),
+  }) : assert(
+         gateway != null || remote != null,
+         'Provide a data gateway or a remote.',
+       ),
+       _remote = remote ?? DataConnectBranchDashboardRemote(gateway: gateway!),
        _attendance = attendanceCounter ?? AttendanceDayCounter();
 
   final BranchDashboardRemote _remote;

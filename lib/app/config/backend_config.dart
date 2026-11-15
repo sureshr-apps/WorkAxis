@@ -7,7 +7,7 @@ enum BackendMode {
   mock,
 
   /// Live Firebase infrastructure using Firebase Authentication, Cloud Firestore
-  /// (NoSQL for exponential events), and Firebase Data Connect / PostgreSQL.
+  /// (NoSQL for exponential events), and PostgreSQL reached through the `dataOp` callable.
   firebase,
 }
 
@@ -22,6 +22,15 @@ class BackendConfig {
       const String.fromEnvironment('BACKEND_MODE') == 'firebase'
       ? BackendMode.firebase
       : BackendMode.mock;
+
+  /// Cloud Storage bucket holding WorkAxis attachments (photos, documents).
+  /// A dedicated bucket keeps this app's storage rules independent of any
+  /// other app in the Firebase project. Override with
+  /// `--dart-define=ATTACHMENTS_BUCKET=<name>`.
+  static const String attachmentsBucket = String.fromEnvironment(
+    'ATTACHMENTS_BUCKET',
+    defaultValue: 'workaxis-app-attachments',
+  );
 
   /// Returns true when running in Firebase live backend mode.
   static bool get isFirebase => mode == BackendMode.firebase;

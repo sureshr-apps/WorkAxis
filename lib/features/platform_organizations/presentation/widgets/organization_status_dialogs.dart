@@ -47,3 +47,25 @@ class ReactivateOrganizationDialog extends StatelessWidget {
     failureMessage: failureMessage,
   );
 }
+
+/// Confirmation dialog for permanently deleting an organization.
+class DeleteOrganizationDialog extends StatelessWidget {
+  const DeleteOrganizationDialog({
+    super.key,
+    required this.organization,
+    required this.onConfirm,
+    this.failureMessage,
+  });
+
+  final CustomerOrganization organization;
+  final Future<bool> Function() onConfirm;
+  final String? Function()? failureMessage;
+
+  @override
+  Widget build(BuildContext context) => OrganizationStatusChangeDialog(
+    organization: organization,
+    change: OrganizationStatusChange.delete,
+    onConfirm: onConfirm,
+    failureMessage: failureMessage,
+  );
+}

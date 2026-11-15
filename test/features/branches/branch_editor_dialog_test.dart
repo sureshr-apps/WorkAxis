@@ -5,6 +5,8 @@ import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_editor_dialog.dart';
 
+import '../../helpers/fallback_maps.dart';
+
 void main() {
   Future<List<BranchRecord>> pumpEditor(
     WidgetTester tester, {
@@ -19,6 +21,7 @@ void main() {
     final saved = <BranchRecord>[];
     await tester.pumpWidget(
       MaterialApp(
+        builder: fallbackMapsBuilder,
         theme: AppTheme.light,
         home: Scaffold(
           body: BranchEditorDialog(
@@ -105,6 +108,7 @@ void main() {
     });
     await tester.pumpWidget(
       MaterialApp(
+        builder: fallbackMapsBuilder,
         theme: AppTheme.light,
         home: Scaffold(
           body: BranchEditorDialog(

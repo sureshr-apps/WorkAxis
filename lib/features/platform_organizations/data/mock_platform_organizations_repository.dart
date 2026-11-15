@@ -97,6 +97,11 @@ class MockPlatformOrganizationsRepository
   }
 
   @override
+  Future<void> deleteOrganization(String id) async {
+    _dataSource.delete(id);
+  }
+
+  @override
   Future<CustomerOrganization> createOrganizationAdmin(
     String organizationId,
     OrganizationAdminDraft draft,

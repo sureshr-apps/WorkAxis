@@ -12,7 +12,7 @@ import { asBag, reqEnum, reqString } from "../util/input";
  * Request:  { targetUid, status: 'active' | 'suspended' }
  * Response: { uid, status }
  * Suspension disables the Auth user, revokes refresh tokens and sets the
- * claim status so SQL Connect and Firestore deny the user immediately.
+ * claim status so the data gateway and Firestore deny the user immediately.
  */
 export const setUserStatus = onCall(callableOptions, (request) =>
   guarded(async () => {

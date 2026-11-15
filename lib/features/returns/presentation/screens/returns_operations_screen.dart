@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_sliver_page.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/kpi/app_kpi_card.dart';
 import 'package:workaxis/core/widgets/kpi/responsive_kpi_section.dart';
@@ -15,6 +16,7 @@ import 'package:workaxis/features/returns/presentation/screens/widgets/return_de
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_filter_bar.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_sliver_body.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_table.dart';
+import 'package:workaxis/features/returns/presentation/screens/widgets/submit_return_dialog.dart';
 
 /// Return review queue for Organization Admins and Branch Managers.
 class ReturnsOperationsScreen extends StatefulWidget {
@@ -99,6 +101,46 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
     );
   }
 
+  void _openSubmitDialog() {
+    final access = context.read<AccessController>().accessContext;
+    if (access == null) return;
+    final controller = context.read<ReturnsController>();
+    controller.clearActionError();
+
+    showDialog<bool>(
+      context: context,
+      builder: (_) => SubmitReturnDialog(
+        availableBranches: access.activeAssignedBranches,
+        initialBranchId: _activeBranchId,
+        onSubmitBatch: (batch) async {
+          final saved = await controller.submitReturnBatch(
+            access: access,
+            branchId: batch.branchId ?? _activeBranchId,
+            input: batch,
+          );
+          if (!saved) {
+            return controller.actionErrorMessage ??
+                'The return request could not be submitted.';
+          }
+          if (mounted) {
+            final count = batch.items.length;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  count == 1
+                      ? 'Return recorded successfully.'
+                      : '$count return items recorded successfully.',
+                ),
+                backgroundColor: AppColors.statusActive,
+              ),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ReturnsController>();
@@ -128,6 +170,13 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
                 subtitle: isManager
                     ? 'Review and verify return requests for ${branchName ?? 'the active branch'}.'
                     : 'Verify customer and inventory return requests across all branches.',
+                action: isManager
+                    ? AppButton.responsive(
+                        text: 'Record Return',
+                        iconData: Icons.add_circle_outline,
+                        onPressed: _openSubmitDialog,
+                      )
+                    : null,
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),

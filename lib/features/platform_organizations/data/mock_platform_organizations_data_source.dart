@@ -335,6 +335,15 @@ class MockPlatformOrganizationsDataSource {
     return updated;
   }
 
+  void delete(String id) {
+    final index = _organizations.indexWhere((o) => o.id == id);
+    if (index == -1) {
+      throw ValidationException('Organization not found.');
+    }
+    _organizations.removeAt(index);
+    _licenseAssignedOrganizationIds.remove(id);
+  }
+
   /// Adds an administrator the way the account callables would: the server
   /// assigns the id and usernames are unique across the platform.
   CustomerOrganization createAdmin(

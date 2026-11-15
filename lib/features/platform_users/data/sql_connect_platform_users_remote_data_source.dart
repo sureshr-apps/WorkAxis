@@ -1,22 +1,19 @@
+import 'package:workaxis/core/backend/data_gateway.dart';
+import 'package:workaxis/core/backend/json_reader.dart';
 import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/core/validation/login_email.dart';
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/data/platform_users_remote_data_source.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 
-/// [PlatformUsersRemoteDataSource] backed by Firebase SQL Connect
+/// [PlatformUsersRemoteDataSource] backed by the data gateway
 /// (`ListPlatformMembersPaged`, `GetMemberById`). SQL is authoritative for
 /// platform administrators; the Firestore profile is only a projection.
 class SqlConnectPlatformUsersRemoteDataSource
     implements PlatformUsersRemoteDataSource {
-  SqlConnectPlatformUsersRemoteDataSource({
-    WorkaxisConnectorConnector? connector,
-  }) : _customConnector = connector;
+  SqlConnectPlatformUsersRemoteDataSource({required this._gateway});
 
-  final WorkaxisConnectorConnector? _customConnector;
-  WorkaxisConnectorConnector get _connector =>
-      _customConnector ?? WorkaxisConnectorConnector.instance;
+  final DataGateway _gateway;
 
   @override
   Future<PageResult<PlatformAdministrator>> listPage({
@@ -25,74 +22,60 @@ class SqlConnectPlatformUsersRemoteDataSource
     String? nameContains,
     AccountStatus? status,
   }) async {
-    final data = (await _builder(
+    final data = await _list(
       limit: limit,
       offset: offset,
       nameContains: nameContains,
       status: status,
-    ).execute()).data;
+    );
     return PageResult(
-      items: [
-        for (final m in data.organizationMembers)
-          PlatformAdministrator(
-            id: m.id,
-            authUid: m.authUid,
-            fullName: m.fullName,
-            username: m.username,
-            email: LoginEmail.displayable(m.email),
-            phone: m.phone,
-            status: _status(m.status),
-            createdAt: m.createdAt.toDateTime(),
-          ),
-      ],
-      total: data.total.firstOrNull?.count_ ?? 0,
+      items: [for (final m in data.objects('organizationMembers')) _admin(m)],
+      total: data.countOf('total'),
       offset: offset,
     );
   }
 
   @override
   Future<int> count({AccountStatus? status}) async {
-    final data = (await _builder(
-      limit: 1,
-      offset: 0,
-      status: status,
-    ).execute()).data;
-    return data.total.firstOrNull?.count_ ?? 0;
+    final data = await _list(limit: 1, offset: 0, status: status);
+    return data.countOf('total');
   }
 
   @override
   Future<PlatformAdministrator?> getById(String id) async {
-    final m = (await _connector.getMemberById(id: id).execute())
-        .data
-        .organizationMember;
-    if (m == null || m.role != 'platformAdmin') return null;
-    return PlatformAdministrator(
-      id: m.id,
-      authUid: m.authUid,
-      fullName: m.fullName,
-      username: m.username,
-      email: LoginEmail.displayable(m.email),
-      phone: m.phone,
-      status: _status(m.status),
-      createdAt: m.createdAt.toDateTime(),
-    );
+    final data = await _gateway.call('GetMemberById', {'id': id});
+    final m = data.optObject('organizationMember');
+    if (m == null || m.string('role') != 'platformAdmin') return null;
+    return _admin(m);
   }
 
-  ListPlatformMembersPagedVariablesBuilder _builder({
+  Future<Map<String, dynamic>> _list({
     required int limit,
     required int offset,
     String? nameContains,
     AccountStatus? status,
   }) {
-    var builder = _connector.listPlatformMembersPaged(
-      limit: limit,
-      offset: offset,
+    return _gateway.call('ListPlatformMembersPaged', {
+      'limit': limit,
+      'offset': offset,
+      // Unset optional variables are omitted, never sent as null.
+      if (nameContains != null && nameContains.trim().isNotEmpty)
+        'nameContains': nameContains.trim(),
+      'status': ?status?.name,
+    });
+  }
+
+  PlatformAdministrator _admin(Map<String, dynamic> m) {
+    return PlatformAdministrator(
+      id: m.string('id'),
+      authUid: m.optString('authUid'),
+      fullName: m.string('fullName'),
+      username: m.string('username'),
+      email: LoginEmail.displayable(m.string('email')),
+      phone: m.optString('phone'),
+      status: _status(m.string('status')),
+      createdAt: m.dateTime('createdAt'),
     );
-    if (nameContains != null && nameContains.trim().isNotEmpty) {
-      builder = builder.nameContains(nameContains.trim());
-    }
-    if (status != null) builder = builder.status(status.name);
-    return builder;
   }
 
   /// Unknown statuses map to suspended (fail closed).

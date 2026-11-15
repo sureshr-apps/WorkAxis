@@ -22,7 +22,7 @@ import 'package:workaxis/features/platform_organizations/domain/repositories/pla
 
 /// Production [PlatformOrganizationsRepository].
 ///
-/// Reads and field writes use SQL Connect through the remote data source
+/// Reads and field writes use the data gateway through the remote data source
 /// (server-side filters, pagination and aggregate counts). Status changes use
 /// the `setOrganizationStatus` callable because suspension must also revoke
 /// every member's access. Methods return what the server saved.
@@ -112,6 +112,11 @@ class SqlConnectPlatformOrganizationsRepository
       );
     }
     return _require(id);
+  });
+
+  @override
+  Future<void> deleteOrganization(String id) => _guard(() async {
+    await _accounts.deleteOrganization(id);
   });
 
   @override

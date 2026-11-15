@@ -33,6 +33,13 @@ class _WriteFailingReturnsRepository extends MockReturnsRepository {
   }) => Future.error(StateError('backend down'));
 
   @override
+  Future<List<ReturnItem>> submitReturnBatch({
+    required UserAccessContext access,
+    String? branchId,
+    required CreateReturnBatchInput input,
+  }) => Future.error(StateError('backend down'));
+
+  @override
   Future<ReturnItem> reviewReturn({
     required UserAccessContext access,
     String? activeBranchId,
@@ -147,12 +154,13 @@ void main() {
     );
     await tester.enterText(fields.at(0), 'Fuji Apples');
     await tester.enterText(fields.at(2), 'INV-1');
-    await tester.tap(
-      find.descendant(
-        of: find.byType(SubmitReturnDialog),
-        matching: find.text('Submit Return'),
-      ),
+    final submitBtn = find.descendant(
+      of: find.byType(SubmitReturnDialog),
+      matching: find.text('Submit Return'),
     );
+    await tester.ensureVisible(submitBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(submitBtn);
     await tester.pumpAndSettle();
 
     expect(find.byType(SubmitReturnDialog), findsOneWidget);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:workaxis/core/widgets/attachment_image.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -79,7 +80,7 @@ class _ReturnDetailsDialogState extends State<ReturnDetailsDialog> {
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: 580,
+          maxWidth: 620,
           maxHeight: MediaQuery.sizeOf(context).height * 0.9,
         ),
         child: SingleChildScrollView(
@@ -99,7 +100,7 @@ class _ReturnDetailsDialogState extends State<ReturnDetailsDialog> {
               _ProductBlock(item: item),
               const SizedBox(height: AppSpacing.md),
               if (item.remarks != null && item.remarks!.isNotEmpty) ...[
-                const _SectionLabel('Employee Remarks'),
+                const _SectionLabel('Condition Remarks'),
                 const SizedBox(height: AppSpacing.xs),
                 Container(
                   width: double.infinity,
@@ -113,9 +114,9 @@ class _ReturnDetailsDialogState extends State<ReturnDetailsDialog> {
                 ),
                 const SizedBox(height: AppSpacing.md),
               ],
-              const _SectionLabel('Bill / Proof of Return'),
+              const _SectionLabel('Proof Photo / Bill Attachment'),
               const SizedBox(height: AppSpacing.xs),
-              _BillAttachmentTile(hasBill: item.billImageUrl != null),
+              _BillAttachmentTile(imageUrl: item.billImageUrl),
               const SizedBox(height: AppSpacing.md),
               if (!isPending && item.reviewedBy != null) ...[
                 _DecisionSummary(item: item),
@@ -243,14 +244,26 @@ class _ProductBlock extends StatelessWidget {
                 value: item.quantityLabel,
               ),
               _DetailItem(
-                icon: Icons.receipt_long_outlined,
-                label: 'Bill / Invoice',
+                icon: item.reason.icon,
+                label: 'Return Reason',
+                value: item.reason.displayName,
+              ),
+              _DetailItem(
+                icon: Icons.receipt_outlined,
+                label: 'Bill Number',
+                value: item.billNumber != null && item.billNumber!.isNotEmpty
+                    ? item.billNumber!
+                    : item.invoiceNumber,
+              ),
+              _DetailItem(
+                icon: Icons.tag_rounded,
+                label: 'Invoice Number',
                 value: item.invoiceNumber,
               ),
               _DetailItem(
-                icon: item.reason.icon,
-                label: 'Reason',
-                value: item.reason.label,
+                icon: Icons.event_note_rounded,
+                label: 'Return Date',
+                value: AppFormatters.formatDate(item.returnDate),
               ),
             ],
           ),
@@ -314,40 +327,159 @@ class _SectionLabel extends StatelessWidget {
   );
 }
 
-/// Reflects only what the record knows: whether a bill image URL exists.
+/// Renders either an interactive photo preview or empty state.
 class _BillAttachmentTile extends StatelessWidget {
-  const _BillAttachmentTile({required this.hasBill});
+  const _BillAttachmentTile({required this.imageUrl});
 
-  final bool hasBill;
+  final String? imageUrl;
+
+  void _openZoom(BuildContext context, String path) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(AppSpacing.md),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                child: _buildImage(path),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildImage(String path) =>
+      AttachmentImage(reference: path, fit: BoxFit.contain, iconSize: 48);
 
   @override
   Widget build(BuildContext context) {
+    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
+
+    if (!hasImage) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.kpiNeutralBackground,
+          borderRadius: AppSpacing.roundedMd,
+          border: Border.all(color: AppColors.outlineSubtle),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.image_not_supported_outlined,
+              color: AppColors.textMuted,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                'No proof photo was attached to this return request.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: AppColors.kpiNeutralBackground,
+        color: AppColors.surfaceContainerLowest,
         borderRadius: AppSpacing.roundedMd,
         border: Border.all(color: AppColors.outlineSubtle),
       ),
       child: Row(
         children: [
-          Icon(
-            hasBill
-                ? Icons.receipt_outlined
-                : Icons.image_not_supported_outlined,
-            color: hasBill ? AppColors.primary : AppColors.textMuted,
+          GestureDetector(
+            onTap: () => _openZoom(context, imageUrl!),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              child: Container(
+                width: 72,
+                height: 72,
+                color: AppColors.surfaceContainerLow,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _buildImage(imageUrl!),
+                    Positioned(
+                      bottom: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.zoom_in,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
-            child: Text(
-              hasBill
-                  ? 'A bill image is attached to this request.'
-                  : 'No bill image was attached to this request.',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.onSurfaceVariant,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      size: 16,
+                      color: AppColors.statusActive,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Proof Photo Verified',
+                      style: AppTypography.labelMedium.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.statusActive,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Tap preview to view full resolution image',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
+          ),
+          AppButton.outlined(
+            text: 'View Full',
+            isFullWidth: false,
+            onPressed: () => _openZoom(context, imageUrl!),
           ),
         ],
       ),

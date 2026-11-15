@@ -58,6 +58,8 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest());
 
       expect(find.text('WorkAxis'), findsOneWidget);
+      expect(find.text('PORTAL v1.0'), findsNothing);
+      expect(find.text('End-to-end encrypted session'), findsNothing);
       expect(find.text('Username, email, or phone number'), findsOneWidget);
       expect(find.text('Password'), findsOneWidget);
       expect(find.text('Sign In'), findsOneWidget);

@@ -149,5 +149,57 @@ void main() {
       expect(controller.hasActiveBranch, isFalse);
       expect(controller.assignedBranches, isEmpty);
     });
+
+    test(
+      'initFromAccessContext preserves previously selected active branch',
+      () {
+        final branches = dataSource.getAssignedBranchesForUser(
+          'user-bm-multi-01',
+        );
+        final context1 = UserAccessContext(
+          user: const AppUser(
+            id: 'user-bm-multi-01',
+            name: 'Marcus Chen',
+            username: 'manager_multi',
+            role: UserRole.branchManager,
+            organizationId: 'org-acme',
+          ),
+          assignedBranches: branches,
+        );
+
+        controller.initFromAccessContext(context1);
+        final branchToSelect = branches.firstWhere((b) => b.id == 'br-01');
+        controller.selectBranch(branchToSelect);
+        expect(controller.activeBranch?.branchId, 'br-01');
+
+        // Now access is refreshed with an additional branch
+        final updatedBranches = [
+          ...branches,
+          const BranchSummary(
+            id: 'br-new',
+            organizationId: 'org-acme',
+            name: 'New Airport Branch',
+            code: 'BR-999',
+            location: 'Terminal 2',
+          ),
+        ];
+        final context2 = UserAccessContext(
+          user: const AppUser(
+            id: 'user-bm-multi-01',
+            name: 'Marcus Chen',
+            username: 'manager_multi',
+            role: UserRole.branchManager,
+            organizationId: 'org-acme',
+          ),
+          assignedBranches: updatedBranches,
+        );
+
+        controller.initFromAccessContext(context2);
+        // Selected branch must remain active!
+        expect(controller.hasActiveBranch, isTrue);
+        expect(controller.activeBranch?.branchId, 'br-01');
+        expect(controller.assignedBranches.length, updatedBranches.length);
+      },
+    );
   });
 }

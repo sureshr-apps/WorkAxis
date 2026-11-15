@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_data_source.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/create_organization_request.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
@@ -126,6 +127,34 @@ void main() {
       acme = await repository.getOrganizationById('org-acme');
       expect(acme?.isActive, isTrue);
     });
+
+    test(
+      'deletes an organization and updates platform counts and lists',
+      () async {
+        await controller.loadOrganizations();
+        final initialTotal = controller.totalCount;
+
+        final ok = await controller.deleteOrganization('org-acme');
+        expect(ok, isTrue);
+
+        expect(controller.totalCount, initialTotal - 1);
+        expect(
+          controller.organizations.any((o) => o.id == 'org-acme'),
+          isFalse,
+        );
+
+        final fetched = await repository.getOrganizationById('org-acme');
+        expect(fetched, isNull);
+
+        // Verify that after refresh (loadOrganizations), the deleted entry does not return
+        await controller.loadOrganizations();
+        expect(
+          controller.organizations.any((o) => o.id == 'org-acme'),
+          isFalse,
+        );
+        expect(controller.totalCount, initialTotal - 1);
+      },
+    );
   });
 
   group('OrganizationsListScreen Widget Tests', () {
@@ -245,6 +274,32 @@ void main() {
         expect(find.text('Showing 7 organizations'), findsOneWidget);
         expect(find.text('ABC Enterprises Global'), findsOneWidget);
         expect(find.text('Load more'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'renders empty state without duplicate Add Organization action button when no organizations exist',
+      (tester) async {
+        final mockSource = MockPlatformOrganizationsDataSource();
+        for (final org in List.of(mockSource.getOrganizations())) {
+          mockSource.delete(org.id);
+        }
+        final repository = MockPlatformOrganizationsRepository(
+          dataSource: mockSource,
+        );
+        final controller = PlatformOrganizationsController(
+          repository: repository,
+        );
+
+        await tester.pumpWidget(buildTestWidget(controller: controller));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('No customer organizations registered'),
+          findsOneWidget,
+        );
+        // Only the header action has Add Organization, not the empty state card
+        expect(find.text('Add Organization'), findsOneWidget);
       },
     );
   });
@@ -567,6 +622,66 @@ void main() {
         expect(renderBox.size.width, greaterThan(0));
       },
     );
+
+    testWidgets('opens Delete dialog and confirms organization deletion', (
+      tester,
+    ) async {
+      final repository = MockPlatformOrganizationsRepository();
+      final controller = PlatformOrganizationsController(
+        repository: repository,
+      );
+      await controller.loadOrganizations();
+
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final router = GoRouter(
+        initialLocation: '/details',
+        routes: [
+          GoRoute(
+            path: '/details',
+            builder: (_, _) =>
+                const OrganizationDetailsScreen(organizationId: 'org-acme'),
+          ),
+          GoRoute(
+            path: AppRoutes.platformOrganizations,
+            builder: (_, _) => const Scaffold(body: Text('ORG LIST')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ChangeNotifierProvider<PlatformOrganizationsController>.value(
+          value: controller,
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Find and tap the Delete Organization icon button in header
+      final deleteBtn = find.byTooltip('Delete Acme Corporation');
+      expect(deleteBtn, findsOneWidget);
+      await tester.tap(deleteBtn);
+      await tester.pumpAndSettle();
+
+      // Verify Delete confirmation dialog appears
+      expect(find.text('Delete Organization?'), findsOneWidget);
+      expect(
+        find.textContaining('permanently deleted from the platform'),
+        findsOneWidget,
+      );
+
+      // Tap Confirm Delete
+      await tester.tap(find.widgetWithText(AppButton, 'Delete Organization'));
+      await tester.pumpAndSettle();
+
+      // Verify dialog dismissed and org removed
+      expect(find.text('Delete Organization?'), findsNothing);
+      expect(find.text('ORG LIST'), findsOneWidget);
+      expect(controller.organizations.any((o) => o.id == 'org-acme'), isFalse);
+    });
   });
 
   group('AddOrganizationScreen Widget Tests', () {

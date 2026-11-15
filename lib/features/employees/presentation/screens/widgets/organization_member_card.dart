@@ -5,6 +5,7 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/validation/login_email.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/attachment_image.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
@@ -42,17 +43,7 @@ class OrganizationMemberCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                radius: 21,
-                backgroundColor: AppColors.primaryContainer,
-                child: Text(
-                  member.initials,
-                  style: AppTypography.labelLarge.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              _MemberAvatar(member: member),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
@@ -67,7 +58,10 @@ class OrganizationMemberCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      member.role.displayName,
+                      member.designation != null &&
+                              member.designation!.isNotEmpty
+                          ? '${member.designation} • ${member.role.displayName}'
+                          : member.role.displayName,
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.onSurfaceVariant,
                       ),
@@ -81,6 +75,14 @@ class OrganizationMemberCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
+          if (member.employeeCode != null &&
+              member.employeeCode!.isNotEmpty) ...[
+            _MemberLine(
+              icon: Icons.badge_outlined,
+              value: member.employeeCode!,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
           _MemberLine(icon: Icons.alternate_email, value: member.username),
           if (email.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xs),
@@ -143,4 +145,34 @@ class _MemberLine extends StatelessWidget {
       ),
     ],
   );
+}
+
+/// Initials avatar, replaced by the member's photo when one is stored.
+class _MemberAvatar extends StatelessWidget {
+  const _MemberAvatar({required this.member});
+
+  final OrganizationMember member;
+
+  @override
+  Widget build(BuildContext context) {
+    final photo = member.profilePhotoUrl;
+    return CircleAvatar(
+      radius: 21,
+      backgroundColor: AppColors.primaryContainer,
+      child: photo != null && photo.isNotEmpty
+          ? ClipOval(
+              child: SizedBox.square(
+                dimension: 42,
+                child: AttachmentImage(reference: photo, iconSize: 20),
+              ),
+            )
+          : Text(
+              member.initials,
+              style: AppTypography.labelLarge.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+    );
+  }
 }

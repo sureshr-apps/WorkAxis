@@ -58,6 +58,9 @@ abstract interface class PlatformOrganizationsRepository {
     OrganizationStatus newStatus,
   );
 
+  /// Permanently deletes an organization and removes it from the platform.
+  Future<void> deleteOrganization(String id);
+
   /// Creates an Organization Admin account in [organizationId] through the
   /// account callables; returns the organization with its refreshed admins.
   /// Email and phone are optional; the initial password is required.

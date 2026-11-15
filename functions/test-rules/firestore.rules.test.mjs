@@ -112,6 +112,36 @@ describe("users", () => {
   });
 });
 
+describe("employee_private", () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "employee_private/emp"), { organizationId: "o1", salary: 1000, aadhaarNumber: "123412341234" });
+    });
+  });
+
+  it("lets the active org admin of that org and the employee read it", async () => {
+    await assertSucceeds(getDoc(doc(db("orgAdmin"), "employee_private/emp")));
+    await assertSucceeds(getDoc(doc(db("emp"), "employee_private/emp")));
+  });
+
+  it("denies branch managers, platform roles, other orgs, suspended admins and anonymous", async () => {
+    for (const who of ["bm", "owner", "padmin", "orgAdmin2", "suspendedAdmin"]) {
+      await assertFails(getDoc(doc(db(who), "employee_private/emp")));
+    }
+    await assertFails(getDoc(doc(anon(), "employee_private/emp")));
+    await assertFails(getDoc(doc(db("emp"), "employee_private/emp2")));
+  });
+
+  it("denies listing and every client write", async () => {
+    await assertFails(getDocs(collection(db("orgAdmin"), "employee_private")));
+    for (const who of ["owner", "orgAdmin", "bm", "emp"]) {
+      await assertFails(setDoc(doc(db(who), "employee_private/new"), { organizationId: "o1", salary: 1 }));
+      await assertFails(updateDoc(doc(db(who), "employee_private/emp"), { salary: 9 }));
+      await assertFails(deleteDoc(doc(db(who), "employee_private/emp")));
+    }
+  });
+});
+
 describe("attendance_entries read", () => {
   it("scopes reads by role", async () => {
     await assertSucceeds(getDoc(doc(db("owner"), "attendance_entries/e3")));

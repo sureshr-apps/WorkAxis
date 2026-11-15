@@ -43,7 +43,6 @@ class FakeBranchesDataSource implements BranchesRemoteDataSource {
   @override
   Future<BranchRecord?> getById(String id) async => _rows[id];
 
-  @override
   Future<String> add(
     BranchRecord branch, {
     required String organizationId,
@@ -64,7 +63,6 @@ class FakeBranchesDataSource implements BranchesRemoteDataSource {
     return id;
   }
 
-  @override
   Future<void> update(BranchRecord branch) async {
     final existing = _rows[branch.id]!;
     _assertCodeFree(existing.organizationId, branch.code, branch.id);

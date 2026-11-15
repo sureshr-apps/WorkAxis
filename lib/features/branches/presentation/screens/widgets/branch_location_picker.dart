@@ -9,6 +9,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/maps/map_rendering_scope.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/geofence_map_painter.dart';
 
 /// Interactive map picker allowing administrators to select and inspect
@@ -40,10 +41,6 @@ class BranchLocationPicker extends StatefulWidget {
         defaultTargetPlatform == TargetPlatform.iOS;
   }
 
-  static bool get isHeadlessTest {
-    return WidgetsBinding.instance.runtimeType.toString().contains('Test');
-  }
-
   @override
   State<BranchLocationPicker> createState() => _BranchLocationPickerState();
 }
@@ -62,7 +59,8 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
   Future<void> _checkInitialPermission() async {
     try {
       final p = await Geolocator.checkPermission();
-      if (p == LocationPermission.always || p == LocationPermission.whileInUse) {
+      if (p == LocationPermission.always ||
+          p == LocationPermission.whileInUse) {
         if (mounted) setState(() => _hasLocationPermission = true);
       }
     } catch (_) {}
@@ -87,6 +85,12 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
     );
   }
 
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
   Future<void> _useCurrentLocation() async {
     setState(() => _isLocating = true);
     try {
@@ -94,12 +98,15 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
+      if (!mounted) return;
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Location permission is required to detect position.'),
+              content: Text(
+                'Location permission is required to detect position.',
+              ),
             ),
           );
         }
@@ -112,6 +119,7 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
           timeLimit: Duration(seconds: 10),
         ),
       );
+      if (!mounted) return;
       widget.onLocationSelected(pos.latitude, pos.longitude);
       _animateTo(pos.latitude, pos.longitude);
     } catch (_) {
@@ -140,21 +148,26 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.place_outlined,
-                  size: 18,
-                  color: AppColors.primary,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  'Select location on map',
-                  style: AppTypography.labelLarge.copyWith(
-                    fontWeight: FontWeight.w600,
+            Expanded(
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.place_outlined,
+                    size: 18,
+                    color: AppColors.primary,
                   ),
-                ),
-              ],
+                  const SizedBox(width: AppSpacing.xs),
+                  Flexible(
+                    child: Text(
+                      'Select location on map',
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelLarge.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             TextButton.icon(
               onPressed: _isLocating ? null : _useCurrentLocation,
@@ -192,8 +205,9 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
             color: AppColors.outlineVariant,
           ),
           clipBehavior: Clip.antiAlias,
-          child: widget.forceFallback ||
-                  BranchLocationPicker.isHeadlessTest ||
+          child:
+              widget.forceFallback ||
+                  MapRenderingScope.useFallbackOf(context) ||
                   !BranchLocationPicker.isPlatformSupported
               ? _FallbackPickerView(
                   latitude: widget.latitude,
@@ -207,8 +221,10 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
                     zoom: hasCoords ? 16.0 : 12.0,
                   ),
                   onMapCreated: (controller) => _mapController = controller,
-                  onTap: (latLng) =>
-                      widget.onLocationSelected(latLng.latitude, latLng.longitude),
+                  onTap: (latLng) => widget.onLocationSelected(
+                    latLng.latitude,
+                    latLng.longitude,
+                  ),
                   // Enable gesture recognition inside scrollable dialog
                   gestureRecognizers: {
                     Factory<OneSequenceGestureRecognizer>(
@@ -230,7 +246,9 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
                             circleId: const CircleId('geofence_preview'),
                             center: center,
                             radius: widget.geofenceRadiusMeters.toDouble(),
-                            fillColor: AppColors.primary.withValues(alpha: 0.18),
+                            fillColor: AppColors.primary.withValues(
+                              alpha: 0.18,
+                            ),
                             strokeColor: AppColors.primary,
                             strokeWidth: 2,
                           ),
@@ -250,7 +268,8 @@ class _BranchLocationPickerState extends State<BranchLocationPicker> {
                               title: widget.branchName.isNotEmpty
                                   ? widget.branchName
                                   : 'Branch Location',
-                              snippet: '${widget.geofenceRadiusMeters}m geofence',
+                              snippet:
+                                  '${widget.geofenceRadiusMeters}m geofence',
                             ),
                           ),
                         }
@@ -309,7 +328,9 @@ class _FallbackPickerView extends StatelessWidget {
                     Icon(
                       hasCoords ? Icons.place : Icons.touch_app_outlined,
                       size: 18,
-                      color: hasCoords ? AppColors.primary : AppColors.onSurfaceVariant,
+                      color: hasCoords
+                          ? AppColors.primary
+                          : AppColors.onSurfaceVariant,
                     ),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
@@ -331,7 +352,9 @@ class _FallbackPickerView extends StatelessWidget {
                   ),
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                    ),
                   ),
                   child: const Text('Set default coordinates on map'),
                 ),

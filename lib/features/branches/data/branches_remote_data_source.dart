@@ -1,16 +1,12 @@
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 
-/// Remote branch reads and field writes. Thin seam over SQL Connect so the
-/// repository can be unit-tested with a fake. Manager assignments and kiosk
-/// pairing are not here: they use account callables.
+/// Remote branch reads. Thin seam over the data gateway so the repository can
+/// be unit-tested with a fake. Every branch write (fields, manager assignments)
+/// goes through the `saveBranch` callable and kiosk pairing through its own
+/// callable, so none of them are here.
 abstract interface class BranchesRemoteDataSource {
   Future<List<BranchRecord>> listByOrganization(String organizationId);
 
   /// Null when the branch does not exist or is not visible to the caller.
   Future<BranchRecord?> getById(String id);
-
-  /// Inserts the branch (server assigns the id) and returns that id.
-  Future<String> add(BranchRecord branch, {required String organizationId});
-
-  Future<void> update(BranchRecord branch);
 }

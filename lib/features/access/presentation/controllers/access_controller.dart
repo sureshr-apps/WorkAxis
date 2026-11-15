@@ -3,6 +3,7 @@ import 'package:workaxis/core/errors/user_message.dart';
 import 'package:workaxis/core/session/session_scoped.dart';
 import 'package:workaxis/core/state/request_generation.dart';
 import 'package:workaxis/core/state/safe_notifier.dart';
+import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/domain/repositories/access_repository.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
@@ -11,9 +12,16 @@ import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 class AccessController extends ChangeNotifier
     with SafeNotifier
     implements SessionScoped {
-  AccessController({required this.accessRepository, this.onResolved});
+  AccessController({required this.accessRepository, this.onResolved, Now? now})
+    : _now = now ?? systemNow;
+
+  /// A refresh requested within this window of the last successful resolve is
+  /// skipped unless forced: screens refresh on every entry, and each refresh
+  /// is a server round trip for the member and branches.
+  static const Duration freshnessWindow = Duration(seconds: 60);
 
   final AccessRepository accessRepository;
+  final Now _now;
 
   /// Called with the resolved context *before* listeners are notified, so
   /// dependent state (the active branch) is consistent when the router
@@ -26,6 +34,7 @@ class AccessController extends ChangeNotifier
   AppUser? _resolvingUser;
   bool _isResolving = false;
   String? _errorMessage;
+  DateTime? _resolvedAt;
 
   UserAccessContext? get accessContext => _accessContext;
   bool get isResolving => _isResolving;
@@ -48,6 +57,7 @@ class AccessController extends ChangeNotifier
       final context = await accessRepository.resolveCurrentUserAccess(user);
       if (!_requests.isCurrent(token)) return false;
       _accessContext = context;
+      _resolvedAt = _now();
       _isResolving = false;
       _errorMessage = null;
       onResolved?.call(context);
@@ -67,6 +77,44 @@ class AccessController extends ChangeNotifier
     }
   }
 
+  /// Silently refreshes access boundaries (such as after branches or assignments are modified)
+  /// without clearing the current context, setting [isResolving] to true, or interrupting current navigation.
+  ///
+  /// Forced by default, so pull-to-refresh and post-mutation refreshes always
+  /// reach the server. Screen-entry loads pass `force: false` to skip the round
+  /// trip when access was resolved within [freshnessWindow]; a skipped refresh
+  /// returns `false` and leaves the current context untouched.
+  Future<bool> refreshAccess({bool force = true}) async {
+    final user = _resolvingUser ?? _accessContext?.user;
+    if (user == null) return false;
+    if (!force && _isFresh) return false;
+    // A refresh must never invalidate an in-flight sign-in resolution: that
+    // would leave the router stuck on the "resolving" state.
+    if (_isResolving) return false;
+    final token = _requests.next();
+
+    try {
+      final context = await accessRepository.resolveCurrentUserAccess(user);
+      if (!_requests.isCurrent(token)) return false;
+      _accessContext = context;
+      _resolvedAt = _now();
+      _errorMessage = null;
+      onResolved?.call(context);
+      notifyListeners();
+      return true;
+    } catch (_) {
+      if (!_requests.isCurrent(token)) return false;
+      return false;
+    }
+  }
+
+  bool get _isFresh {
+    final resolvedAt = _resolvedAt;
+    return _accessContext != null &&
+        resolvedAt != null &&
+        _now().difference(resolvedAt) < freshnessWindow;
+  }
+
   /// Retries resolution using the previously attempted user.
   Future<bool> retryResolveAccess() async {
     final user = _resolvingUser;
@@ -79,6 +127,7 @@ class AccessController extends ChangeNotifier
   void clear() {
     _requests.invalidate();
     _accessContext = null;
+    _resolvedAt = null;
     _resolvingUser = null;
     _isResolving = false;
     _errorMessage = null;

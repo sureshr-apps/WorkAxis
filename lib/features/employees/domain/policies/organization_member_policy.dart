@@ -4,7 +4,9 @@ import 'package:workaxis/core/validation/contact_validators.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/employees/domain/models/member_field.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
+import 'package:workaxis/features/employees/domain/policies/member_form_values.dart';
 
 /// Business rules for managing customer-organization accounts. Used by both
 /// the mock and the production repository, so they cannot drift apart.
@@ -76,6 +78,119 @@ class OrganizationMemberPolicy {
     } on AppException {
       return false;
     }
+  }
+
+  /// Single source of truth for mandatory fields. The editor derives its
+  /// asterisks from this set and enforces it through [validateForSave], so a
+  /// label can never disagree with the enforced rule.
+  ///
+  /// Employees must be created with Aadhaar number and photo, designation and
+  /// salary; the functions backend enforces the same rule. Edits only require
+  /// what every account always has (an editor may be unable to see private HR
+  /// data, so it cannot be demanded on edit).
+  static Set<MemberField> requiredFields({
+    required UserRole role,
+    required bool isCreation,
+  }) => {
+    MemberField.fullName,
+    MemberField.dailyWorkHours,
+    MemberField.shiftHours,
+    if (role != UserRole.orgAdmin) MemberField.branches,
+    if (isCreation) ...{MemberField.username, MemberField.password},
+    if (isCreation && role == UserRole.employee) ...{
+      MemberField.aadhaarNumber,
+      MemberField.aadhaarPhoto,
+      MemberField.designation,
+      MemberField.salary,
+    },
+  };
+
+  /// Field-level errors for the editor, in form order (empty = valid).
+  static Map<MemberField, String> validateForSave({
+    required MemberFormValues values,
+    required bool isCreation,
+    required bool actorIsBranchManager,
+    String? activeBranchId,
+  }) {
+    final role = actorIsBranchManager ? UserRole.employee : values.role;
+    final required = requiredFields(role: role, isCreation: isCreation);
+    final found = <MemberField, String>{};
+    bool blank(String v) => v.trim().isEmpty;
+
+    if (blank(values.fullName)) {
+      found[MemberField.fullName] = 'Enter the full name.';
+    }
+    if (isCreation) {
+      final usernameError = ContactValidators.username(values.username);
+      if (usernameError != null) found[MemberField.username] = usernameError;
+      final passwordError = ContactValidators.password(values.password);
+      if (passwordError != null) found[MemberField.password] = passwordError;
+    }
+    final emailError = ContactValidators.optionalEmail(values.email);
+    if (emailError != null) found[MemberField.email] = emailError;
+    final phoneError = ContactValidators.optionalPhone(values.phone);
+    if (phoneError != null) found[MemberField.phone] = phoneError;
+
+    final rawAadhaar = values.aadhaarNumber
+        .replaceAll(RegExp(r'\s+'), '')
+        .trim();
+    if (rawAadhaar.isEmpty) {
+      if (required.contains(MemberField.aadhaarNumber)) {
+        found[MemberField.aadhaarNumber] = 'Enter the 12-digit Aadhaar number.';
+      }
+    } else if (!RegExp(r'^\d{12}$').hasMatch(rawAadhaar)) {
+      found[MemberField.aadhaarNumber] =
+          'Aadhaar number must be exactly 12 digits.';
+    }
+    if (required.contains(MemberField.aadhaarPhoto) &&
+        blank(values.aadhaarPhotoPath ?? '')) {
+      found[MemberField.aadhaarPhoto] =
+          'Attach the Aadhaar card document photo.';
+    }
+    if (required.contains(MemberField.designation) &&
+        blank(values.designation)) {
+      found[MemberField.designation] = 'Enter the employee designation.';
+    }
+
+    final salaryText = values.salaryText.trim();
+    if (salaryText.isEmpty) {
+      if (required.contains(MemberField.salary)) {
+        found[MemberField.salary] = 'Enter the monthly salary.';
+      }
+    } else {
+      final salary = double.tryParse(salaryText);
+      if (salary == null || salary < 0) {
+        found[MemberField.salary] = 'Salary must be a valid positive amount.';
+      }
+    }
+
+    final hours = double.tryParse(values.workHoursText.trim());
+    if (hours == null || hours < 0.5 || hours > 24) {
+      found[MemberField.dailyWorkHours] =
+          'Daily work hours must be between 0.5 and 24 hours.';
+    }
+    if (blank(values.shiftHours)) {
+      found[MemberField.shiftHours] = 'Enter a shift window range.';
+    }
+
+    if (actorIsBranchManager) {
+      if (activeBranchId == null && values.branchIds.isEmpty) {
+        found[MemberField.branches] =
+            'Choose an active branch to create an employee.';
+      }
+    } else if (values.role.isPlatformLevel) {
+      found[MemberField.role] =
+          'Platform accounts cannot be created in an organization.';
+    } else if (required.contains(MemberField.branches) &&
+        values.branchIds.isEmpty) {
+      found[MemberField.branches] =
+          'Select at least one branch for this ${values.role.displayName.toLowerCase()}.';
+    }
+
+    return {
+      for (final field in MemberField.values)
+        if (found.containsKey(field)) field: found[field]!,
+    };
   }
 
   /// Validates and normalizes a new account.
@@ -155,6 +270,8 @@ class OrganizationMemberPolicy {
     }
     return _normalized(
       existing.copyWith(
+        // copyWith keeps nulls, so emptied optional fields are cleared explicitly.
+        clear: _emptiedFields(draft),
         fullName: draft.fullName,
         email: draft.email,
         phone: draft.phone,
@@ -162,6 +279,21 @@ class OrganizationMemberPolicy {
         role: role,
         branchIds: branchIds,
         status: existing.status,
+        dailyWorkHours: draft.dailyWorkHours,
+        shiftHours: draft.shiftHours,
+        employeeCode: draft.employeeCode,
+        aadhaarNumber: draft.aadhaarNumber,
+        aadhaarPhotoUrl: draft.aadhaarPhotoUrl,
+        dateOfBirth: draft.dateOfBirth,
+        gender: draft.gender,
+        address: draft.address,
+        profilePhotoUrl: draft.profilePhotoUrl,
+        designation: draft.designation,
+        joiningDate: draft.joiningDate,
+        relievingDate: draft.relievingDate,
+        clearRelievingDate: draft.relievingDate == null,
+        salary: draft.salary,
+        assetDetails: draft.assetDetails,
       ),
       branchIds: branchIds,
       status: existing.status,
@@ -212,6 +344,22 @@ class OrganizationMemberPolicy {
     throw const AccessDeniedException('Role cannot manage accounts');
   }
 
+  static Set<MemberField> _emptiedFields(OrganizationMember d) {
+    bool blank(String? v) => v == null || v.trim().isEmpty;
+    return {
+      if (blank(d.aadhaarNumber)) MemberField.aadhaarNumber,
+      if (blank(d.aadhaarPhotoUrl)) MemberField.aadhaarPhoto,
+      if (blank(d.profilePhotoUrl)) MemberField.profilePhoto,
+      if (blank(d.gender)) MemberField.gender,
+      if (blank(d.address)) MemberField.address,
+      if (blank(d.designation)) MemberField.designation,
+      if (blank(d.assetDetails)) MemberField.assetDetails,
+      if (d.dateOfBirth == null) MemberField.dateOfBirth,
+      if (d.joiningDate == null) MemberField.joiningDate,
+      if (d.salary == null) MemberField.salary,
+    };
+  }
+
   static bool _isSelf(UserAccessContext access, OrganizationMember member) =>
       member.id == access.user.id || member.authUid == access.user.id;
 
@@ -250,11 +398,30 @@ class OrganizationMemberPolicy {
     return ids;
   }
 
+  static String? _blankToNull(String? v) {
+    final t = v?.trim();
+    return t == null || t.isEmpty ? null : t;
+  }
+
   static OrganizationMember _normalized(
     OrganizationMember member, {
     required List<String> branchIds,
     required AccountStatus status,
   }) {
+    if (member.dailyWorkHours <= 0 || member.dailyWorkHours > 24) {
+      throw ValidationException('Work hours must be between 0.5 and 24 hours.');
+    }
+    final rawAadhaar = member.aadhaarNumber
+        ?.replaceAll(RegExp(r'\s+'), '')
+        .trim();
+    if (rawAadhaar != null && rawAadhaar.isNotEmpty) {
+      if (!RegExp(r'^\d{12}$').hasMatch(rawAadhaar)) {
+        throw ValidationException('Aadhaar number must be exactly 12 digits.');
+      }
+    }
+    if (member.salary != null && member.salary! < 0) {
+      throw ValidationException('Salary cannot be negative.');
+    }
     final phone = ContactValidators.normalizePhone(member.phone);
     return OrganizationMember(
       id: member.id,
@@ -267,6 +434,20 @@ class OrganizationMemberPolicy {
       role: member.role,
       branchIds: List.unmodifiable(branchIds),
       status: status,
+      dailyWorkHours: member.dailyWorkHours,
+      shiftHours: member.shiftHours?.trim(),
+      employeeCode: _blankToNull(member.employeeCode),
+      aadhaarNumber: rawAadhaar,
+      aadhaarPhotoUrl: _blankToNull(member.aadhaarPhotoUrl),
+      dateOfBirth: member.dateOfBirth,
+      gender: _blankToNull(member.gender),
+      address: _blankToNull(member.address),
+      profilePhotoUrl: _blankToNull(member.profilePhotoUrl),
+      designation: _blankToNull(member.designation),
+      joiningDate: member.joiningDate,
+      relievingDate: member.relievingDate,
+      salary: member.salary,
+      assetDetails: _blankToNull(member.assetDetails),
     );
   }
 }

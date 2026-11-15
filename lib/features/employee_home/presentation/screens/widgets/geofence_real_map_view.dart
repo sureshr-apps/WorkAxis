@@ -8,6 +8,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/maps/map_rendering_scope.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/geofence_map_painter.dart';
 
 /// Real map displaying the branch geofence boundary and pin.
@@ -49,10 +50,6 @@ class GeofenceRealMapView extends StatefulWidget {
     if (kIsWeb) return true;
     return defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
-  }
-
-  static bool get isHeadlessTest {
-    return WidgetsBinding.instance.runtimeType.toString().contains('Test');
   }
 
   @override
@@ -97,10 +94,10 @@ class _GeofenceRealMapViewState extends State<GeofenceRealMapView> {
         widget.geofenceRadiusMeters ?? GeofenceRealMapView.defaultRadiusMeters;
     final center = LatLng(lat, lng);
 
-    // Provide a reliable rendering fallback on Windows desktop or headless tests
-    // where Google Maps platform views are not available.
+    // Painted fallback where Google Maps platform views are unavailable (for
+    // example Windows desktop) or when a MapRenderingScope asks for it.
     if (widget.forceFallback ||
-        GeofenceRealMapView.isHeadlessTest ||
+        MapRenderingScope.useFallbackOf(context) ||
         !GeofenceRealMapView.isPlatformSupported) {
       return _FallbackMapView(
         latitude: lat,

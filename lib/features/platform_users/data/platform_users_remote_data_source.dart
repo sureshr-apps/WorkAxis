@@ -2,7 +2,7 @@ import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 
-/// Remote platform-administrator reads. Thin seam over SQL Connect so the
+/// Remote platform-administrator reads. Thin seam over the data gateway so the
 /// repository can be unit-tested with a fake.
 abstract interface class PlatformUsersRemoteDataSource {
   Future<PageResult<PlatformAdministrator>> listPage({

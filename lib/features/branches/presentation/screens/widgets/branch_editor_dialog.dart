@@ -101,7 +101,8 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
   Widget _buildForm() {
     final lat = double.tryParse(_latitudeController.text.trim());
     final lng = double.tryParse(_longitudeController.text.trim());
-    final radius = int.tryParse(_radiusController.text.trim()) ??
+    final radius =
+        int.tryParse(_radiusController.text.trim()) ??
         BranchGeofenceValidator.defaultRadiusMeters;
 
     return Column(

@@ -16,7 +16,7 @@ const CHUNK = 20;
  * Request:  { organizationId, status: 'active' | 'suspended' }
  * Response: { organizationId, status, membersUpdated, membersFailed }
  * Organization suspension must also revoke member sign-in, so it is not done
- * through the UpdateOrganization SQL Connect mutation.
+ * through the SQL organization update.
  */
 export const setOrganizationStatus = onCall(callableOptions, (request) =>
   guarded(async () => {

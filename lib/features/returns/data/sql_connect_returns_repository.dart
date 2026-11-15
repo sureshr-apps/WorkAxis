@@ -1,7 +1,9 @@
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
+import 'package:workaxis/core/storage/attachment_storage.dart';
+import 'package:workaxis/core/storage/attachment_uploader.dart';
 import 'package:workaxis/core/time/clock.dart';
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/core/backend/data_gateway.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/returns/data/data_connect_returns_remote.dart';
@@ -10,18 +12,23 @@ import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
 import 'package:workaxis/features/returns/domain/services/returns_scope.dart';
 
-/// Production [ReturnsRepository] using Firebase SQL Connect.
+/// Production [ReturnsRepository] using the data gateway.
 ///
 /// Employees use `ListMyReturns`, managers `ListReturnsByBranchPaged` for the
 /// active branch, and Organization Admins `ListReturnsByOrgPaged` (one query
 /// for the whole organization, optionally narrowed to a branch).
 class SqlConnectReturnsRepository implements ReturnsRepository {
   SqlConnectReturnsRepository({
-    WorkaxisConnectorConnector? connector,
+    DataGateway? gateway,
     ReturnsRemote? remote,
     this._scope = const ReturnsScope(),
     Now? now,
-  }) : _remote = remote ?? DataConnectReturnsRemote(connector: connector),
+    this._attachments,
+  }) : assert(
+         gateway != null || remote != null,
+         'Provide a data gateway or a remote.',
+       ),
+       _remote = remote ?? DataConnectReturnsRemote(gateway: gateway!),
        _now = now ?? systemNow;
 
   /// Rows fetched per query.
@@ -30,6 +37,9 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
   final ReturnsRemote _remote;
   final ReturnsScope _scope;
   final Now _now;
+
+  /// Uploads the bill photo before a return is saved. Null skips uploading.
+  final AttachmentUploader? _attachments;
 
   @override
   Future<List<ReturnItem>> getReturns({
@@ -86,28 +96,79 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
     String? branchId,
     required CreateReturnInput input,
   }) async {
+    final results = await submitReturnBatch(
+      access: access,
+      branchId: branchId,
+      input: input.toBatch(),
+    );
+    return results.first;
+  }
+
+  @override
+  Future<List<ReturnItem>> submitReturnBatch({
+    required UserAccessContext access,
+    String? branchId,
+    required CreateReturnBatchInput input,
+  }) async {
     try {
       final branch = _scope.forSubmit(access, branchId);
-      final id = await _remote.submit(branchId: branch.id, input: input);
-      final remarks = input.remarks?.trim();
-      return ReturnItem(
-        id: id,
-        organizationId: access.organization!.id,
-        branchId: branch.id,
-        branchName: branch.name,
-        employeeId: access.user.id,
-        employeeName: access.user.name,
-        productTitle: input.productTitle,
-        reason: input.reason,
-        quantity: input.quantity,
-        unit: input.unit,
-        invoiceNumber: input.invoiceNumber,
-        // Display value until the next load returns the server timestamp.
-        returnDate: _now(),
-        status: ReturnStatus.pending,
-        billImageUrl: input.billImageUrl,
-        remarks: remarks == null || remarks.isEmpty ? null : remarks,
-      );
+      // Upload the bill photo once for the whole bill, before any line is
+      // saved, so no line ever carries a local device path.
+      final billImage =
+          await _attachments?.ensureStored(
+            input.billImageUrl,
+            organizationId: access.organization!.id,
+            kind: AttachmentKind.returnBill,
+          ) ??
+          input.billImageUrl;
+      final createdList = <ReturnItem>[];
+      for (final line in input.items) {
+        final combinedRemarks = [
+          if (input.remarks != null && input.remarks!.trim().isNotEmpty)
+            input.remarks!.trim(),
+          if (line.remarks != null && line.remarks!.trim().isNotEmpty)
+            line.remarks!.trim(),
+        ].join(' - ');
+        final singleInput = CreateReturnInput(
+          branchId: branch.id,
+          branchName: branch.name,
+          billNumber: input.billNumber,
+          invoiceNumber: input.invoiceNumber,
+          returnDate: input.returnDate,
+          productTitle: line.productTitle,
+          quantity: line.quantity,
+          unit: line.unit,
+          reason: line.reason,
+          billImageUrl: billImage,
+          remarks: combinedRemarks.isEmpty ? null : combinedRemarks,
+        );
+        final id = await _remote.submit(
+          branchId: branch.id,
+          input: singleInput,
+        );
+        createdList.add(
+          ReturnItem(
+            id: id,
+            organizationId: access.organization!.id,
+            branchId: branch.id,
+            branchName: branch.name,
+            employeeId: access.user.id,
+            employeeName: access.user.name,
+            productTitle: line.productTitle,
+            reason: line.reason,
+            quantity: line.quantity,
+            unit: line.unit,
+            billNumber: input.billNumber,
+            invoiceNumber: input.invoiceNumber,
+            // Display value until the next load returns the server timestamp.
+            returnDate: input.returnDate ?? _now(),
+            status: ReturnStatus.pending,
+            billImageUrl: billImage,
+            remarks: singleInput.remarks,
+          ),
+        );
+      }
+      return createdList;
     } catch (e, st) {
       throw mapBackendError(e, st);
     }

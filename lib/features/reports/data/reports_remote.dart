@@ -1,6 +1,5 @@
-import 'package:firebase_data_connect/firebase_data_connect.dart'
-    show Timestamp;
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/core/backend/data_gateway.dart';
+import 'package:workaxis/core/backend/json_reader.dart';
 import 'package:workaxis/features/reports/data/report_period_range.dart';
 
 /// Return aggregates for a reporting window.
@@ -14,7 +13,7 @@ class ReportReturnStats {
   final Map<String, int> byReason;
 }
 
-/// Thin seam over SQL Connect aggregate queries used by reports, so the
+/// Thin seam over the data gateway's aggregate queries used by reports, so the
 /// repository can be tested with a fake.
 abstract interface class ReportsRemote {
   /// Returns per branch and per reason for the organization within [range]
@@ -32,40 +31,29 @@ abstract interface class ReportsRemote {
   );
 }
 
-/// [ReportsRemote] backed by the generated connector.
+/// [ReportsRemote] backed by the data gateway (`GetReturnCountsByBranch`,
+/// `GetBranchStats`).
 class DataConnectReportsRemote implements ReportsRemote {
-  DataConnectReportsRemote({this._connector});
+  DataConnectReportsRemote({required this._gateway});
 
-  final WorkaxisConnectorConnector? _connector;
+  final DataGateway _gateway;
 
-  WorkaxisConnectorConnector get _c =>
-      _connector ?? WorkaxisConnectorConnector.instance;
-
-  static Timestamp _ts(DateTime instant) =>
-      Timestamp(0, instant.millisecondsSinceEpoch ~/ 1000);
+  static String _ts(DateTime instant) => instant.toUtc().toIso8601String();
 
   @override
   Future<ReportReturnStats> returnStatsForOrganization(
     String organizationId,
     ReportRange range,
   ) async {
-    final data =
-        (await _c
-                .getReturnCountsByBranch(orgId: organizationId)
-                .from(_ts(range.from))
-                .to(_ts(range.to))
-                .execute())
-            .data;
-    final byBranch = <String, int>{};
-    for (final row in data.returnRecords) {
-      byBranch[row.branchId] = (byBranch[row.branchId] ?? 0) + row.count_;
-    }
-    final byReason = <String, int>{};
-    for (final row in data.returnsByReason) {
-      byReason[row.returnReason] =
-          (byReason[row.returnReason] ?? 0) + row.count_;
-    }
-    return ReportReturnStats(byBranch: byBranch, byReason: byReason);
+    final data = await _gateway.call('GetReturnCountsByBranch', {
+      'orgId': organizationId,
+      'from': _ts(range.from),
+      'to': _ts(range.to),
+    });
+    return ReportReturnStats(
+      byBranch: groupedCounts(data.objects('returnRecords'), 'branchId'),
+      byReason: groupedCounts(data.objects('returnsByReason'), 'returnReason'),
+    );
   }
 
   @override
@@ -73,19 +61,14 @@ class DataConnectReportsRemote implements ReportsRemote {
     String branchId,
     ReportRange range,
   ) async {
-    final data =
-        (await _c
-                .getBranchStats(branchId: branchId)
-                .from(_ts(range.from))
-                .to(_ts(range.to))
-                .execute())
-            .data;
-    final byReason = <String, int>{};
-    for (final row in data.returnsByReason) {
-      byReason[row.returnReason] =
-          (byReason[row.returnReason] ?? 0) + row.count_;
-    }
-    final total = data.returnsByStatus.fold<int>(0, (s, r) => s + r.count_);
-    return ReportReturnStats(byBranch: {branchId: total}, byReason: byReason);
+    final data = await _gateway.call('GetBranchStats', {
+      'branchId': branchId,
+      'from': _ts(range.from),
+      'to': _ts(range.to),
+    });
+    return ReportReturnStats(
+      byBranch: {branchId: sumCounts(data.objects('returnsByStatus'))},
+      byReason: groupedCounts(data.objects('returnsByReason'), 'returnReason'),
+    );
   }
 }

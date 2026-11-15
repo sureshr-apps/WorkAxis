@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/employee_home/domain/models/device_location.dart';
+import 'package:workaxis/features/employee_home/domain/models/location_peek.dart';
 import 'package:workaxis/features/employee_home/domain/services/device_location_gateway.dart';
 import 'package:workaxis/features/employee_home/domain/services/gateway_attendance_location_provider.dart';
 
@@ -70,6 +71,44 @@ void main() {
       expect(gateway.lastTimeout, const Duration(seconds: 3));
     },
   );
+
+  group('peekLocation never prompts', () {
+    test('reports permissionNeeded without requesting', () async {
+      gateway.current = LocationPermissionState.denied;
+      final peek = await provider.peekLocation();
+      expect(peek.readiness, LocationReadiness.permissionNeeded);
+      expect(peek.fix, isNull);
+      expect(gateway.requests, 0);
+    });
+
+    test('reports permissionBlocked and serviceDisabled', () async {
+      gateway.current = LocationPermissionState.deniedForever;
+      expect(
+        (await provider.peekLocation()).readiness,
+        LocationReadiness.permissionBlocked,
+      );
+      gateway.serviceEnabled = false;
+      expect(
+        (await provider.peekLocation()).readiness,
+        LocationReadiness.serviceDisabled,
+      );
+      expect(gateway.requests, 0);
+    });
+
+    test('returns the fix when already granted', () async {
+      final peek = await provider.peekLocation();
+      expect(peek.readiness, LocationReadiness.ready);
+      expect(peek.fix?.latitude, 12.97);
+    });
+
+    test('a failing fix is unavailable, not an exception', () async {
+      gateway.fixError = TimeoutException('slow');
+      expect(
+        (await provider.peekLocation()).readiness,
+        LocationReadiness.unavailable,
+      );
+    });
+  });
 
   test('requests permission once when denied, then proceeds', () async {
     gateway.current = LocationPermissionState.denied;

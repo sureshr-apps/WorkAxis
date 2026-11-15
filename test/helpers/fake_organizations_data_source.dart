@@ -116,6 +116,12 @@ class FakeOrganizationsDataSource
     );
   }
 
+  /// Mirrors the server-side effect of the `deleteOrganization` callable.
+  Future<void> delete(String id) async {
+    _orgs.remove(id);
+    _licenses.remove(id);
+  }
+
   int _nextAdmin = 1;
 
   /// What `provisionUser` does to the member table.

@@ -1,6 +1,6 @@
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/core/backend/data_gateway.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/attendance/data/attendance_day_counter.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
@@ -12,19 +12,22 @@ import 'package:workaxis/features/organization_dashboard/domain/repositories/org
 
 /// Production [OrganizationDashboardRepository].
 ///
-/// Counts come from SQL Connect aggregate queries
+/// Counts come from data gateway aggregate queries
 /// (`GetOrganizationDashboardCounts`); today's attendance comes from Firestore
 /// count queries scoped to the organization. Nothing is estimated: figures the
 /// backend cannot provide (leave, per-branch headcount) are left out.
 class SqlConnectOrganizationDashboardRepository
     implements OrganizationDashboardRepository {
   SqlConnectOrganizationDashboardRepository({
-    WorkaxisConnectorConnector? connector,
+    DataGateway? gateway,
     OrganizationDashboardRemote? remote,
     AttendanceDayCounter? attendanceCounter,
-  }) : _remote =
-           remote ??
-           DataConnectOrganizationDashboardRemote(connector: connector),
+  }) : assert(
+         gateway != null || remote != null,
+         'Provide a data gateway or a remote.',
+       ),
+       _remote =
+           remote ?? DataConnectOrganizationDashboardRemote(gateway: gateway!),
        _attendance = attendanceCounter ?? AttendanceDayCounter();
 
   final OrganizationDashboardRemote _remote;

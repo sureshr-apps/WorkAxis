@@ -168,13 +168,28 @@ class _MiddleRow extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: Text(
-            'Bill #${item.invoiceNumber}',
-            style: AppTypography.labelMono.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item.referenceLabel,
+                  style: AppTypography.labelMono.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (item.billImageUrl != null &&
+                  item.billImageUrl!.isNotEmpty) ...[
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(
+                  Icons.photo_camera_outlined,
+                  size: 14,
+                  color: AppColors.primary,
+                ),
+              ],
+            ],
           ),
         ),
         Text(

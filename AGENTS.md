@@ -156,14 +156,14 @@ The project uses the **Firebase ecosystem**, with a hybrid persistence model.
 Current direction:
 
 - Firebase Authentication for authentication identity/password flows
-- Firebase SQL Connect / PostgreSQL for relational data
+- PostgreSQL (accessed through Cloud Functions) for relational data
 - Cloud Firestore for high-growth/event-oriented data
 - Firebase Storage / Cloud Storage for files and images
 - Trusted Firebase/server-side functions where privileged or cross-store operations require them
 
 Do **not** replace this direction with Firestore-only or PostgreSQL-only unless explicitly instructed.
 
-## PostgreSQL / SQL Connect
+## PostgreSQL (accessed through Cloud Functions)
 
 Prefer PostgreSQL for data that benefits from:
 
@@ -324,7 +324,7 @@ Do not create enormous interfaces containing unrelated methods.
 ## Dependency Inversion Principle
 
 High-level business logic should not depend directly on low-level infrastructure details.
-Where appropriate, depend on repository/service contracts rather than Firebase, SQL Connect, Firestore, storage, or platform-specific implementations directly.
+Where appropriate, depend on repository/service contracts rather than Firebase, PostgreSQL, Firestore, storage, or platform-specific implementations directly.
 
 ---
 
@@ -513,7 +513,7 @@ Responsible for:
 - Repository implementations
 - Mock repositories/data sources
 - Firebase Authentication integration
-- SQL Connect/PostgreSQL integration
+- PostgreSQL (accessed through Cloud Functions) integration
 - Firestore integration
 - Storage uploads
 - Serialization/mapping
@@ -1159,7 +1159,7 @@ when appropriate.
 - Dependency injection, if any
 - Mock/real repository strategy
 - Firebase Authentication approach
-- SQL Connect/PostgreSQL integration
+- PostgreSQL (accessed through Cloud Functions) integration
 - Firestore integration
 - Storage integration
 - Responsive/adaptive strategy

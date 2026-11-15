@@ -16,6 +16,7 @@ import 'package:workaxis/features/employee_home/presentation/screens/widgets/tod
 
 import '../../helpers/access_controller_fixture.dart';
 import '../../helpers/access_fixtures.dart';
+import '../../helpers/fallback_maps.dart';
 
 void main() {
   group('Employee Home Repository & Controller', () {
@@ -92,6 +93,7 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
+            builder: fallbackMapsBuilder,
             theme: AppTheme.light,
             home: MultiProvider(
               providers: [
@@ -217,6 +219,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          builder: fallbackMapsBuilder,
           theme: AppTheme.light,
           home: MultiProvider(
             providers: [
@@ -258,6 +261,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          builder: fallbackMapsBuilder,
           theme: AppTheme.light,
           home: MultiProvider(
             providers: [

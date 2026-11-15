@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
+import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
@@ -10,6 +11,7 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/data/mock_organization_members_repository.dart';
 import 'package:workaxis/features/employees/presentation/controllers/organization_members_controller.dart';
 import 'package:workaxis/features/employees/presentation/screens/employee_directory_screen.dart';
+import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_editor_dialog.dart';
 
 void main() {
   group('EmployeeDirectoryScreen Widget Tests', () {
@@ -153,5 +155,45 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Employee Directory'), findsOneWidget);
     });
+
+    testWidgets(
+      'newly created branch appears in member editor without re-login',
+      (tester) async {
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: accessController),
+              ChangeNotifierProvider.value(value: branchController),
+              ChangeNotifierProvider.value(value: membersController),
+            ],
+            child: const MaterialApp(home: EmployeeDirectoryScreen()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Dynamically add a new branch to the data source (simulating branch creation)
+        const newBranch = BranchSummary(
+          id: 'br-newly-created',
+          organizationId: 'org-acme',
+          name: 'Westside Supercentre',
+          code: 'BR-999',
+          location: 'West Ring Road',
+        );
+        dataSource.saveBranch(newBranch);
+
+        // Open the member editor by clicking "Add Member"
+        expect(find.text('Add Member'), findsOneWidget);
+        await tester.tap(find.text('Add Member'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(OrganizationMemberEditorDialog), findsOneWidget);
+        await tester.dragUntilVisible(
+          find.text('Westside Supercentre'),
+          find.byType(ListView).last,
+          const Offset(0, -200),
+        );
+        expect(find.text('Westside Supercentre'), findsOneWidget);
+      },
+    );
   });
 }

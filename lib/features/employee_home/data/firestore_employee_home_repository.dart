@@ -13,6 +13,7 @@ import 'package:workaxis/features/attendance/data/attendance_entry_mapper.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
+import 'package:workaxis/features/employee_home/domain/models/location_peek.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/services/attendance_location_provider.dart';
 
@@ -51,11 +52,16 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   @override
   Future<EmployeeHomeSummary> getEmployeeHomeSummary({
     required UserAccessContext access,
+    bool requestLocationPermission = false,
   }) async {
     try {
       _requireEmployee(access);
       final entry = await _todayEntry(access.user.id);
-      return await _summarize(access, entry);
+      return await _summarize(
+        access,
+        entry,
+        requestLocationPermission: requestLocationPermission,
+      );
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -150,8 +156,9 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
 
   Future<EmployeeHomeSummary> _summarize(
     UserAccessContext access,
-    Map<String, dynamic>? entry,
-  ) async {
+    Map<String, dynamic>? entry, {
+    required bool requestLocationPermission,
+  }) async {
     final checkIn = AttendanceEntryMapper.instant(entry?['checkInAt']);
     final checkOut = AttendanceEntryMapper.instant(entry?['checkOutAt']);
     final breaks = _breaks(entry?['breaks']);
@@ -180,10 +187,11 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         branch != null &&
         branch.latitude != null &&
         branch.longitude != null) {
-      try {
-        final fix = await _location
-            .currentLocation()
-            .timeout(const Duration(seconds: 4));
+      final peek = await _readLocation(
+        requestPermission: requestLocationPermission,
+      );
+      final fix = peek.fix;
+      if (fix != null) {
         final distance = _distanceMeters(
           fix.latitude,
           fix.longitude,
@@ -192,37 +200,67 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         );
         final radius = branch.geofenceRadiusMeters ?? 150;
         isWithinGeofence = distance <= radius;
-        if (isWithinGeofence) {
-          locationStatus = 'Inside geofence • Ready to check in';
-        } else {
-          locationStatus =
-              'Outside geofence (${distance.round()}m away, radius: ${radius}m)';
-        }
-      } catch (_) {
-        // Location permission denied, service disabled, or timed out.
+        locationStatus = isWithinGeofence
+            ? 'Inside geofence • Ready to check in'
+            : 'Outside geofence (${distance.round()}m away, radius: ${radius}m)';
+      } else {
+        locationStatus = _locationOffStatus(peek.readiness);
       }
     }
 
-    const standardShiftSeconds = 8 * 3600;
+    double dailyWorkHours = 8.0;
+    String shiftHours = EmployeeHomeSummary.unavailable;
+    try {
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(access.user.id)
+          .get();
+      final userData = userDoc.data();
+      if (userData != null) {
+        final hoursVal = userData['dailyWorkHours'];
+        if (hoursVal is num && hoursVal > 0) {
+          dailyWorkHours = hoursVal.toDouble();
+        }
+        final shiftVal = userData['shiftHours'];
+        if (shiftVal is String && shiftVal.trim().isNotEmpty) {
+          shiftHours = shiftVal.trim();
+        }
+      }
+    } catch (_) {
+      // Fallback to defaults if read fails or device is offline.
+    }
+
+    final totalMinutes = (dailyWorkHours * 60).round();
+    final stdHours = totalMinutes ~/ 60;
+    final stdMins = totalMinutes % 60;
+    final standardDuration =
+        '${stdHours}h ${stdMins.toString().padLeft(2, '0')}m';
+
+    final standardShiftSeconds = (dailyWorkHours * 3600).round();
     final progress = worked == null
         ? 0.0
-        : (worked.inSeconds / standardShiftSeconds).clamp(0.0, 1.0);
+        : standardShiftSeconds > 0
+        ? (worked.inSeconds / standardShiftSeconds).clamp(0.0, 1.0)
+        : 0.0;
 
     return EmployeeHomeSummary(
       employeeId: access.user.id,
       employeeName: access.user.name,
-      branchName:
-          branch?.name ?? EmployeeHomeSummary.unavailable,
+      branchName: branch?.name ?? EmployeeHomeSummary.unavailable,
       organizationName: access.organization!.name,
       shiftName: EmployeeHomeSummary.unavailable,
-      shiftHours: EmployeeHomeSummary.unavailable,
-      standardDuration: '8h 00m',
+      shiftHours: shiftHours,
+      standardDuration: standardDuration,
       currentStatus: status,
       checkInTime: AppFormatters.formatTime(checkIn, placeholder: '-- : --'),
       checkInNote: recordedByManager ? 'Recorded by your manager' : null,
       checkOutTime: AppFormatters.formatTime(checkOut, placeholder: '-- : --'),
       workingDuration: worked == null ? '0h 00m' : _formatDuration(worked),
       shiftProgress: progress,
+      elapsedActive: worked == null ? '-- : --' : _formatDuration(worked),
+      elapsedActivePercentText: worked == null
+          ? EmployeeHomeSummary.unavailable
+          : '${(progress * 100).toStringAsFixed(0)}% complete',
       locationStatus: locationStatus,
       isWithinGeofence: isWithinGeofence,
       latitude: branch?.latitude,
@@ -230,6 +268,39 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       geofenceRadiusMeters: branch?.geofenceRadiusMeters,
     );
   }
+
+  /// Passive read by default (never prompts). Only an explicit user action
+  /// ([requestPermission]) may trigger the OS permission dialog.
+  Future<LocationPeek> _readLocation({required bool requestPermission}) async {
+    const limit = Duration(seconds: 4);
+    if (!requestPermission) {
+      return _location.peekLocation().timeout(
+        limit,
+        onTimeout: () => const LocationPeek(LocationReadiness.unavailable),
+      );
+    }
+    try {
+      final fix = await _location.currentLocation().timeout(limit);
+      return LocationPeek(LocationReadiness.ready, fix);
+    } on LocationException catch (e) {
+      return LocationPeek(switch (e.failure) {
+        LocationFailure.serviceDisabled => LocationReadiness.serviceDisabled,
+        LocationFailure.permissionDenied => LocationReadiness.permissionNeeded,
+        LocationFailure.permissionDeniedForever =>
+          LocationReadiness.permissionBlocked,
+        _ => LocationReadiness.unavailable,
+      });
+    } catch (_) {
+      return const LocationPeek(LocationReadiness.unavailable);
+    }
+  }
+
+  String _locationOffStatus(LocationReadiness readiness) => switch (readiness) {
+    LocationReadiness.permissionBlocked =>
+      'Location blocked – enable it in settings to punch in',
+    LocationReadiness.unavailable => 'Location unavailable – tap refresh',
+    _ => 'Location off – enable to punch in',
+  };
 
   List<({DateTime start, DateTime? end})> _breaks(Object? raw) {
     if (raw is! List) return const [];

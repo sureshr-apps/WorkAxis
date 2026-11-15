@@ -14,7 +14,7 @@ import 'package:workaxis/features/platform_users/domain/repositories/platform_us
 
 /// Production [PlatformUsersRepository].
 ///
-/// Reads come from SQL Connect; create, update, status and password changes go
+/// Reads come from the data gateway; create, update, status and password changes go
 /// through the account callables, which also own Firebase Auth, claims and
 /// alias maintenance. The client never writes `users` or `user_aliases`.
 class SqlConnectPlatformUsersRepository implements PlatformUsersRepository {

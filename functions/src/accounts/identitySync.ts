@@ -3,7 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { REGION } from "../config";
+import { MAX_INSTANCES, REGION, RUNTIME_SERVICE_ACCOUNT } from "../config";
 import { normalizeIdentity } from "../auth/aliasKeys";
 import { releaseAliases, reserveAliasesTx } from "../firestore/userStore";
 import { getMemberByAuthUid } from "../sql/members";
@@ -58,7 +58,12 @@ export async function syncIdentityWithinLock(
 }
 
 export const reconcileIdentitySync = onSchedule(
-  { schedule: "every 1 minutes", region: REGION },
+  {
+    schedule: "every 1 minutes",
+    region: REGION,
+    maxInstances: MAX_INSTANCES,
+    serviceAccount: RUNTIME_SERVICE_ACCOUNT,
+  },
   async () => {
     const jobs = await getFirestore()
       .collection("identity_sync_jobs")

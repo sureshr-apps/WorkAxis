@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/config/backend_config.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
@@ -211,35 +210,12 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
         ),
 
-        const SizedBox(height: AppSpacing.xl),
-
         // Debug-only quick fill; never rendered in profile/release builds or
         // against the real backend.
         if (BackendConfig.isMock && kDebugMode) ...[
+          const SizedBox(height: AppSpacing.xl),
           DemoAccountsPanel(onSelected: _fillDemoAccount),
-          const SizedBox(height: AppSpacing.lg),
         ],
-
-        // Security Footnote
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.lock_outline,
-              size: 13,
-              color: AppColors.secondary,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              'End-to-end encrypted session',
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                color: AppColors.secondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
       ],
     );
 

@@ -224,6 +224,7 @@ class _OrganizationProfileCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                             Expanded(
+                              flex: 3,
                               child: Text(
                                 organization.contactEmail ?? 'No email',
                                 style: AppTypography.labelMedium.copyWith(
@@ -232,10 +233,15 @@ class _OrganizationProfileCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            Text(
-                              'Platform Contact',
-                              style: AppTypography.labelSmall.copyWith(
-                                color: AppColors.kpiMuted,
+                            const SizedBox(width: AppSpacing.sm),
+                            Flexible(
+                              flex: 2,
+                              child: Text(
+                                'Platform Contact',
+                                textAlign: TextAlign.end,
+                                style: AppTypography.labelSmall.copyWith(
+                                  color: AppColors.kpiMuted,
+                                ),
                               ),
                             ),
                           ],
@@ -261,6 +267,7 @@ class _OrganizationProfileCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                             Expanded(
+                              flex: 3,
                               child: Text(
                                 organization.contactPhone ?? 'No phone',
                                 style: AppTypography.labelMedium.copyWith(
@@ -269,10 +276,15 @@ class _OrganizationProfileCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            Text(
-                              'Direct Operations Line',
-                              style: AppTypography.labelSmall.copyWith(
-                                color: AppColors.kpiMuted,
+                            const SizedBox(width: AppSpacing.sm),
+                            Flexible(
+                              flex: 2,
+                              child: Text(
+                                'Direct Operations Line',
+                                textAlign: TextAlign.end,
+                                style: AppTypography.labelSmall.copyWith(
+                                  color: AppColors.kpiMuted,
+                                ),
                               ),
                             ),
                           ],

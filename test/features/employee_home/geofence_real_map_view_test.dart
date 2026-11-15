@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/geofence_real_map_view.dart';
 
+import '../../helpers/fallback_maps.dart';
+
 void main() {
   group('GeofenceRealMapView Tests', () {
     testWidgets('renders fallback map in test environment with coordinates', (
       tester,
     ) async {
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
+          builder: fallbackMapsBuilder,
           home: Scaffold(
             body: SizedBox(
               width: 350,
@@ -36,7 +39,8 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
+          builder: fallbackMapsBuilder,
           home: Scaffold(
             body: SizedBox(
               width: 350,

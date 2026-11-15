@@ -5,7 +5,7 @@ import 'package:workaxis/features/platform_organizations/domain/models/organizat
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/repositories/platform_organizations_repository.dart';
 
-/// Remote organization reads and field writes. Thin seam over SQL Connect so
+/// Remote organization reads and field writes. Thin seam over the data gateway so
 /// the repository can be unit-tested with a fake. Status changes are not
 /// here: they go through the `setOrganizationStatus` callable.
 abstract interface class PlatformOrganizationsRemoteDataSource {

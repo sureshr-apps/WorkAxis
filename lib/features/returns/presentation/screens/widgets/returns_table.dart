@@ -60,9 +60,43 @@ class ReturnsTableColumn {
 
   static ReturnsTableColumn invoice(String title) => ReturnsTableColumn(
     title: title,
-    flex: 1.6,
-    cell: (context, item) =>
-        Text(item.invoiceNumber, style: AppTypography.labelMono),
+    flex: 1.8,
+    cell: (context, item) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (item.billNumber != null && item.billNumber!.isNotEmpty) ...[
+                Text(
+                  'Bill: ${item.billNumber}',
+                  style: AppTypography.labelMono,
+                ),
+                Text(
+                  'Inv: ${item.invoiceNumber}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ] else ...[
+                Text(item.invoiceNumber, style: AppTypography.labelMono),
+              ],
+            ],
+          ),
+        ),
+        if (item.billImageUrl != null && item.billImageUrl!.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.only(left: 4),
+            child: Icon(
+              Icons.photo_camera_outlined,
+              size: 14,
+              color: AppColors.primary,
+            ),
+          ),
+      ],
+    ),
   );
 
   static ReturnsTableColumn employee() => ReturnsTableColumn(

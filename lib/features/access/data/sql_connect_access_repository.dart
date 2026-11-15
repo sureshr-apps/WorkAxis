@@ -1,7 +1,6 @@
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/features/access/data/access_remote_data_source.dart';
-import 'package:workaxis/features/access/data/sql_connect_access_remote_data_source.dart';
 import 'package:workaxis/features/access/domain/models/access_member_record.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
@@ -17,8 +16,7 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 /// The role carried by the sign-in token is cross-checked against it, so a
 /// stale or tampered token cannot widen access. Every failure denies access.
 class SqlConnectAccessRepository implements AccessRepository {
-  SqlConnectAccessRepository({AccessRemoteDataSource? dataSource})
-    : _dataSource = dataSource ?? SqlConnectAccessRemoteDataSource();
+  SqlConnectAccessRepository({required this._dataSource});
 
   final AccessRemoteDataSource _dataSource;
 

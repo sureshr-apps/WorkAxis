@@ -132,9 +132,57 @@ void runOrganizationMembersContract(
     });
 
     test(
+      'org admin creates an organization admin without branch assignments',
+      () async {
+        final admin = await repo.saveMember(
+          access: orgAdminAccess(),
+          member: memberDraft(
+            username: 'second.admin',
+            role: UserRole.orgAdmin,
+            branches: [],
+          ),
+          initialPassword: _password,
+        );
+        expect(admin.id, isNotEmpty);
+        expect(admin.role, UserRole.orgAdmin);
+        expect(admin.branchIds, isEmpty);
+        expect(admin.status, AccountStatus.active);
+      },
+    );
+
+    test('org admin creates a branch manager with branches', () async {
+      final manager = await repo.saveMember(
+        access: orgAdminAccess(),
+        member: memberDraft(
+          username: 'new.branch.mgr',
+          role: UserRole.branchManager,
+          branches: ['br-01'],
+        ),
+        initialPassword: _password,
+      );
+      expect(manager.id, isNotEmpty);
+      expect(manager.role, UserRole.branchManager);
+      expect(manager.branchIds, ['br-01']);
+      expect(manager.status, AccountStatus.active);
+    });
+
+    test(
       'branch manager creates employees only, in the active branch',
       () async {
         final bm = branchManagerAccess();
+        await expectLater(
+          repo.saveMember(
+            access: bm,
+            member: memberDraft(
+              username: 'bm.attempt.admin',
+              role: UserRole.orgAdmin,
+              branches: [],
+            ),
+            initialPassword: _password,
+            activeBranchId: 'br-01',
+          ),
+          throwsA(isA<AccessDeniedException>()),
+        );
         await expectLater(
           repo.saveMember(
             access: bm,

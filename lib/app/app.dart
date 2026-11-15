@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:workaxis/core/storage/attachment_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/bootstrap/backend_factory.dart';
 import 'package:workaxis/app/routing/app_router.dart';
@@ -169,6 +170,9 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
       providers: [
         Provider<OrganizationMembersRepository>.value(
           value: widget.repositories.organizationMembersRepository,
+        ),
+        Provider<AttachmentStorage>.value(
+          value: widget.repositories.attachmentStorage,
         ),
         Provider<SessionController>.value(value: _sessionController),
         ChangeNotifierProvider<AuthController>.value(value: _authController),

@@ -40,7 +40,11 @@ class _OperationalReportsScreenState extends State<OperationalReportsScreen> {
   String? get _activeBranchId =>
       context.read<BranchContextController>().activeBranch?.branchId;
 
-  Future<void> _loadData() async {
+  /// Entry loads reuse recently resolved access; pull-to-refresh and retry
+  /// pass [force] to re-resolve it.
+  Future<void> _loadData({bool force = false}) async {
+    await context.read<AccessController>().refreshAccess(force: force);
+    if (!mounted) return;
     final access = context.read<AccessController>().accessContext;
     if (access == null) return;
     await context.read<ReportsController>().loadReports(
@@ -74,7 +78,7 @@ class _OperationalReportsScreenState extends State<OperationalReportsScreen> {
       backgroundColor: AppColors.surface,
       body: SafeArea(
         child: ResponsiveSliverPage(
-          onRefresh: _loadData,
+          onRefresh: () => _loadData(force: true),
           slivers: [
             SliverToBoxAdapter(
               child: AppPageHeader(
@@ -115,7 +119,7 @@ class _OperationalReportsScreenState extends State<OperationalReportsScreen> {
               SliverToBoxAdapter(
                 child: ErrorState(
                   message: controller.errorMessage!,
-                  onRetry: _loadData,
+                  onRetry: () => _loadData(force: true),
                 ),
               )
             else if (summary != null) ...[

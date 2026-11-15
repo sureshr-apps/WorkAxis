@@ -12,13 +12,22 @@ import { assertCanManage } from "../auth/authorization";
 import { ROLES } from "../auth/roles";
 import { callableOptions } from "../config";
 import { conflict, guarded } from "../errors";
-import { releaseAliases, reserveAliasesTx } from "../firestore/userStore";
+import { FieldValue } from "firebase-admin/firestore";
+import {
+  buildProfilePatch,
+  privateKeyScrub,
+  releaseAliases,
+  reserveAliasesTx,
+  usersCol,
+  writeEmployeePrivate,
+} from "../firestore/userStore";
 import { assertOrgAndBranchesValid } from "../provisioning/scope";
-import { isUniqueViolation } from "../sql/client";
+import { isUniqueViolation } from "../db";
 import {
   getMemberByAuthUid,
   updateMemberWithAssignments,
 } from "../sql/members";
+import { assertNoSelfEmploymentEdit, parseEmployeeExtras } from "../util/employeeProfile";
 import {
   asBag,
   optString,
@@ -32,6 +41,8 @@ import {
  * Request:  { targetUid, fullName?, email?, phone? (string | null to clear),
  *             role?, branchIds? }   (username is immutable)
  * Response: { uid }
+ * Optional employee profile fields: omitted = unchanged, explicit null = clear
+ * (never for dailyWorkHours/shiftHours/employeeCode). See docs/backend-api.md.
  * Same authorization matrix as provisionUser; refreshes claims, profile and
  * aliases; revokes sessions when role or branch scope changes.
  */
@@ -40,6 +51,10 @@ export const updateUserAccount = onCall(callableOptions, (request) =>
     const actor = await resolveActor(request);
     const bag = asBag(request.data);
     const targetUid = reqString(bag, "targetUid", 1, 128);
+    // Validate optional profile fields up front: validation after the SQL commit
+    // would be reported as a pending projection instead of rejecting the request.
+    const extras = parseEmployeeExtras(bag);
+    assertNoSelfEmploymentEdit(actor.uid, targetUid, extras);
     return withIdentityLocks([targetUid], async () => {
       const { member, target } = await loadTarget(targetUid);
 
@@ -109,6 +124,7 @@ export const updateUserAccount = onCall(callableOptions, (request) =>
                   email: after.loginEmail,
                   phone: after.phone ?? null,
                   role,
+                  employeeCode: extras.employeeCode,
                 },
                 branchIds,
               ),
@@ -123,6 +139,18 @@ export const updateUserAccount = onCall(callableOptions, (request) =>
             },
             complete: async () => {
               await job.delete();
+              // Patch semantics: value = set, null = delete the field, omitted = keep.
+              const updates: Record<string, unknown> = {
+                updatedAt: FieldValue.serverTimestamp(),
+                ...buildProfilePatch(extras),
+              };
+
+              // employeeCode is projected from SQL by refreshProjection; sensitive
+              // HR fields live only in employee_private.
+              await writeEmployeePrivate(targetUid, member.organizationId, extras);
+              await usersCol()
+                .doc(targetUid)
+                .set({ ...updates, ...privateKeyScrub() }, { merge: true });
             },
             recordRecoveryFailure: (error) =>
               logger.error("Account update recovery pending", {

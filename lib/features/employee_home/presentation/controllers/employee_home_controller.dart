@@ -51,7 +51,13 @@ class EmployeeHomeController extends ChangeNotifier
   /// a failed punch never replaces the loaded summary with an error state.
   String? get actionErrorMessage => _actionErrorMessage;
 
-  Future<void> loadHomeSummary({required UserAccessContext access}) async {
+  /// Loads today's summary. The OS location prompt is shown only when
+  /// [requestLocationPermission] is true, which callers set solely from an
+  /// explicit user action.
+  Future<void> loadHomeSummary({
+    required UserAccessContext access,
+    bool requestLocationPermission = false,
+  }) async {
     _access = access;
     final token = _requests.next();
     _status = EmployeeHomeStatus.loading;
@@ -59,7 +65,10 @@ class EmployeeHomeController extends ChangeNotifier
     notifyListeners();
 
     try {
-      final result = await repository.getEmployeeHomeSummary(access: access);
+      final result = await repository.getEmployeeHomeSummary(
+        access: access,
+        requestLocationPermission: requestLocationPermission,
+      );
       if (!_requests.isCurrent(token)) return;
       _summary = result;
       _status = EmployeeHomeStatus.loaded;

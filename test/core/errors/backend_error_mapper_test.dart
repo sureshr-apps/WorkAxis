@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_data_connect/firebase_data_connect.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
@@ -39,26 +38,6 @@ void main() {
         ),
         isA<RequestTimeoutException>(),
       );
-    });
-
-    test('Data Connect errors map by their error code', () {
-      expect(
-        mapBackendError(
-          DataConnectError(DataConnectErrorCode.unavailable, leakyText),
-        ),
-        isA<NetworkException>(),
-      );
-      expect(
-        mapBackendError(
-          DataConnectError(DataConnectErrorCode.unauthorized, leakyText),
-        ),
-        isA<AccessDeniedException>(),
-      );
-      final other = mapBackendError(
-        DataConnectError(DataConnectErrorCode.codecFailed, leakyText),
-      );
-      expect(other, isA<DatabaseException>());
-      expect(other.userMessage, isNot(contains('secret')));
     });
 
     test('auth errors never reveal whether an account exists', () {

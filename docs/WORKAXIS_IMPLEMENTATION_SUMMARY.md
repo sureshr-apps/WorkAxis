@@ -1,9 +1,9 @@
 # WorkAxis Implementation Summary & Status Report
 
-**Document Date:** October 18, 2026  
+**Document Date:** November 15, 2026 (status refreshed; original October 18, 2026)  
 **Application:** WorkAxis Unified Enterprise Platform  
 **Target Form Factors:** Android Smartphone, Android Tablet, Responsive Web Browser  
-**Status:** Vertical Slices 1–7 are implemented with mock data. Slice 8 (Firebase persistence) is intentionally deferred for this pass. Current verification results are recorded in Section 4.
+**Status:** All feature slices run against the real backend (Firebase project `workaxis-app`). Mock repositories remain for tests and the `mock` backend mode. See Sections 4 and 5.
 
 ---
 
@@ -16,7 +16,7 @@ WorkAxis is a single, unified Flutter application designed to serve five distinc
 4. **Branch Manager** (Operational management across assigned branches with mandatory active branch context)
 5. **Employee** (Self-service attendance, shifts, and operational activities)
 
-The project follows a **Mock-First architecture**: all user interfaces, interactions, and business rules are constructed against strict domain contracts and realistic mock repositories. This enables rapid UI/UX iteration and comprehensive testing without backend dependencies, while allowing seamless future replacement with real Firebase Auth, PostgreSQL (via SQL Connect), and Firestore persistence.
+The project was built **mock-first**: UI and business rules sit behind domain contracts, with mock repositories for tests and the `mock` backend mode. The real implementations are now wired (Section 5): Firebase Authentication, PostgreSQL reached only through Cloud Functions (`dataOp`), Firestore for event data, and Cloud Storage for attachments.
 
 ---
 
@@ -117,38 +117,32 @@ Implemented four production-quality screens for Platform Owner / Administrator w
 
 ---
 
-## 4. Quality & Verification Metrics
+## 4. Quality & Verification
 
-| Metric | Result | Target | Status |
-| :--- | :---: | :---: | :---: |
-| **Static Analysis (`flutter analyze`)** | **0 Issues** | 0 Issues | Passed |
-| **Automated Tests (`flutter test`)** | **99 / 99 Passed** | 100% | Passed |
-| **Operations Mock Repository Tests** | **6 / 6 Passed** | 100% | Passed |
-| **Web Build (`flutter build web`)** | **Success** | Success | Passed |
-| **Browser Smoke Review** | **Phone, tablet, and desktop; branch/employee create and details, attendance review** | Responsive flows | Passed |
-| **Scoped Dart Formatting** | **34 affected files checked/formatted** | Clean | Passed |
-| **Repository-wide Formatting Check** | **13 out-of-scope files need formatting** | Clean | Not applied to avoid unrelated edits |
-
-`dart format --output=none --set-exit-if-changed .` identified the 13 files listed in the command output. The implementation touched only its feature directories and their associated routing, wiring, tests, and documentation; those Dart files were formatted with the scoped `dart format` command.
-
-The browser smoke review used the local mock app at 390×844 (phone), 768×1024 (tablet), and 1280×800 (desktop). It covered the collapsible phone/tablet navigation, branch details and kiosk pairing state, employee add/details flows, attendance exception verification, and the desktop branch card layout. No live backend was used.
-
-The full test suite logged Google Fonts network-fetch errors in this environment, but completed with all 99 tests passing.
+Last verified 2026-11-15: `dart format lib test` clean, `flutter analyze` reports no issues, and `flutter test` passes (888 tests). Earlier counts in this document (99 tests, Slice 1-7 browser smoke review) are historical and no longer apply.
 
 ---
 
 ## 5. Current Implementation Scope
 
-### Completed in the mock-first pass
+### Backend (current)
 
-- **Slice 4 — Platform Users Management:** Platform administrator listing, profile creation/editing, status changes, and details.
-- **Slice 5 — Organization Branch Management:** Branch creation, editing, and details, geofence radius and coordinates, manager assignments, and kiosk pairing state.
-- **Slice 6 — Employee Directory & Management:** Account creation, editing, and details; role and branch assignment; and branch-scoped employee administration.
-- **Slice 7 — Attendance & Roster Operations:** Organization and active-branch attendance, employee self history, check-in details, and exception verification/dismissal.
+- **Relational data:** plain PostgreSQL, reached only from Cloud Functions through `SqlExecutor` (`functions/src/db`). The app calls one callable, `dataOp`, through `DataGateway` (`lib/core/backend/data_gateway.dart`). Firebase Data Connect and the generated client have been removed. Schema and seed: `functions/db/migrations`, `functions/db/seed/seed_data.sql`.
+- **Account and organization operations:** typed callables in `lib/core/backend/account_callables.dart` (provision, update, reset password, set status, `deleteOrganization`).
+- **Firebase project:** `workaxis-app` (Auth, Firestore, Storage, Hosting, Functions in asia-south1).
+- **Attachments and photos:** uploaded through `AttachmentStorage` (`lib/core/storage`), backed by Cloud Storage. Records saved before the upload change may still hold local device paths.
+- **Employee home location:** loading and refreshing the screen only reads location permission state. The OS permission prompt appears only from an explicit user action (the geofence refresh button or a punch).
 
-### Deferred
+### Fixed in the 2026-11-15 review pass
 
-- **Slice 8 — Real Backend Persistence:** Firebase Authentication, SQL Connect / PostgreSQL, and Firestore are not connected in this pass, per the mock-only implementation decision.
-- Newly created mock member profiles do not enable sign-in. The mock repository discards initial passwords; a later auth integration must pass credentials to Firebase Authentication.
-- Kiosk pairing codes and pairing state are mock-only and remain in memory.
-- The new mock organization member profiles are not added to mock authentication credentials, so they cannot sign in during this pass.
+- Employee home no longer triggers the location prompt on load or refresh (`AttendanceLocationProvider.peekLocation`).
+- `AccessController.refreshAccess` skips non-forced refreshes within 60 seconds of the last resolve; pull-to-refresh and post-mutation refreshes remain forced.
+- Organization details actions and organization list cards fit 360dp at 1.3x text with 48dp touch targets.
+- Deleting an organization navigates to the list without a "not found" flash, updates the list and counts locally, and then reconciles with the server. The SQL-backed repository calls the `deleteOrganization` callable through `AccountCallables`.
+- Test detection (`isHeadlessTest`) was removed from production code; maps read an injected `MapRenderingScope`.
+
+### Known gaps
+
+- Kiosk pairing codes and pairing state are in-memory only.
+- Test-only: mock member profiles cannot sign in; real accounts are created through `provisionUser`.
+- Decommissioning of the old WorkAxis functions and hosting in the previous Firebase project is pending (see `HANDOFF.md`).

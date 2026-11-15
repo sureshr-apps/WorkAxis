@@ -13,9 +13,9 @@ import 'package:workaxis/features/employees/data/organization_members_remote_dat
 
 /// Production [BranchManagementRepository].
 ///
-/// Branch fields use SQL Connect (`AddBranch`, `UpdateBranch`,
-/// `GetBranchById`). Branch Manager assignments are identity data, so they go
-/// through `updateUserAccount`; kiosk pairing tokens come from the
+/// Branch reads use the data gateway (`ListBranchesByOrg`, `GetBranchById`);
+/// branch writes use the `saveBranch` callable. Branch Manager assignments are
+/// identity data, so they go through `updateUserAccount`; kiosk pairing tokens come from the
 /// `createKioskPairingToken` callable (random, expiring, stored hashed).
 class SqlConnectBranchManagementRepository
     implements BranchManagementRepository {

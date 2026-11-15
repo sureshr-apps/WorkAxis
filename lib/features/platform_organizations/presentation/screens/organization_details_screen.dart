@@ -40,6 +40,10 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
   /// so a previously selected organization is never shown on the first frame.
   bool _loadRequested = false;
 
+  /// Set the moment a delete succeeds. The controller clears the selection, so
+  /// without this the screen would render "not found" until the route changes.
+  bool _deleted = false;
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +72,12 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_deleted) {
+      return const Scaffold(
+        backgroundColor: AppColors.surface,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     final controller = context.watch<PlatformOrganizationsController>();
     final selected = controller.selectedOrganization;
     final organization = selected?.id == widget.organizationId
@@ -115,6 +125,7 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
                   onToggleStatus: () => organization.isActive
                       ? _confirmSuspend(organization, controller)
                       : _confirmReactivate(organization, controller),
+                  onDelete: () => _confirmDelete(organization, controller),
                   onCopyCode: () => _copyOrganizationCode(organization.code),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -261,6 +272,37 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _confirmDelete(
+    CustomerOrganization organization,
+    PlatformOrganizationsController controller,
+  ) async {
+    controller.clearActionError();
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    final deleted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => DeleteOrganizationDialog(
+        organization: organization,
+        failureMessage: () => controller.actionErrorMessage,
+        onConfirm: () async {
+          final ok = await controller.deleteOrganization(organization.id);
+          if (ok) {
+            if (mounted) setState(() => _deleted = true);
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('${organization.name} permanently deleted.'),
+                backgroundColor: AppColors.statusUrgent,
+              ),
+            );
+          }
+          return ok;
+        },
+      ),
+    );
+    if (deleted == true) router.go(AppRoutes.platformOrganizations);
   }
 }
 

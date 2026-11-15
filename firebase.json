@@ -3,9 +3,12 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "dataconnect": {
-    "source": "dataconnect"
-  },
+  "storage": [
+    {
+      "bucket": "workaxis-app-attachments",
+      "rules": "storage.rules"
+    }
+  ],
   "functions": [
     {
       "source": "functions",
@@ -18,7 +21,9 @@
         "test-rules",
         "lib/test"
       ],
-      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
     }
   ],
   "hosting": {
@@ -37,8 +42,12 @@
     ]
   },
   "emulators": {
-    "firestore": { "port": 8080 },
-    "ui": { "enabled": false },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    },
     "singleProjectMode": true
   }
 }

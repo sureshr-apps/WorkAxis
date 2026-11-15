@@ -12,12 +12,14 @@ class OrganizationCardList extends StatelessWidget {
     required this.columns,
     required this.onSelect,
     required this.onEdit,
+    this.onDelete,
   });
 
   final List<CustomerOrganization> organizations;
   final int columns;
   final ValueChanged<CustomerOrganization> onSelect;
   final ValueChanged<CustomerOrganization> onEdit;
+  final ValueChanged<CustomerOrganization>? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +32,9 @@ class OrganizationCardList extends StatelessWidget {
           organization: organizations[index],
           onTap: () => onSelect(organizations[index]),
           onEdit: () => onEdit(organizations[index]),
+          onDelete: onDelete != null
+              ? () => onDelete!(organizations[index])
+              : null,
         );
         if (columns == 1) return cardAt(row);
 

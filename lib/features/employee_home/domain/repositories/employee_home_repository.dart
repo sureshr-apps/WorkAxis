@@ -6,8 +6,13 @@ import 'package:workaxis/features/employee_home/domain/models/employee_home_summ
 /// scoped to the signed-in employee in [UserAccessContext].
 abstract interface class EmployeeHomeRepository {
   /// Today's summary for the employee in [access].
+  ///
+  /// Loading never shows the OS location-permission prompt. Pass
+  /// [requestLocationPermission] only from an explicit user action (such as
+  /// tapping the location refresh button) to allow the prompt.
   Future<EmployeeHomeSummary> getEmployeeHomeSummary({
     required UserAccessContext access,
+    bool requestLocationPermission = false,
   });
 
   /// Records an attendance action and returns the refreshed summary. The

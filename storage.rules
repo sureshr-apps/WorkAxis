@@ -1,0 +1,45 @@
+rules_version = '2';
+
+// Attachments are uploaded by the Flutter client (AttachmentStorage) and are
+// immutable: every object gets a fresh UUID name, so only `create` is allowed.
+// Claims (role, organizationId, status) are the ones written by the trusted
+// account functions. Storage rules cannot check branch assignment, so manager
+// access is organization-wide.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function active() {
+      return request.auth != null && request.auth.token.status == 'active';
+    }
+    function inOrg(orgId) {
+      return active() && request.auth.token.organizationId == orgId;
+    }
+    function isOrgManager(orgId) {
+      return inOrg(orgId) &&
+        request.auth.token.role in ['orgAdmin', 'branchManager'];
+    }
+    function validImage() {
+      return request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/(jpeg|png)');
+    }
+
+    match /organizations/{orgId}/profile-photos/{file} {
+      allow read: if inOrg(orgId);
+      allow create: if isOrgManager(orgId) && validImage();
+    }
+
+    // Identity documents: organization managers only.
+    match /organizations/{orgId}/aadhaar-documents/{file} {
+      allow read: if isOrgManager(orgId);
+      allow create: if isOrgManager(orgId) && validImage();
+    }
+
+    match /organizations/{orgId}/return-bills/{file} {
+      allow read: if inOrg(orgId);
+      allow create: if inOrg(orgId) && validImage();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

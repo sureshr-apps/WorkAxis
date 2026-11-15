@@ -1,21 +1,19 @@
+import 'package:workaxis/core/backend/data_gateway.dart';
+import 'package:workaxis/core/backend/json_reader.dart';
 import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/core/validation/login_email.dart';
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/data/organization_members_remote_data_source.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 
-/// [OrganizationMembersRemoteDataSource] backed by Firebase SQL Connect.
+/// [OrganizationMembersRemoteDataSource] backed by the data gateway
+/// (`ListMembersByOrgPaged`, `ListMembersByBranchPaged`, `GetMemberById`).
 class SqlConnectOrganizationMembersRemoteDataSource
     implements OrganizationMembersRemoteDataSource {
-  SqlConnectOrganizationMembersRemoteDataSource({
-    WorkaxisConnectorConnector? connector,
-  }) : _customConnector = connector;
+  SqlConnectOrganizationMembersRemoteDataSource({required this._gateway});
 
-  final WorkaxisConnectorConnector? _customConnector;
-  WorkaxisConnectorConnector get _connector =>
-      _customConnector ?? WorkaxisConnectorConnector.instance;
+  final DataGateway _gateway;
 
   @override
   Future<PageResult<OrganizationMember>> listByOrganization({
@@ -26,36 +24,22 @@ class SqlConnectOrganizationMembersRemoteDataSource
     AccountStatus? status,
     UserRole? role,
   }) async {
-    var builder = _connector.listMembersByOrgPaged(
-      orgId: organizationId,
-      limit: limit,
-      offset: offset,
-    );
-    if (nameContains != null && nameContains.isNotEmpty) {
-      builder = builder.nameContains(nameContains);
-    }
-    if (status != null) builder = builder.status(status.name);
-    if (role != null) builder = builder.role(role.name);
-    final data = (await builder.execute()).data;
+    final data = await _gateway.call('ListMembersByOrgPaged', {
+      'orgId': organizationId,
+      'limit': limit,
+      'offset': offset,
+      // Unset optional variables are omitted, never sent as null.
+      if (nameContains != null && nameContains.isNotEmpty)
+        'nameContains': nameContains,
+      'status': ?status?.name,
+      'role': ?role?.name,
+    });
     return PageResult(
       items: [
-        for (final m in data.organizationMembers)
-          _build(
-            id: m.id,
-            authUid: m.authUid,
-            organizationId: organizationId,
-            fullName: m.fullName,
-            username: m.username,
-            email: m.email,
-            phone: m.phone,
-            role: m.role,
-            status: m.status,
-            branchIds: m.userBranchAssignments_on_member
-                .map((a) => a.branch.id)
-                .toList(),
-          ),
+        for (final m in data.objects('organizationMembers'))
+          _build(m, organizationId: organizationId),
       ],
-      total: data.total.firstOrNull?.count_ ?? 0,
+      total: data.countOf('total'),
       offset: offset,
     );
   }
@@ -69,86 +53,61 @@ class SqlConnectOrganizationMembersRemoteDataSource
     String? nameContains,
     AccountStatus? status,
   }) async {
-    var builder = _connector.listMembersByBranchPaged(
-      branchId: branchId,
-      limit: limit,
-      offset: offset,
-    );
-    if (nameContains != null && nameContains.isNotEmpty) {
-      builder = builder.nameContains(nameContains);
-    }
-    if (status != null) builder = builder.status(status.name);
-    final data = (await builder.execute()).data;
+    final data = await _gateway.call('ListMembersByBranchPaged', {
+      'branchId': branchId,
+      'limit': limit,
+      'offset': offset,
+      if (nameContains != null && nameContains.isNotEmpty)
+        'nameContains': nameContains,
+      'status': ?status?.name,
+    });
     return PageResult(
       items: [
-        for (final a in data.userBranchAssignments)
-          _build(
-            id: a.member.id,
-            authUid: a.member.authUid,
-            organizationId: organizationId,
-            fullName: a.member.fullName,
-            username: a.member.username,
-            email: a.member.email,
-            phone: a.member.phone,
-            role: a.member.role,
-            status: a.member.status,
-            branchIds: a.member.userBranchAssignments_on_member
-                .map((x) => x.branch.id)
-                .toList(),
-          ),
+        for (final a in data.objects('userBranchAssignments'))
+          _build(a.object('member'), organizationId: organizationId),
       ],
-      total: data.total.firstOrNull?.count_ ?? 0,
+      total: data.countOf('total'),
       offset: offset,
     );
   }
 
   @override
   Future<OrganizationMember?> getById(String memberId) async {
-    final data = (await _connector.getMemberById(id: memberId).execute()).data;
-    final m = data.organizationMember;
+    final data = await _gateway.call('GetMemberById', {'id': memberId});
+    final m = data.optObject('organizationMember');
     if (m == null) return null;
     return _build(
-      id: m.id,
-      authUid: m.authUid,
-      organizationId: m.organization?.id ?? '',
-      fullName: m.fullName,
-      username: m.username,
-      email: m.email,
-      phone: m.phone,
-      role: m.role,
-      status: m.status,
-      branchIds: m.userBranchAssignments_on_member
-          .map((a) => a.branch.id)
-          .toList(),
+      m,
+      organizationId: m.optObject('organization')?.string('id') ?? '',
     );
   }
 
   /// Unknown roles map to the least-privileged role and unknown statuses to
   /// suspended, so malformed data can never widen access.
-  OrganizationMember _build({
-    required String id,
-    required String? authUid,
+  OrganizationMember _build(
+    Map<String, dynamic> m, {
     required String organizationId,
-    required String fullName,
-    required String username,
-    required String email,
-    required String? phone,
-    required String role,
-    required String status,
-    required List<String> branchIds,
   }) {
+    final role = m.string('role');
+    final status = m.string('status');
     return OrganizationMember(
-      id: id,
-      authUid: authUid,
+      id: m.string('id'),
+      authUid: m.optString('authUid'),
       organizationId: organizationId,
-      fullName: fullName,
-      username: username,
-      email: LoginEmail.displayable(email),
-      phone: phone,
+      fullName: m.string('fullName'),
+      username: m.string('username'),
+      email: LoginEmail.displayable(m.string('email')),
+      phone: m.optString('phone'),
+      employeeCode: m.optString('employeeCode'),
       role:
           UserRole.values.where((r) => r.name == role).firstOrNull ??
           UserRole.employee,
-      branchIds: List.unmodifiable(branchIds),
+      branchIds: List.unmodifiable([
+        for (final a
+            in m.optObjects('userBranchAssignments_on_member') ??
+                const <Map<String, dynamic>>[])
+          a.object('branch').string('id'),
+      ]),
       status:
           AccountStatus.values.where((s) => s.name == status).firstOrNull ??
           AccountStatus.suspended,

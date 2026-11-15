@@ -1,4 +1,5 @@
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/core/backend/data_gateway.dart';
+import 'package:workaxis/core/backend/json_reader.dart';
 
 /// Aggregate counts for one organization (from `GetOrganizationDashboardCounts`).
 class OrganizationCounts {
@@ -22,53 +23,41 @@ class OrganizationCounts {
   int returns(String status) => returnsByStatus[status] ?? 0;
 }
 
-/// Thin seam over SQL Connect so the repository can be tested with a fake.
+/// Thin seam over the data gateway so the repository can be tested with a fake.
 abstract interface class OrganizationDashboardRemote {
   Future<OrganizationCounts> loadCounts(String organizationId);
 }
 
-/// [OrganizationDashboardRemote] backed by the generated connector.
+/// [OrganizationDashboardRemote] backed by the data gateway
+/// (`GetOrganizationDashboardCounts`).
 class DataConnectOrganizationDashboardRemote
     implements OrganizationDashboardRemote {
-  DataConnectOrganizationDashboardRemote({this._connector});
+  DataConnectOrganizationDashboardRemote({required this._gateway});
 
-  final WorkaxisConnectorConnector? _connector;
-
-  WorkaxisConnectorConnector get _c =>
-      _connector ?? WorkaxisConnectorConnector.instance;
+  final DataGateway _gateway;
 
   @override
   Future<OrganizationCounts> loadCounts(String organizationId) async {
-    final data =
-        (await _c
-                .getOrganizationDashboardCounts(orgId: organizationId)
-                .execute())
-            .data;
-
-    Map<String, int> byStatus(Iterable<(String, int)> rows) {
-      final out = <String, int>{};
-      for (final (status, count) in rows) {
-        final key = status.toLowerCase();
-        out[key] = (out[key] ?? 0) + count;
-      }
-      return out;
-    }
-
-    final activeEmployees = data.membersByRole
-        .where(
-          (m) =>
-              m.role.toLowerCase() == 'employee' &&
-              m.status.toLowerCase() == 'active',
-        )
-        .fold<int>(0, (sum, m) => sum + m.count_);
-
+    final data = await _gateway.call('GetOrganizationDashboardCounts', {
+      'orgId': organizationId,
+    });
+    final activeEmployees = sumCounts([
+      for (final m in data.objects('membersByRole'))
+        if (m.string('role').toLowerCase() == 'employee' &&
+            m.string('status').toLowerCase() == 'active')
+          m,
+    ]);
     return OrganizationCounts(
-      branchesByStatus: byStatus(
-        data.branchesByStatus.map((b) => (b.status, b.count_)),
+      branchesByStatus: groupedCounts(
+        data.objects('branchesByStatus'),
+        'status',
+        lowerCaseKeys: true,
       ),
       activeEmployees: activeEmployees,
-      returnsByStatus: byStatus(
-        data.returnsByStatus.map((r) => (r.status, r.count_)),
+      returnsByStatus: groupedCounts(
+        data.objects('returnsByStatus'),
+        'status',
+        lowerCaseKeys: true,
       ),
     );
   }

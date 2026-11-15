@@ -27,6 +27,13 @@ abstract interface class ReturnsRepository {
     required CreateReturnInput input,
   });
 
+  /// Submits one or more returned items sharing the same bill/invoice header.
+  Future<List<ReturnItem>> submitReturnBatch({
+    required UserAccessContext access,
+    String? branchId,
+    required CreateReturnBatchInput input,
+  });
+
   /// Approves or rejects a pending [returnItem]. Organization Admins of its
   /// organization, or the Branch Manager whose active branch it belongs to.
   /// The reviewer is derived server-side from the authenticated session.

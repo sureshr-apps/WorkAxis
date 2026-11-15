@@ -11,7 +11,7 @@ import {
   getMemberByAuthUid,
   insertMember,
 } from "../sql/members";
-import { isUniqueViolation } from "../sql/client";
+import { isUniqueViolation } from "../db";
 import type { ProvisionResult } from "./requestLedger";
 
 export interface ProvisionPlan {
@@ -22,6 +22,20 @@ export interface ProvisionPlan {
   role: Role;
   organizationId?: string;
   branchIds: string[];
+  dailyWorkHours?: number;
+  shiftHours?: string;
+  employeeCode?: string;
+  aadhaarNumber?: string;
+  aadhaarPhotoUrl?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  address?: string;
+  profilePhotoUrl?: string;
+  designation?: string;
+  joiningDate?: string;
+  relievingDate?: string | null;
+  salary?: number;
+  assetDetails?: string;
 }
 
 /**
@@ -52,6 +66,7 @@ export async function runProvision(plan: ProvisionPlan): Promise<ProvisionResult
           email: identity.loginEmail,
           phone: identity.phone,
           role: plan.role,
+          employeeCode: plan.employeeCode,
         },
         plan.branchIds,
       );
@@ -75,13 +90,28 @@ export async function runProvision(plan: ProvisionPlan): Promise<ProvisionResult
       status: "active",
     }),
   );
-  await writeProfile(member);
+  await writeProfile(member, {
+    dailyWorkHours: plan.dailyWorkHours,
+    shiftHours: plan.shiftHours,
+    aadhaarNumber: plan.aadhaarNumber,
+    aadhaarPhotoUrl: plan.aadhaarPhotoUrl,
+    dateOfBirth: plan.dateOfBirth,
+    gender: plan.gender,
+    address: plan.address,
+    profilePhotoUrl: plan.profilePhotoUrl,
+    designation: plan.designation,
+    joiningDate: plan.joiningDate,
+    relievingDate: plan.relievingDate,
+    salary: plan.salary,
+    assetDetails: plan.assetDetails,
+  });
 
   return {
     uid,
     memberId: member.id,
     username: identity.username,
     loginEmail: identity.loginEmail,
+    ...(member.employeeCode ? { employeeCode: member.employeeCode } : {}),
   };
 }
 

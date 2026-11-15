@@ -1,7 +1,7 @@
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/core/time/clock.dart';
-import 'package:workaxis/dataconnect_generated/workaxis_connector.dart';
+import 'package:workaxis/core/backend/data_gateway.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
@@ -22,10 +22,14 @@ import 'package:workaxis/features/returns/domain/models/return_item.dart';
 /// instead of being invented.
 class SqlConnectReportsRepository implements ReportsRepository {
   SqlConnectReportsRepository({
-    WorkaxisConnectorConnector? connector,
+    DataGateway? gateway,
     ReportsRemote? remote,
     Now? now,
-  }) : _remote = remote ?? DataConnectReportsRemote(connector: connector),
+  }) : assert(
+         gateway != null || remote != null,
+         'Provide a data gateway or a remote.',
+       ),
+       _remote = remote ?? DataConnectReportsRemote(gateway: gateway!),
        _now = now ?? systemNow;
 
   final ReportsRemote _remote;

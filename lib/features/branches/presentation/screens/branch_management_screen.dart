@@ -47,7 +47,11 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  /// Entry loads reuse recently resolved access; pull-to-refresh and retry
+  /// pass [force] to re-resolve it.
+  Future<void> _load({bool force = false}) async {
+    await context.read<AccessController>().refreshAccess(force: force);
+    if (!mounted) return;
     final access = context.read<AccessController>().accessContext;
     if (access == null) return;
     final controller = context.read<BranchManagementController>();
@@ -66,7 +70,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
       backgroundColor: AppColors.surface,
       body: SafeArea(
         child: ResponsiveSliverPage(
-          onRefresh: _load,
+          onRefresh: () => _load(force: true),
           slivers: [
             SliverToBoxAdapter(
               child: Column(
@@ -123,7 +127,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
               SliverToBoxAdapter(
                 child: ErrorState(
                   message: controller.errorMessage!,
-                  onRetry: _load,
+                  onRetry: () => _load(force: true),
                 ),
               )
             else if (branches.isEmpty)
@@ -184,7 +188,13 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
             controller.saveBranch(access: access, branch: record),
       ),
     );
-    if (saved == true && mounted) await controller.loadBranches(access);
+    if (saved == true && mounted) {
+      await context.read<AccessController>().refreshAccess();
+      if (!mounted) return;
+      final freshAccess =
+          context.read<AccessController>().accessContext ?? access;
+      await controller.loadBranches(freshAccess);
+    }
   }
 
   Future<void> _openDetails(

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:workaxis/core/widgets/attachment_image.dart';
+import 'package:intl/intl.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -19,6 +21,35 @@ class MemberDetailsDialog extends StatelessWidget {
   final OrganizationMember member;
   final List<String> branchNames;
 
+  static final _dateFormat = DateFormat('dd MMM yyyy');
+
+  Widget _buildAvatar() {
+    final photoPath = member.profilePhotoUrl;
+    if (photoPath != null && photoPath.isNotEmpty) {
+      return CircleAvatar(
+        radius: 36,
+        backgroundColor: AppColors.primaryContainer,
+        child: ClipOval(
+          child: SizedBox.square(
+            dimension: 72,
+            child: AttachmentImage(reference: photoPath, iconSize: 28),
+          ),
+        ),
+      );
+    }
+    return CircleAvatar(
+      radius: 36,
+      backgroundColor: AppColors.primaryContainer,
+      child: Text(
+        member.initials,
+        style: AppTypography.headlineMedium.copyWith(
+          color: AppColors.primary,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final email = LoginEmail.displayable(member.email);
@@ -26,35 +57,132 @@ class MemberDetailsDialog extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Center(child: _buildAvatar()),
+        const SizedBox(height: AppSpacing.md),
+        Center(
+          child: Column(
+            children: [
+              Text(
+                member.fullName,
+                style: AppTypography.headlineMedium.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (member.designation != null &&
+                  member.designation!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  member.designation!,
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              if (member.employeeCode != null &&
+                  member.employeeCode!.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
+                  ),
+                  child: Text(
+                    member.employeeCode!,
+                    style: AppTypography.labelMono.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        const Divider(height: 1),
+        const SizedBox(height: AppSpacing.sm),
+
         _Detail(label: 'Role', value: member.role.displayName),
         _Detail(label: 'Username', value: member.username),
+        _Detail(label: 'Mobile', value: member.phone ?? 'Not provided'),
         _Detail(label: 'Email', value: email.isEmpty ? 'Not provided' : email),
-        _Detail(label: 'Phone', value: member.phone ?? 'Not provided'),
         _Detail(
           label: 'Status',
           value: member.status == AccountStatus.active ? 'Active' : 'Suspended',
         ),
+
+        if (member.gender != null)
+          _Detail(label: 'Gender', value: member.gender!),
+        if (member.dateOfBirth != null)
+          _Detail(
+            label: 'Date of Birth',
+            value: _dateFormat.format(member.dateOfBirth!),
+          ),
+        if (member.aadhaarNumber != null && member.aadhaarNumber!.isNotEmpty)
+          _Detail(
+            label: 'Aadhaar Number',
+            value: member.aadhaarNumber!
+                .replaceAllMapped(RegExp(r'.{4}'), (m) => '${m.group(0)} ')
+                .trim(),
+          ),
+        if (member.aadhaarPhotoUrl != null &&
+            member.aadhaarPhotoUrl!.isNotEmpty)
+          const _Detail(
+            label: 'Aadhaar Card',
+            value: 'Attached Document Available',
+          ),
+        if (member.address != null && member.address!.isNotEmpty)
+          _Detail(label: 'Address', value: member.address!),
+
+        const Divider(height: 16),
+
+        _Detail(
+          label: 'Work hours',
+          value:
+              '${member.dailyWorkHours == member.dailyWorkHours.roundToDouble() ? member.dailyWorkHours.toInt() : member.dailyWorkHours.toStringAsFixed(1)} hrs / day',
+        ),
+        if (member.shiftHours != null && member.shiftHours!.isNotEmpty)
+          _Detail(label: 'Shift window', value: member.shiftHours!),
+
+        if (member.joiningDate != null)
+          _Detail(
+            label: 'Joining Date',
+            value: _dateFormat.format(member.joiningDate!),
+          ),
+        if (member.relievingDate != null)
+          _Detail(
+            label: 'Relieving Date',
+            value: _dateFormat.format(member.relievingDate!),
+          ),
+        if (member.salary != null)
+          _Detail(
+            label: 'Monthly Salary',
+            value: '₹${member.salary!.toStringAsFixed(0)}',
+          ),
+        if (member.assetDetails != null && member.assetDetails!.isNotEmpty)
+          _Detail(label: 'Assigned Assets', value: member.assetDetails!),
+
         _Detail(
           label: 'Branches',
           value: branchNames.isEmpty ? 'None' : branchNames.join(', '),
         ),
       ],
     );
+
     if (context.isCompact) {
       return Dialog.fullscreen(
         child: Scaffold(
-          appBar: AppBar(title: const Text('Account details')),
+          appBar: AppBar(title: const Text('Employee Details')),
           body: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(member.fullName, style: AppTypography.headlineMedium),
-                  const SizedBox(height: AppSpacing.lg),
-                  content,
-                ],
-              ),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: content,
             ),
           ),
           bottomNavigationBar: SafeArea(
@@ -69,11 +197,10 @@ class MemberDetailsDialog extends StatelessWidget {
         ),
       );
     }
-    // A plain Dialog (not AlertDialog): AlertDialog lays its content out with
-    // intrinsic sizing, which AppButton's LayoutBuilder cannot support.
+
     return Dialog(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
+        constraints: const BoxConstraints(maxWidth: 520),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: SingleChildScrollView(
@@ -81,10 +208,8 @@ class MemberDetailsDialog extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(member.fullName, style: AppTypography.headlineMedium),
-                const SizedBox(height: AppSpacing.md),
                 content,
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.lg),
                 AppButton.outlined(
                   text: 'Close',
                   onPressed: () => Navigator.of(context).pop(),
@@ -100,33 +225,37 @@ class MemberDetailsDialog extends StatelessWidget {
 
 class _Detail extends StatelessWidget {
   const _Detail({required this.label, required this.value});
+
   final String label;
   final String value;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.onSurfaceVariant,
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
             ),
           ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: AppTypography.bodyMedium.copyWith(
-              fontWeight: FontWeight.w500,
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              value,
+              style: AppTypography.bodyMedium.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

@@ -146,6 +146,14 @@ void runPlatformOrganizationsContract(
       expect(restored.status, OrganizationStatus.active);
     });
 
+    test('deleting an organization removes it from the catalog', () async {
+      expect(await repo.getOrganizationById('org-acme'), isNotNull);
+      await repo.deleteOrganization('org-acme');
+      expect(await repo.getOrganizationById('org-acme'), isNull);
+      final remaining = (await repo.getOrganizationsPage()).items;
+      expect(remaining.any((o) => o.id == 'org-acme'), isFalse);
+    });
+
     test('license details exist for licensed organizations only', () async {
       final license = await repo.getOrganizationLicenseDetails('org-acme');
       expect(license, isNotNull);

@@ -7,6 +7,13 @@ import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 
+const double _wrapTextScale = 1.15;
+const double _wrapBelowScreenWidth = 400;
+const BoxConstraints _touchTarget = BoxConstraints(
+  minWidth: AppSpacing.minTouchTarget,
+  minHeight: AppSpacing.minTouchTarget,
+);
+
 /// Card for a customer organization on smartphone and tablet widths.
 ///
 /// Tapping the card (or "Details") opens the organization; the pencil button
@@ -17,11 +24,13 @@ class OrganizationCardItem extends StatelessWidget {
     required this.organization,
     required this.onTap,
     required this.onEdit,
+    this.onDelete,
   });
 
   final CustomerOrganization organization;
   final VoidCallback onTap;
   final VoidCallback onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -82,8 +91,20 @@ class OrganizationCardItem extends StatelessWidget {
                         size: 18,
                         color: AppColors.secondary,
                       ),
+                      constraints: _touchTarget,
                       onPressed: onEdit,
                     ),
+                    if (onDelete != null)
+                      IconButton(
+                        tooltip: 'Delete ${organization.name}',
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: AppColors.statusUrgentText,
+                        ),
+                        constraints: _touchTarget,
+                        onPressed: onDelete,
+                      ),
                     ConstrainedBox(
                       constraints: const BoxConstraints(
                         minHeight: AppSpacing.minTouchTarget,
@@ -158,6 +179,31 @@ class _MetricsRow extends StatelessWidget {
       height: 20,
       child: VerticalDivider(width: 1, color: AppColors.outlineSubtle),
     );
+    // Large text or a narrow phone cannot fit three metrics on one line, so
+    // they wrap (dividers dropped) instead of overflowing. Decided from
+    // MediaQuery because the card sits in an IntrinsicHeight, which cannot
+    // host a LayoutBuilder.
+    final crowded =
+        MediaQuery.textScalerOf(context).scale(1) > _wrapTextScale ||
+        MediaQuery.sizeOf(context).width < _wrapBelowScreenWidth;
+    final metrics = [
+      _Metric(
+        value: organization.branchCount?.toString() ?? '—',
+        label: 'hubs',
+        icon: Icons.storefront_outlined,
+      ),
+      _Metric(
+        value: organization.employeeCount?.toString() ?? '—',
+        label: 'staff',
+        icon: Icons.people_outline,
+      ),
+      _Metric(
+        value: AppFormatters.formatDate(organization.createdAt),
+        label: 'onboarded',
+        icon: Icons.calendar_today_outlined,
+        isDate: true,
+      ),
+    ];
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
@@ -170,29 +216,17 @@ class _MetricsRow extends StatelessWidget {
           color: AppColors.outlineSubtle.withValues(alpha: 0.6),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _Metric(
-            value: organization.branchCount?.toString() ?? '—',
-            label: 'hubs',
-            icon: Icons.storefront_outlined,
-          ),
-          divider,
-          _Metric(
-            value: organization.employeeCount?.toString() ?? '—',
-            label: 'staff',
-            icon: Icons.people_outline,
-          ),
-          divider,
-          _Metric(
-            value: AppFormatters.formatDate(organization.createdAt),
-            label: 'onboarded',
-            icon: Icons.calendar_today_outlined,
-            isDate: true,
-          ),
-        ],
-      ),
+      child: crowded
+          ? Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.sm,
+              children: metrics,
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [metrics[0], divider, metrics[1], divider, metrics[2]],
+            ),
     );
   }
 }

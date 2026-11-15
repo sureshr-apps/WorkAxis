@@ -43,6 +43,7 @@ class MockEmployeeHomeRepository
   @override
   Future<EmployeeHomeSummary> getEmployeeHomeSummary({
     required UserAccessContext access,
+    bool requestLocationPermission = false,
   }) async {
     _applyIdentity(access);
     await _latency();

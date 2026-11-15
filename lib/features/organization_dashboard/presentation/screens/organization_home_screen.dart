@@ -32,7 +32,11 @@ class _OrganizationHomeScreenState extends State<OrganizationHomeScreen> {
     });
   }
 
-  Future<void> _load() async {
+  /// Entry loads reuse recently resolved access; pull-to-refresh and retry
+  /// pass [force] to re-resolve it.
+  Future<void> _load({bool force = false}) async {
+    await context.read<AccessController>().refreshAccess(force: force);
+    if (!mounted) return;
     final access = context.read<AccessController>().accessContext;
     if (access == null) return;
     await context.read<OrganizationDashboardController>().loadDashboard(
@@ -49,7 +53,7 @@ class _OrganizationHomeScreenState extends State<OrganizationHomeScreen> {
       backgroundColor: AppColors.surface,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _load,
+          onRefresh: () => _load(force: true),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: ResponsivePageContent(
@@ -68,7 +72,7 @@ class _OrganizationHomeScreenState extends State<OrganizationHomeScreen> {
                       message:
                           controller.errorMessage ??
                           'An error occurred loading the dashboard.',
-                      onRetry: _load,
+                      onRetry: () => _load(force: true),
                     )
                   else if (summary != null)
                     _DashboardBody(summary: summary),
