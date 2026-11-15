@@ -211,15 +211,15 @@ void main() {
           body: OrganizationMemberCard(
             member: _member,
             branchNames: const ['Downtown'],
-            onView: () {},
+            onOpen: () {},
             onEdit: null,
           ),
         ),
       ),
     );
 
-    expect(find.text('View details'), findsOneWidget);
-    expect(find.text('Edit'), findsNothing);
+    expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
   });
 
   testWidgets('branch manager role field is disabled and locked to Employee', (

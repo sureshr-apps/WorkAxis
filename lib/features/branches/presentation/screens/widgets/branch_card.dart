@@ -3,13 +3,10 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/widgets/card_action_icon.dart';
+import 'package:workaxis/core/widgets/inset_metrics_box.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
-
-const BoxConstraints _actionTouchTarget = BoxConstraints(
-  minWidth: AppSpacing.minTouchTarget,
-  minHeight: AppSpacing.minTouchTarget,
-);
 
 /// One branch, laid out like a license plan card: name and status with a chevron
 /// on top, the employee and geofence figures in an inset box, and the branch
@@ -60,7 +57,22 @@ class BranchCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            _MetricsBox(branch: branch),
+            InsetMetricsBox(
+              metrics: [
+                InsetMetric(
+                  icon: Icons.people_outline,
+                  label: 'Employees',
+                  value: '${branch.activeEmployeeCount} Active',
+                ),
+                InsetMetric(
+                  icon: Icons.radar,
+                  label: 'Geofence',
+                  value: branch.hasGeofence
+                      ? '${branch.geofenceRadiusMeters} m'
+                      : 'Not set',
+                ),
+              ],
+            ),
             const SizedBox(height: AppSpacing.xs),
             _Footer(
               branch: branch,
@@ -111,98 +123,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _MetricsBox extends StatelessWidget {
-  const _MetricsBox({required this.branch});
-
-  final BranchRecord branch;
-
-  @override
-  Widget build(BuildContext context) {
-    final geofence = branch.hasGeofence
-        ? '${branch.geofenceRadiusMeters} m'
-        : 'Not set';
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: AppSpacing.roundedSm,
-        border: Border.all(
-          color: AppColors.outlineSubtle.withValues(alpha: 0.6),
-        ),
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            Expanded(
-              child: _Metric(
-                icon: Icons.people_outline,
-                label: 'Employees',
-                value: '${branch.activeEmployeeCount} Active',
-              ),
-            ),
-            const VerticalDivider(width: AppSpacing.md),
-            Expanded(
-              child: _Metric(
-                icon: Icons.radar,
-                label: 'Geofence',
-                value: geofence,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({required this.icon, required this.label, required this.value});
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 14, color: AppColors.secondary),
-            const SizedBox(width: AppSpacing.xs),
-            Expanded(
-              child: Text(
-                label,
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.secondary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(
-          value,
-          style: AppTypography.labelMono.copyWith(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.onSurface,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
-}
-
 class _Footer extends StatelessWidget {
   const _Footer({
     required this.branch,
@@ -233,39 +153,29 @@ class _Footer extends StatelessWidget {
           ),
         ),
         if (onEdit != null)
-          IconButton(
+          CardActionIcon(
             tooltip: 'Edit ${branch.name}',
-            icon: const Icon(
-              Icons.edit_outlined,
-              size: 18,
-              color: AppColors.secondary,
-            ),
-            constraints: _actionTouchTarget,
-            onPressed: onEdit,
+            icon: Icons.edit_outlined,
+            color: AppColors.secondary,
+            onPressed: onEdit!,
           ),
         if (onToggleActive != null)
-          IconButton(
+          CardActionIcon(
             tooltip: isActive
                 ? 'Suspend ${branch.name}'
                 : 'Reactivate ${branch.name}',
-            icon: Icon(
-              isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
-              size: 18,
-              color: AppColors.secondary,
-            ),
-            constraints: _actionTouchTarget,
-            onPressed: onToggleActive,
+            icon: isActive
+                ? Icons.pause_circle_outline
+                : Icons.play_circle_outline,
+            color: AppColors.secondary,
+            onPressed: onToggleActive!,
           ),
         if (onDelete != null)
-          IconButton(
+          CardActionIcon(
             tooltip: 'Delete ${branch.name}',
-            icon: const Icon(
-              Icons.delete_outline,
-              size: 18,
-              color: AppColors.statusUrgentText,
-            ),
-            constraints: _actionTouchTarget,
-            onPressed: onDelete,
+            icon: Icons.delete_outline,
+            color: AppColors.statusUrgentText,
+            onPressed: onDelete!,
           ),
       ],
     );

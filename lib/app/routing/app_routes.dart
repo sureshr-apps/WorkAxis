@@ -44,12 +44,20 @@ abstract final class AppRoutes {
   static const String orgAdminReports = '/organization/reports';
   static const String orgAdminSettings = '/organization/settings';
 
+  static String orgAdminBranchDetailsPath(String id) =>
+      '/organization/branches/$id';
+  static String orgAdminEmployeeDetailsPath(String id) =>
+      '/organization/employees/$id';
+
   // Branch Manager destinations
   static const String branchManagerWorkspace = '/branch-manager';
   static const String branchManagerEmployees = '/branch-manager/employees';
   static const String branchManagerAttendance = '/branch-manager/attendance';
   static const String branchManagerReturns = '/branch-manager/returns';
   static const String branchManagerReports = '/branch-manager/reports';
+
+  static String branchManagerEmployeeDetailsPath(String id) =>
+      '/branch-manager/employees/$id';
 
   // Employee destinations
   static const String employeeWorkspace = '/employee';

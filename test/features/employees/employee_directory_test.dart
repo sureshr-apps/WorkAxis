@@ -55,7 +55,7 @@ void main() {
       membersController.dispose();
     });
 
-    testWidgets('renders member cards with view and edit actions', (
+    testWidgets('renders member cards with a details chevron and edit icon', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -72,9 +72,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Employee Directory'), findsOneWidget);
-      expect(find.text('View details'), findsWidgets);
+      expect(find.text('View details'), findsNothing);
+      expect(find.byIcon(Icons.chevron_right_rounded), findsWidgets);
       // Organization Admin may manage every non-platform account.
-      expect(find.text('Edit'), findsWidgets);
+      expect(find.byIcon(Icons.edit_outlined), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 

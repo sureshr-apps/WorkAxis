@@ -14,7 +14,9 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:workaxis/features/authentication/presentation/screens/sign_in_screen.dart';
 import 'package:workaxis/features/branch_dashboard/presentation/screens/branch_home_screen.dart';
+import 'package:workaxis/features/branches/presentation/screens/branch_details_screen.dart';
 import 'package:workaxis/features/branches/presentation/screens/branch_management_screen.dart';
+import 'package:workaxis/features/employees/presentation/screens/employee_details_screen.dart';
 import 'package:workaxis/features/employees/presentation/screens/employee_directory_screen.dart';
 import 'package:workaxis/features/attendance/presentation/screens/attendance_operations_screen.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/employee_home_screen.dart';
@@ -200,10 +202,28 @@ GoRouter createAppRouter({
           GoRoute(
             path: AppRoutes.orgAdminBranches,
             builder: (context, state) => const BranchManagementScreen(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => BranchDetailsScreen(
+                  branchId: state.pathParameters['id'] ?? '',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.orgAdminEmployees,
             builder: (context, state) => const EmployeeDirectoryScreen(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => EmployeeDetailsScreen(
+                  memberId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.orgAdminEmployees,
+                  listLabel: 'Employee Directory',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.orgAdminAttendance,
@@ -245,6 +265,16 @@ GoRouter createAppRouter({
           GoRoute(
             path: AppRoutes.branchManagerEmployees,
             builder: (context, state) => const EmployeeDirectoryScreen(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => EmployeeDetailsScreen(
+                  memberId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.branchManagerEmployees,
+                  listLabel: 'Branch Employees',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.branchManagerAttendance,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
@@ -15,7 +17,6 @@ import 'package:workaxis/features/access/presentation/controllers/access_control
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 import 'package:workaxis/features/branches/presentation/controllers/branch_management_controller.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_card.dart';
-import 'package:workaxis/features/branches/presentation/screens/widgets/branch_details_dialog.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_editor_dialog.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_summary_strip.dart';
 
@@ -147,7 +148,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
             else
               _BranchList(
                 branches: branches,
-                onOpen: (branch) => _openDetails(branch, access),
+                onOpen: _openDetails,
                 onEdit: access == null
                     ? null
                     : (branch) => _openEditor(access, branch: branch),
@@ -278,33 +279,8 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     }
   }
 
-  Future<void> _openDetails(
-    BranchRecord branch,
-    UserAccessContext? access,
-  ) async {
-    if (access == null) return;
-    final controller = context.read<BranchManagementController>()
-      ..clearActionError();
-    final details = await controller.getBranch(access, branch.id);
-    await controller.loadManagerOptions(access);
-    if (!mounted || details == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => BranchDetailsDialog(
-        branch: details,
-        managerNames: controller.managerOptions
-            .where((option) => details.managerIds.contains(option.id))
-            .map((option) => option.name)
-            .toList(growable: false),
-        onGenerateToken: () =>
-            controller.createPairingToken(access: access, branchId: branch.id),
-        onCompletePairing: () =>
-            controller.completePairing(access: access, branchId: branch.id),
-        readActionError: () => controller.actionErrorMessage,
-      ),
-    );
-    if (mounted) await controller.loadBranches(access);
-  }
+  void _openDetails(BranchRecord branch) =>
+      context.push(AppRoutes.orgAdminBranchDetailsPath(branch.id));
 }
 
 /// Branch cards in one or more columns, sized to their content like the plan
