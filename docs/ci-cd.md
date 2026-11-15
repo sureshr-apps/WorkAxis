@@ -13,8 +13,8 @@ except the Cloud SQL connection used for migrations (see "Database access").
 | `deploy.yml` | push to `main`, or run manually | verify, then database migrations, then functions + Firestore rules/indexes + Storage rules, then web build and Hosting deploy. In parallel with the backend, a signed Android APK and AAB are built and uploaded as a workflow artifact |
 
 Deployments are serialised (`concurrency: deploy-main`) and are never cancelled
-midway. The Android `versionCode` is the workflow run number, so each build
-installs over the previous one.
+midway. The Android `versionCode` is `100 + the workflow run number`, so each build
+installs over the previous one (the offset keeps it above early hand-made builds).
 
 Where to find the Android build: the run's page, section Artifacts,
 `workaxis-android-<run number>` (APK for direct install, AAB for the Play

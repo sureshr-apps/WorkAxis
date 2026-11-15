@@ -161,8 +161,9 @@ jobs:
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
 
-      # The run number is the Android versionCode, so every build installs
-      # over the previous one.
+      # versionCode = 100 + run number: strictly increasing, so every build
+      # installs over the previous one, and it stays above builds made by hand
+      # before the pipeline existed (those used low numbers such as 99).
       - name: Build APK and App Bundle
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
