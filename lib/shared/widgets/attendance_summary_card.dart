@@ -31,10 +31,8 @@ class AttendanceSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Header(onViewDetails: onViewDetails),
+          const _Header(),
           const SizedBox(height: AppSpacing.lg),
-          _DistributionBar(attendance: attendance),
-          const SizedBox(height: AppSpacing.xs + 2),
           Text(
             'Attendance rate: ${attendance.attendancePercentage}% of '
             '${attendance.distributionTotal} scheduled',
@@ -43,8 +41,19 @@ class AttendanceSummaryCard extends StatelessWidget {
               color: AppColors.secondary,
             ),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          _DistributionBar(attendance: attendance),
           const SizedBox(height: AppSpacing.lg),
           _MetricTiles(attendance: attendance),
+          if (onViewDetails != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            AppButton.outlined(
+              text: 'View full roster',
+              iconData: Icons.arrow_forward,
+              isFullWidth: true,
+              onPressed: onViewDetails,
+            ),
+          ],
           if (branchSnapshots.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
             Text(
@@ -83,44 +92,24 @@ class AttendanceSummaryCard extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({this.onViewDetails});
-
-  final VoidCallback? onViewDetails;
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Today's Attendance",
-              style: AppTypography.titleLarge.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppColors.onSurface,
-              ),
-            ),
-            Text(
-              'Roster distribution for today',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.secondary,
-              ),
-            ),
-          ],
-        ),
-        if (onViewDetails != null)
-          AppButton.outlined(
-            text: 'View full roster',
-            iconData: Icons.arrow_forward,
-            isFullWidth: false,
-            onPressed: onViewDetails,
+        Text(
+          "Today's Attendance",
+          style: AppTypography.titleLarge.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.onSurface,
           ),
+        ),
+        Text(
+          'Roster distribution for today',
+          style: AppTypography.bodySmall.copyWith(color: AppColors.secondary),
+        ),
       ],
     );
   }
