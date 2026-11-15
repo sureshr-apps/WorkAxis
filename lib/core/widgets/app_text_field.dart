@@ -41,10 +41,12 @@ class AppTextField extends StatelessWidget {
     ValueChanged<String>? onChanged,
     ValueChanged<String>? onSubmitted,
     VoidCallback? onClear,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return AppTextField(
       key: key,
       controller: controller,
+      inputFormatters: inputFormatters,
       hintText: hintText,
       prefixIcon: const Icon(
         Icons.search,

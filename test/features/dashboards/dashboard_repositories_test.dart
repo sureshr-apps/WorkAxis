@@ -10,7 +10,10 @@ import 'package:workaxis/features/organization_dashboard/domain/models/attendanc
 import 'package:workaxis/features/organization_dashboard/domain/models/attention_item.dart';
 import 'package:workaxis/features/platform_dashboard/data/platform_dashboard_remote.dart';
 import 'package:workaxis/features/platform_dashboard/data/sql_connect_platform_dashboard_repository.dart';
-import 'package:workaxis/features/platform_dashboard/domain/models/recent_organization_summary.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
+import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_repository.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 
 import '../../helpers/access_fixtures.dart';
 import '../../helpers/fixed_clock.dart';
@@ -41,28 +44,40 @@ class _FakeBranchRemote implements BranchDashboardRemote {
   }
 }
 
+/// Records the page size the dashboard asks the organizations list for.
+class _RecordingOrganizations extends MockPlatformOrganizationsRepository {
+  int? lastLimit;
+  Object? failWith;
+
+  @override
+  Future<PageResult<CustomerOrganization>> getOrganizationsPage({
+    String? query,
+    OrganizationStatus? statusFilter,
+    int offset = 0,
+    int limit = defaultPageSize,
+  }) {
+    lastLimit = limit;
+    if (failWith != null) throw failWith!;
+    return super.getOrganizationsPage(
+      query: query,
+      statusFilter: statusFilter,
+      offset: offset,
+      limit: limit,
+    );
+  }
+}
+
 class _FakePlatformRemote implements PlatformDashboardRemote {
   PlatformStats stats = const PlatformStats(
     organizationsByStatus: {'active': 5, 'suspended': 2},
     platformAdminCount: 4,
   );
-  List<RecentOrganizationSummary> recent = [];
   Object? failWith;
-  int? lastLimit;
 
   @override
   Future<PlatformStats> loadStats() async {
     if (failWith != null) throw failWith!;
     return stats;
-  }
-
-  @override
-  Future<List<RecentOrganizationSummary>> loadRecentOrganizations({
-    required int limit,
-  }) async {
-    lastLimit = limit;
-    if (failWith != null) throw failWith!;
-    return recent;
   }
 }
 
@@ -352,11 +367,16 @@ void main() {
 
   group('SqlConnectPlatformDashboardRepository', () {
     late _FakePlatformRemote remote;
+    late _RecordingOrganizations organizations;
     late SqlConnectPlatformDashboardRepository repo;
 
     setUp(() {
       remote = _FakePlatformRemote();
-      repo = SqlConnectPlatformDashboardRepository(remote: remote);
+      organizations = _RecordingOrganizations();
+      repo = SqlConnectPlatformDashboardRepository(
+        remote: remote,
+        organizations: organizations,
+      );
     });
 
     test(
@@ -371,28 +391,18 @@ void main() {
     );
 
     test(
-      'recent organizations keep real data and no invented admin email',
+      'recent organizations come from the organizations list, one page',
       () async {
-        remote.recent = [
-          RecentOrganizationSummary(
-            id: 'o1',
-            name: 'Org One',
-            code: 'ONE',
-            status: 'active',
-            branchCount: 3,
-            employeeCount: 12,
-            createdAt: testNow,
-          ),
-        ];
         final recent = await repo.getRecentOrganizations();
-        expect(recent.single.adminEmail, isNull);
-        expect(recent.single.branchCount, 3);
-        expect(remote.lastLimit, repo.recentLimit);
+        expect(organizations.lastLimit, repo.recentLimit);
+        expect(recent, isNotEmpty);
+        expect(recent.length, lessThanOrEqualTo(repo.recentLimit));
       },
     );
 
     test('failures are typed, with no fallback admin count', () async {
       remote.failWith = const NetworkException();
+      organizations.failWith = const NetworkException();
       await expectLater(
         repo.getPlatformDashboardSummary(),
         throwsA(isA<NetworkException>()),

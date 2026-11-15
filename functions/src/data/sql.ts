@@ -84,6 +84,15 @@ export class Query {
     return this;
   }
 
+  /** Case-insensitive substring match on any of the columns (one bound value). */
+  containsAny(columns: string[], text: string | undefined): this {
+    if (text !== undefined) {
+      const value = this.bind(likeContains(text));
+      this.conds.push(`(${columns.map((c) => `${c} ILIKE ${value}`).join(" OR ")})`);
+    }
+    return this;
+  }
+
   /** Inclusive lower / exclusive upper bound on a timestamp column. */
   period(column: string, from?: string, to?: string): this {
     if (from !== undefined) this.conds.push(`${column} >= ${this.bind(from)}::timestamptz`);

@@ -13,28 +13,30 @@ const BoxConstraints _touchTarget = BoxConstraints(
   minHeight: AppSpacing.minTouchTarget,
 );
 
-/// Card for a customer organization on smartphone and tablet widths.
+/// Card for a customer organization, shared by the Organizations tab and the
+/// dashboard's recent organizations.
 ///
-/// Tapping the card opens the organization on every width. Smartphones
-/// (compact width) show a chevron beside the status and nothing else; wider
-/// layouts also show edit, delete and "Details" actions.
+/// The whole card is the tap target and a chevron marks it. [onEdit] and
+/// [onDelete] add management icons on wider layouts; they are only passed where
+/// management is allowed, so the dashboard shows the card without them.
 class OrganizationCardItem extends StatelessWidget {
   const OrganizationCardItem({
     super.key,
     required this.organization,
     required this.onTap,
-    required this.onEdit,
+    this.onEdit,
     this.onDelete,
   });
 
   final CustomerOrganization organization;
   final VoidCallback onTap;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final compact = context.isCompact;
+    final showActions = !compact && (onEdit != null || onDelete != null);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
@@ -77,19 +79,15 @@ class OrganizationCardItem extends StatelessWidget {
                       organization.status.displayName,
                       width: 96,
                     ),
-                    // Phones show only a chevron: the whole card is the
-                    // tap target and edit/delete live on the details page.
-                    if (compact) ...const [
-                      SizedBox(width: AppSpacing.xs),
-                      Padding(
-                        padding: EdgeInsets.only(top: AppSpacing.xxs),
-                        child: Icon(
-                          Icons.chevron_right_rounded,
-                          size: 24,
-                          color: AppColors.primary,
-                        ),
+                    const SizedBox(width: AppSpacing.xs),
+                    const Padding(
+                      padding: EdgeInsets.only(top: AppSpacing.xxs),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 24,
+                        color: AppColors.primary,
                       ),
-                    ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -98,21 +96,22 @@ class OrganizationCardItem extends StatelessWidget {
                   staffCount: organization.employeeCount,
                   onboardedOn: organization.createdAt,
                 ),
-                if (!compact) ...[
+                if (showActions) ...[
                   const SizedBox(height: AppSpacing.xs),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      IconButton(
-                        tooltip: 'Edit ${organization.name}',
-                        icon: const Icon(
-                          Icons.edit_outlined,
-                          size: 18,
-                          color: AppColors.secondary,
+                      if (onEdit != null)
+                        IconButton(
+                          tooltip: 'Edit ${organization.name}',
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: AppColors.secondary,
+                          ),
+                          constraints: _touchTarget,
+                          onPressed: onEdit,
                         ),
-                        constraints: _touchTarget,
-                        onPressed: onEdit,
-                      ),
                       if (onDelete != null)
                         IconButton(
                           tooltip: 'Delete ${organization.name}',
@@ -124,30 +123,6 @@ class OrganizationCardItem extends StatelessWidget {
                           constraints: _touchTarget,
                           onPressed: onDelete,
                         ),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          minHeight: AppSpacing.minTouchTarget,
-                        ),
-                        child: Center(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Details',
-                                style: AppTypography.labelMedium.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                size: 16,
-                                color: AppColors.primary,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ],

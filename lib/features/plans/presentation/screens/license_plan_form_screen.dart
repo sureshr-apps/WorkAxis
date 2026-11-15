@@ -14,6 +14,7 @@ import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/core/widgets/form_action_row.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/plans/domain/license_plan_policy.dart';
 import 'package:workaxis/features/plans/domain/models/license_plan.dart';
 import 'package:workaxis/features/plans/domain/models/license_plan_draft.dart';
@@ -110,6 +111,12 @@ class _LicensePlanFormScreenState extends State<LicensePlanFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  PageBreadcrumb(
+                    backLabel: 'Plans',
+                    currentLabel: isEditing ? 'Edit Plan' : 'Add Plan',
+                    onBack: _goBack,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
                   AppPageHeader(
                     eyebrow: 'Platform Licensing',
                     title: isEditing ? 'Edit Plan' : 'Add Plan',

@@ -13,67 +13,6 @@ import 'package:workaxis/features/platform_organizations/domain/models/customer_
 /// Text scale above which the two header buttons stack instead of sharing a row.
 const double _stackButtonsTextScale = 1.15;
 
-/// Breadcrumb row: back link, organization name and code.
-class OrganizationDetailsBreadcrumb extends StatelessWidget {
-  const OrganizationDetailsBreadcrumb({
-    super.key,
-    required this.organization,
-    required this.onBack,
-  });
-
-  final CustomerOrganization organization;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.xs,
-      children: [
-        InkWell(
-          onTap: onBack,
-          borderRadius: AppSpacing.roundedXs,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: AppSpacing.minTouchTarget,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.arrow_back,
-                  size: 16,
-                  color: AppColors.secondary,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  'Organizations',
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.secondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const Icon(
-          Icons.chevron_right,
-          size: 16,
-          color: AppColors.outlineVariant,
-        ),
-        Text(
-          organization.name,
-          style: AppTypography.labelMedium.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        _CodeBadge(code: organization.code),
-      ],
-    );
-  }
-}
-
 /// Identity, status and actions of the selected organization.
 class OrganizationDetailsHeader extends StatelessWidget {
   const OrganizationDetailsHeader({

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,24 @@ import 'package:workaxis/features/platform_organizations/data/mock_platform_orga
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/create_organization_request.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+
+/// Holds the unfiltered recent-organizations load until the test releases it,
+/// so a search can finish before the load does.
+class _GatedRecentRepository extends MockPlatformDashboardRepository {
+  _GatedRecentRepository() : super(delay: Duration.zero);
+
+  Completer<void>? gate;
+
+  @override
+  Future<List<CustomerOrganization>> getRecentOrganizations({
+    String? query,
+    OrganizationStatus? status,
+  }) async {
+    if ((query ?? '').isEmpty && gate != null) await gate!.future;
+    return super.getRecentOrganizations(query: query, status: status);
+  }
+}
 
 void main() {
   group('Platform Dashboard Repository & Controller', () {
@@ -25,11 +45,11 @@ void main() {
       expect(summary.suspendedOrganizations, equals(2));
       expect(summary.platformAdminsCount, equals(4));
 
-      expect(orgs.length, equals(4));
-      expect(orgs.first.name, equals('Crestline Cold Storage'));
-      expect(orgs.first.code, equals('ORG-CCS-77'));
-      expect(orgs.first.adminEmail, equals('ops@crestlinecold.com'));
-      expect(orgs.first.status, equals('suspended'));
+      expect(orgs.length, equals(5));
+      expect(orgs.first.name, equals('Acme Corporation'));
+      expect(orgs.first.code, equals('ORG-ACM-01'));
+      expect(orgs.first.contactEmail, equals('operations@acmecorp.com'));
+      expect(orgs.first.status, equals(OrganizationStatus.active));
     });
 
     test('PlatformDashboardController loads summary into state', () async {
@@ -44,7 +64,7 @@ void main() {
       expect(controller.summary?.totalOrganizations, equals(7));
       expect(controller.summary?.activeOrganizations, equals(5));
       expect(controller.summary?.suspendedOrganizations, equals(2));
-      expect(controller.recentOrganizations.length, equals(4));
+      expect(controller.recentOrganizations.length, equals(5));
     });
   });
 
@@ -76,8 +96,8 @@ void main() {
         expect(find.text('Suspended Organizations'), findsOneWidget);
         expect(find.text('Platform Administrators'), findsOneWidget);
         expect(find.text('Recent Organizations'), findsOneWidget);
-        expect(find.text('Crestline Cold Storage'), findsOneWidget);
-        expect(find.text('ORG-CCS-77'), findsOneWidget);
+        expect(find.text('Acme Corporation'), findsOneWidget);
+        expect(find.text('ORG-ACM-01'), findsOneWidget);
 
         // Verify Fleet Operational label is removed
         expect(find.text('Fleet Operational'), findsNothing);
@@ -144,7 +164,7 @@ void main() {
       expect(initialSummary.totalOrganizations, equals(7));
       expect(initialSummary.activeOrganizations, equals(5));
       expect(initialSummary.suspendedOrganizations, equals(2));
-      expect(initialRecent.length, equals(4));
+      expect(initialRecent.length, equals(5));
 
       final newOrg = CreateOrganizationRequest(
         name: 'Quantum Logistics',
@@ -163,23 +183,25 @@ void main() {
       expect(updatedSummary.suspendedOrganizations, equals(2));
       expect(updatedSummary.platformAdminsCount, equals(4));
 
-      // Recent list size is kept at 4, ordered newest createdAt first
-      expect(updatedRecent.length, equals(4));
+      // Recent list size is kept at 5, ordered newest createdAt first
+      expect(updatedRecent.length, equals(5));
       expect(updatedRecent.first.id, equals('org-generated-001'));
       expect(updatedRecent.first.name, equals('Quantum Logistics'));
       expect(updatedRecent.first.code, equals('ORG-001'));
       expect(
-        updatedRecent.first.adminEmail,
+        updatedRecent.first.contactEmail,
         equals('s.connor@quantumlogistics.com'),
       );
-      expect(updatedRecent.first.status, equals('active'));
+      expect(updatedRecent.first.status, equals(OrganizationStatus.active));
       expect(updatedRecent.first.branchCount, equals(0));
       expect(updatedRecent.first.employeeCount, equals(0));
     });
 
     test('updateOrganization updates organization details in dashboard recent list', () async {
       // Crestline Cold Storage is in the initial recent list
-      final initialRecent = await dashboardRepo.getRecentOrganizations();
+      final initialRecent = await dashboardRepo.getRecentOrganizations(
+        query: 'crestline',
+      );
       final crestline = initialRecent.firstWhere(
         (o) => o.id == 'org-crestline',
       );
@@ -198,7 +220,9 @@ void main() {
 
       await orgsRepo.updateOrganization(updatedRecord);
 
-      final refreshedRecent = await dashboardRepo.getRecentOrganizations();
+      final refreshedRecent = await dashboardRepo.getRecentOrganizations(
+        query: 'crestline',
+      );
       final updatedRecentItem = refreshedRecent.firstWhere(
         (o) => o.id == 'org-crestline',
       );
@@ -206,7 +230,7 @@ void main() {
       expect(updatedRecentItem.name, equals('Crestline Cold Chain Solutions'));
       expect(updatedRecentItem.code, equals('ORG-CCS-99'));
       expect(
-        updatedRecentItem.adminEmail,
+        updatedRecentItem.contactEmail,
         equals('dispatch@crestlinecoldchain.com'),
       );
       expect(updatedRecentItem.branchCount, equals(12));
@@ -230,9 +254,11 @@ void main() {
       expect(summaryAfterSuspend.suspendedOrganizations, equals(3));
       expect(summaryAfterSuspend.totalOrganizations, equals(7));
 
-      final recentAfterSuspend = await dashboardRepo.getRecentOrganizations();
+      final recentAfterSuspend = await dashboardRepo.getRecentOrganizations(
+        query: 'abc',
+      );
       final abcRecent = recentAfterSuspend.firstWhere((o) => o.id == 'org-abc');
-      expect(abcRecent.status, equals('suspended'));
+      expect(abcRecent.status, equals(OrganizationStatus.suspended));
       expect(abcRecent.isActive, isFalse);
 
       // Reactivate Crestline Cold Storage (originally suspended)
@@ -246,12 +272,13 @@ void main() {
       expect(summaryAfterReactivate.activeOrganizations, equals(5));
       expect(summaryAfterReactivate.suspendedOrganizations, equals(2));
 
-      final recentAfterReactivate = await dashboardRepo
-          .getRecentOrganizations();
+      final recentAfterReactivate = await dashboardRepo.getRecentOrganizations(
+        query: 'crestline',
+      );
       final crestlineRecent = recentAfterReactivate.firstWhere(
         (o) => o.id == 'org-crestline',
       );
-      expect(crestlineRecent.status, equals('active'));
+      expect(crestlineRecent.status, equals(OrganizationStatus.active));
       expect(crestlineRecent.isActive, isTrue);
     });
 
@@ -281,5 +308,97 @@ void main() {
         );
       },
     );
+  });
+
+  group('Recent organization search', () {
+    test(
+      'finds an organization beyond the newest five on the server',
+      () async {
+        final repo = MockPlatformDashboardRepository(delay: Duration.zero);
+        final found = await repo.getRecentOrganizations(query: 'crestline');
+        expect(found.map((o) => o.id), ['org-crestline']);
+      },
+    );
+
+    test('filters the recent list by status on the server', () async {
+      final repo = MockPlatformDashboardRepository(delay: Duration.zero);
+      final suspended = await repo.getRecentOrganizations(
+        status: OrganizationStatus.suspended,
+      );
+      expect(
+        suspended.every((o) => o.status == OrganizationStatus.suspended),
+        isTrue,
+      );
+      expect(suspended.map((o) => o.id), contains('org-northern'));
+    });
+
+    test('a search replaces the recent list after the debounce', () async {
+      final repo = MockPlatformDashboardRepository(delay: Duration.zero);
+      final controller = PlatformDashboardController(
+        repository: repo,
+        searchDebounce: const Duration(milliseconds: 5),
+      );
+      addTearDown(controller.dispose);
+      await controller.loadDashboard();
+
+      controller.searchRecentOrganizations('crestline', null);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(controller.recentOrganizations.map((o) => o.id), [
+        'org-crestline',
+      ]);
+      expect(controller.recentQuery, 'crestline');
+    });
+  });
+
+  group('Recent organization races', () {
+    test(
+      'a search finishing before a slow load is not overwritten by it',
+      () async {
+        final repo = _GatedRecentRepository();
+        repo.gate = Completer<void>();
+        final controller = PlatformDashboardController(
+          repository: repo,
+          searchDebounce: const Duration(milliseconds: 5),
+        );
+        addTearDown(controller.dispose);
+
+        final load = controller.loadDashboard();
+        controller.searchRecentOrganizations('crestline', null);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(controller.recentOrganizations.map((o) => o.id), [
+          'org-crestline',
+        ]);
+
+        repo.gate!.complete();
+        await load;
+
+        expect(controller.recentOrganizations.map((o) => o.id), [
+          'org-crestline',
+        ]);
+        expect(controller.recentQuery, 'crestline');
+      },
+    );
+
+    test('clearing the recent search empties the query and filter', () async {
+      final repo = MockPlatformDashboardRepository(delay: Duration.zero);
+      final controller = PlatformDashboardController(
+        repository: repo,
+        searchDebounce: const Duration(milliseconds: 5),
+      );
+      addTearDown(controller.dispose);
+      await controller.loadDashboard();
+
+      controller.searchRecentOrganizations(
+        'crestline',
+        OrganizationStatus.active,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      controller.clearRecentSearch();
+
+      expect(controller.recentQuery, '');
+      expect(controller.recentStatus, isNull);
+      expect(controller.recentErrorMessage, isNull);
+    });
   });
 }

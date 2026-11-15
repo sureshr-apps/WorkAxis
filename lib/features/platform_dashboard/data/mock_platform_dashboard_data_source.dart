@@ -1,7 +1,7 @@
 import 'package:workaxis/features/platform_dashboard/domain/models/platform_dashboard_summary.dart';
-import 'package:workaxis/features/platform_dashboard/domain/models/recent_organization_summary.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_data_source.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 
 /// In-memory mock data source for platform overview data.
 class MockPlatformDashboardDataSource {
@@ -12,7 +12,7 @@ class MockPlatformDashboardDataSource {
   MockPlatformDashboardDataSource({
     MockPlatformOrganizationsDataSource? organizationsDataSource,
     this.platformAdminsCount = 4,
-    this.recentLimit = 4,
+    this.recentLimit = 5,
   }) : _organizationsDataSource =
            organizationsDataSource ?? MockPlatformOrganizationsDataSource();
 
@@ -33,31 +33,17 @@ class MockPlatformDashboardDataSource {
     );
   }
 
-  List<RecentOrganizationSummary> getRecentOrganizations({int? limit}) {
-    final effectiveLimit = limit ?? recentLimit;
-    final orgs = List<CustomerOrganization>.from(
-      _organizationsDataSource.getOrganizations(),
+  /// The first organizations in the same order as the organizations list, so
+  /// the mock dashboard and the Organizations tab show the same rows.
+  List<CustomerOrganization> getRecentOrganizations({
+    int? limit,
+    String? query,
+    OrganizationStatus? status,
+  }) {
+    final matches = _organizationsDataSource.getOrganizations(
+      query: query,
+      statusFilter: status,
     );
-
-    // Order newest createdAt first
-    orgs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    return orgs.take(effectiveLimit).map((org) {
-      final email =
-          (org.contactEmail != null && org.contactEmail!.trim().isNotEmpty)
-          ? org.contactEmail!.trim()
-          : (org.admins.isNotEmpty ? org.admins.first.email.trim() : '');
-
-      return RecentOrganizationSummary(
-        id: org.id,
-        name: org.name,
-        code: org.code,
-        adminEmail: email,
-        status: org.status.name,
-        branchCount: org.branchCount ?? 0,
-        employeeCount: org.employeeCount ?? 0,
-        createdAt: org.createdAt,
-      );
-    }).toList();
+    return matches.take(limit ?? recentLimit).toList(growable: false);
   }
 }

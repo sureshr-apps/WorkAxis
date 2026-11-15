@@ -8,7 +8,7 @@ import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
-import 'package:workaxis/core/widgets/form_breadcrumb.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/discard_changes_dialog.dart';
@@ -220,7 +220,7 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    FormBreadcrumb(
+                    PageBreadcrumb(
                       backLabel: 'Organizations',
                       currentLabel: 'Edit Organization',
                       onBack: () => _handleCancel(org),

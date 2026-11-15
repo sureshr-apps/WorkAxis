@@ -132,6 +132,13 @@ class BackendFactory {
       final membersSource = SqlConnectOrganizationMembersRemoteDataSource(
         gateway: data,
       );
+      final platformOrganizationsRepository =
+          SqlConnectPlatformOrganizationsRepository(
+            dataSource: SqlConnectPlatformOrganizationsRemoteDataSource(
+              gateway: data,
+            ),
+            functions: callables,
+          );
       return BackendRepositories(
         authRepository: FirebaseAuthRepository(
           auth: auth,
@@ -143,14 +150,9 @@ class BackendFactory {
         ),
         platformRepository: SqlConnectPlatformDashboardRepository(
           gateway: data,
+          organizations: platformOrganizationsRepository,
         ),
-        platformOrganizationsRepository:
-            SqlConnectPlatformOrganizationsRepository(
-              dataSource: SqlConnectPlatformOrganizationsRemoteDataSource(
-                gateway: data,
-              ),
-              functions: callables,
-            ),
+        platformOrganizationsRepository: platformOrganizationsRepository,
         licensePlansRepository: SqlConnectLicensePlansRepository(
           dataSource: SqlConnectLicensePlansRemoteDataSource(gateway: data),
         ),

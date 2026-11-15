@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
-import 'package:workaxis/features/platform_dashboard/domain/models/recent_organization_summary.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/platform_overview_hero_banner.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/recent_organizations_list.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_repository.dart';
@@ -20,31 +21,29 @@ import 'package:workaxis/features/platform_users/presentation/widgets/platform_a
 
 void main() {
   final sampleOrganizations = [
-    RecentOrganizationSummary(
+    CustomerOrganization(
       id: 'org-01',
       name: 'Apex Logistics',
       code: 'ORG-APX',
-      status: 'active',
+      status: OrganizationStatus.active,
       branchCount: 14,
       employeeCount: 342,
-      adminEmail: 'marcus@apexlogistics.com',
       createdAt: DateTime(2026, 1, 15),
     ),
-    RecentOrganizationSummary(
+    CustomerOrganization(
       id: 'org-02',
       name: 'Beacon Retail',
       code: 'ORG-BCN',
-      status: 'suspended',
+      status: OrganizationStatus.suspended,
       branchCount: 6,
       employeeCount: 88,
-      adminEmail: 'elena@beaconretail.com',
       createdAt: DateTime(2026, 2, 20),
     ),
   ];
 
   group('Smartphone (<600dp) Responsiveness Tests', () {
     testWidgets(
-      'RecentOrganizationsList renders 1-column cards with 96dp status and Details link',
+      'RecentOrganizationsList renders 1-column cards with 96dp status and a chevron, no Details button',
       (tester) async {
         tester.view.physicalSize = const Size(390, 844);
         tester.view.devicePixelRatio = 1.0;
@@ -55,7 +54,13 @@ void main() {
           MaterialApp(
             theme: AppTheme.light,
             home: Scaffold(
-              body: RecentOrganizationsList(organizations: sampleOrganizations),
+              body: RecentOrganizationsList(
+                organizations: sampleOrganizations,
+                totalCount: 2,
+                activeCount: 1,
+                suspendedCount: 1,
+                onSearchChanged: (query, status) {},
+              ),
             ),
           ),
         );
@@ -77,8 +82,8 @@ void main() {
           expect(chip.width, 96);
         }
 
-        // Details > link is rendered for each card
-        expect(find.text('Details'), findsNWidgets(2));
+        // Each card is the tap target: a chevron marks it, with no Details button
+        expect(find.text('Details'), findsNothing);
         expect(find.byIcon(Icons.chevron_right_rounded), findsNWidgets(2));
       },
     );
@@ -195,16 +200,22 @@ void main() {
           MaterialApp(
             theme: AppTheme.light,
             home: Scaffold(
-              body: RecentOrganizationsList(organizations: sampleOrganizations),
+              body: RecentOrganizationsList(
+                organizations: sampleOrganizations,
+                totalCount: 2,
+                activeCount: 1,
+                suspendedCount: 1,
+                onSearchChanged: (query, status) {},
+              ),
             ),
           ),
         );
         await tester.pumpAndSettle();
 
-        // Tablet uses Wrap for balanced 2-column grid
-        expect(find.byType(Wrap), findsWidgets);
+        // Tablet shows the shared organization cards in two columns
+        expect(find.byType(OrganizationCardItem), findsNWidgets(2));
         expect(find.text('ADMIN CONTACT'), findsNothing); // Table not shown
-        expect(find.text('Details'), findsNWidgets(2));
+        expect(find.text('Details'), findsNothing);
       },
     );
 
@@ -280,7 +291,13 @@ void main() {
           MaterialApp(
             theme: AppTheme.light,
             home: Scaffold(
-              body: RecentOrganizationsList(organizations: sampleOrganizations),
+              body: RecentOrganizationsList(
+                organizations: sampleOrganizations,
+                totalCount: 2,
+                activeCount: 1,
+                suspendedCount: 1,
+                onSearchChanged: (query, status) {},
+              ),
             ),
           ),
         );
@@ -290,8 +307,8 @@ void main() {
         expect(find.text('CODE'), findsOneWidget);
         expect(find.text('STATUS'), findsOneWidget);
         expect(find.text('BRANCHES'), findsOneWidget);
-        expect(find.text('STAFF'), findsOneWidget);
-        expect(find.text('ADMIN CONTACT'), findsOneWidget);
+        expect(find.text('EMPLOYEES'), findsOneWidget);
+        expect(find.text('ADMIN CONTACT'), findsNothing);
         expect(find.text('ACTIONS'), findsOneWidget);
       },
     );

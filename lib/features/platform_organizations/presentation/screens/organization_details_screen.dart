@@ -6,9 +6,9 @@ import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/empty_state.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
@@ -106,8 +106,9 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                OrganizationDetailsBreadcrumb(
-                  organization: organization,
+                PageBreadcrumb(
+                  backLabel: 'Organizations',
+                  currentLabel: organization.name,
                   onBack: () => context.go(AppRoutes.platformOrganizations),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -298,27 +299,31 @@ class _NotFound extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final backButton = AppButton.secondary(
-      text: 'Back to Organizations',
-      onPressed: () => context.go(AppRoutes.platformOrganizations),
-      isFullWidth: false,
-    );
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        child: errorMessage != null
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ErrorState(message: errorMessage!, onRetry: onRetry),
-                  backButton,
-                ],
-              )
-            : EmptyState(
-                icon: Icons.business_outlined,
-                title: 'Organization not found',
-                action: backButton,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PageBreadcrumb(
+                backLabel: 'Organizations',
+                currentLabel: 'Organization',
+                onBack: () => context.go(AppRoutes.platformOrganizations),
               ),
+              const SizedBox(height: AppSpacing.md),
+              Expanded(
+                child: errorMessage != null
+                    ? ErrorState(message: errorMessage!, onRetry: onRetry)
+                    : const EmptyState(
+                        icon: Icons.business_outlined,
+                        title: 'Organization not found',
+                      ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -83,12 +83,14 @@ void main() {
   });
 
   group('OrganizationCardItem on a tablet', () {
-    testWidgets('keeps edit, delete and details actions', (tester) async {
+    testWidgets('keeps edit and delete actions, without a Details button', (
+      tester,
+    ) async {
       final taps = await _pump(tester, width: 700);
 
       expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
       expect(find.byIcon(Icons.delete_outline), findsOneWidget);
-      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Details'), findsNothing);
 
       await tester.tap(find.byIcon(Icons.edit_outlined));
       await tester.tap(find.byIcon(Icons.delete_outline));

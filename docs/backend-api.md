@@ -180,7 +180,7 @@ Branch Manager (BM) = assigned branches only. Paged operations take
 | Operation | Who may call | Key vars | Response keys |
 | --- | --- | --- | --- |
 | `ListOrganizations` | Platform | none | `organizations` |
-| `ListOrganizationsPaged` | Platform | `nameContains`, `status` | `organizations`, `total` |
+| `ListOrganizationsPaged` | Platform | `nameContains` (matches name or code), `status`, `limit`, `offset` | `organizations` (each with `branchCount`, `memberCount`), `total` |
 | `GetOrganizationById` | Platform; members of that organization | `id` | `organization` (includes `planId`, `planName`) |
 | `GetOrganizationStats` | Platform; Org Admin | `orgId` | `branchCount`, `memberCount` |
 | `GetPlatformStats` | Platform | none | `organizationsByStatus`, `platformAdminCount` |

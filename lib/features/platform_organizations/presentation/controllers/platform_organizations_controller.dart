@@ -6,6 +6,7 @@ import 'package:workaxis/core/errors/user_message.dart';
 import 'package:workaxis/core/session/session_scoped.dart';
 import 'package:workaxis/core/state/request_generation.dart';
 import 'package:workaxis/core/state/safe_notifier.dart';
+import 'package:workaxis/features/platform_organizations/domain/organization_filter.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/create_organization_request.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
@@ -225,22 +226,11 @@ class PlatformOrganizationsController extends ChangeNotifier
   }
 
   void _applyFilter() {
-    _filteredOrganizations = _allOrganizations
-        .where((org) {
-          if (_statusFilter != null && org.status != _statusFilter) {
-            return false;
-          }
-          if (_searchQuery.trim().isNotEmpty) {
-            final q = _searchQuery.trim().toLowerCase();
-            final matchesName = org.name.toLowerCase().contains(q);
-            final matchesCode = org.code.toLowerCase().contains(q);
-            if (!matchesName && !matchesCode) {
-              return false;
-            }
-          }
-          return true;
-        })
-        .toList(growable: false);
+    _filteredOrganizations = filterOrganizations(
+      _allOrganizations,
+      status: _statusFilter,
+      query: _searchQuery,
+    );
   }
 
   Future<CustomerOrganization?> loadOrganizationDetails(String id) async {

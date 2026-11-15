@@ -13,6 +13,7 @@ import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 import 'package:workaxis/features/platform_users/presentation/controllers/platform_users_controller.dart';
@@ -79,16 +80,17 @@ class _PlatformAdministratorDetailsScreenState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                PageBreadcrumb(
+                  backLabel: 'Platform Users',
+                  currentLabel: 'Administrator',
+                  onBack: () => context.go(AppRoutes.platformUsers),
+                ),
+                const SizedBox(height: AppSpacing.md),
                 ErrorState(
                   message:
                       controller.errorMessage ??
                       'This platform administrator could not be found.',
                   onRetry: _load,
-                ),
-                AppButton.outlined(
-                  text: 'Back to Platform Users',
-                  onPressed: () => context.go(AppRoutes.platformUsers),
-                  isFullWidth: false,
                 ),
               ],
             ),
@@ -105,16 +107,12 @@ class _PlatformAdministratorDetailsScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppButton.outlined(
-                    text: 'Platform Users',
-                    iconData: Icons.arrow_back,
-                    isFullWidth: false,
-                    onPressed: () => context.go(AppRoutes.platformUsers),
-                  ),
+                PageBreadcrumb(
+                  backLabel: 'Platform Users',
+                  currentLabel: 'Administrator details',
+                  onBack: () => context.go(AppRoutes.platformUsers),
                 ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.md),
                 AppPageHeader(
                   eyebrow: 'Platform Access',
                   title: 'Administrator details',

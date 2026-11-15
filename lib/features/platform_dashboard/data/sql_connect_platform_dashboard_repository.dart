@@ -2,16 +2,20 @@ import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/core/backend/data_gateway.dart';
 import 'package:workaxis/features/platform_dashboard/data/platform_dashboard_remote.dart';
 import 'package:workaxis/features/platform_dashboard/domain/models/platform_dashboard_summary.dart';
-import 'package:workaxis/features/platform_dashboard/domain/models/recent_organization_summary.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
+import 'package:workaxis/features/platform_organizations/domain/repositories/platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_dashboard/domain/repositories/platform_dashboard_repository.dart';
 
-/// Production [PlatformDashboardRepository] using data gateway aggregates
-/// (`GetPlatformStats`, `ListOrganizationsPaged`, `GetOrganizationStats`).
+/// Production [PlatformDashboardRepository]. Summary counts come from the data
+/// gateway aggregates (`GetPlatformStats`). Recent organizations come from the
+/// organizations repository, so they match the Organizations tab exactly.
 class SqlConnectPlatformDashboardRepository
     implements PlatformDashboardRepository {
   SqlConnectPlatformDashboardRepository({
     DataGateway? gateway,
     PlatformDashboardRemote? remote,
+    required this._organizations,
     this.recentLimit = 5,
   }) : assert(
          gateway != null || remote != null,
@@ -21,6 +25,7 @@ class SqlConnectPlatformDashboardRepository
            remote ?? DataConnectPlatformDashboardRemote(gateway: gateway!);
 
   final PlatformDashboardRemote _remote;
+  final PlatformOrganizationsRepository _organizations;
 
   /// How many organizations the "recent" list shows.
   final int recentLimit;
@@ -42,9 +47,17 @@ class SqlConnectPlatformDashboardRepository
   }
 
   @override
-  Future<List<RecentOrganizationSummary>> getRecentOrganizations() async {
+  Future<List<CustomerOrganization>> getRecentOrganizations({
+    String? query,
+    OrganizationStatus? status,
+  }) async {
     try {
-      return await _remote.loadRecentOrganizations(limit: recentLimit);
+      final page = await _organizations.getOrganizationsPage(
+        query: query,
+        statusFilter: status,
+        limit: recentLimit,
+      );
+      return page.items;
     } catch (e, st) {
       throw mapBackendError(e, st);
     }

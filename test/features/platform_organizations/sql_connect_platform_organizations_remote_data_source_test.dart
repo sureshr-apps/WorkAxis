@@ -55,6 +55,22 @@ void main() {
     expect(o.branchCount, isNull);
   });
 
+  test('listPage maps the branch and member counts each row carries', () async {
+    gateway.respond('ListOrganizationsPaged', {
+      'organizations': [
+        {..._org(), 'branchCount': 3, 'memberCount': 11},
+      ],
+      'total': [
+        {'_count': 1},
+      ],
+    });
+
+    final o = (await source.listPage(limit: 25, offset: 0)).items.single;
+
+    expect(o.branchCount, 3);
+    expect(o.employeeCount, 11);
+  });
+
   test('listPage sends trimmed name and status filters', () async {
     gateway.respond('ListOrganizationsPaged', {
       'organizations': <dynamic>[],

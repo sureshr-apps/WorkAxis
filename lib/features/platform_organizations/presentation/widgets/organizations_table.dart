@@ -11,8 +11,11 @@ import 'package:workaxis/features/platform_organizations/domain/models/customer_
 
 const double _rowHorizontalPadding = AppSpacing.lg;
 
-/// Sliver table of customer organizations for wide layouts.
+/// Sliver table of customer organizations for wide layouts. Shared by the
+/// Organizations tab and the dashboard's recent organizations.
 ///
+/// Each row is a tap target that opens the organization. [onEdit] and
+/// [onDelete] add row actions and are only passed where management is allowed.
 /// Rows are built lazily. The footer reports how many rows are loaded and
 /// offers "Load more" when the server has further pages. Must be placed in a
 /// `CustomScrollView`.
@@ -21,7 +24,7 @@ class OrganizationsTable extends StatelessWidget {
     super.key,
     required this.organizations,
     required this.onSelect,
-    required this.onEdit,
+    this.onEdit,
     this.onDelete,
     required this.hasMore,
     required this.isLoadingMore,
@@ -30,7 +33,7 @@ class OrganizationsTable extends StatelessWidget {
 
   final List<CustomerOrganization> organizations;
   final ValueChanged<CustomerOrganization> onSelect;
-  final ValueChanged<CustomerOrganization> onEdit;
+  final ValueChanged<CustomerOrganization>? onEdit;
   final ValueChanged<CustomerOrganization>? onDelete;
   final bool hasMore;
   final bool isLoadingMore;
@@ -51,7 +54,9 @@ class OrganizationsTable extends StatelessWidget {
             itemBuilder: (context, index) => _OrganizationRow(
               organization: organizations[index],
               onSelect: () => onSelect(organizations[index]),
-              onEdit: () => onEdit(organizations[index]),
+              onEdit: onEdit == null
+                  ? null
+                  : () => onEdit!(organizations[index]),
               onDelete: onDelete != null
                   ? () => onDelete!(organizations[index])
                   : null,
@@ -108,13 +113,13 @@ class _OrganizationRow extends StatelessWidget {
   const _OrganizationRow({
     required this.organization,
     required this.onSelect,
-    required this.onEdit,
+    this.onEdit,
     this.onDelete,
   });
 
   final CustomerOrganization organization;
   final VoidCallback onSelect;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   @override
@@ -186,15 +191,16 @@ class _OrganizationRow extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    IconButton(
-                      tooltip: 'Edit ${org.name}',
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        size: 18,
-                        color: AppColors.secondary,
+                    if (onEdit != null)
+                      IconButton(
+                        tooltip: 'Edit ${org.name}',
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          size: 18,
+                          color: AppColors.secondary,
+                        ),
+                        onPressed: onEdit,
                       ),
-                      onPressed: onEdit,
-                    ),
                     if (onDelete != null)
                       IconButton(
                         tooltip: 'Delete ${org.name}',
@@ -205,16 +211,9 @@ class _OrganizationRow extends StatelessWidget {
                         ),
                         onPressed: onDelete,
                       ),
-                    Text(
-                      'Details',
-                      style: AppTypography.labelMedium.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
-                      ),
-                    ),
                     const Icon(
                       Icons.chevron_right_rounded,
-                      size: 16,
+                      size: 20,
                       color: AppColors.primary,
                     ),
                   ],

@@ -7,8 +7,8 @@ import 'package:workaxis/app/theme/app_typography.dart';
 ///
 /// The back target is a text link with a 48dp touch height, so it reads as
 /// navigation back to the list the form belongs to.
-class FormBreadcrumb extends StatelessWidget {
-  const FormBreadcrumb({
+class PageBreadcrumb extends StatelessWidget {
+  const PageBreadcrumb({
     super.key,
     required this.backLabel,
     required this.currentLabel,

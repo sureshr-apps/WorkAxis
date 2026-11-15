@@ -67,7 +67,9 @@ describe("organizations ops", () => {
     assert.deepEqual(res.total, [{ _count: 7 }]);
     assert.equal(res.organizations.length, 1);
     const list = db.calls[1];
-    assert.match(list.sql, /name ILIKE \$1/);
+    assert.match(list.sql, /\(name ILIKE \$1 OR code ILIKE \$1\)/);
+    assert.match(list.sql, /AS "branchCount"/);
+    assert.match(list.sql, /AS "memberCount"/);
     assert.deepEqual(list.params, ["%50\\%\\_off%", 5, 10]);
   });
 

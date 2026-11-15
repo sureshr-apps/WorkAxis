@@ -1,8 +1,9 @@
 import 'package:workaxis/features/platform_dashboard/data/mock_platform_dashboard_data_source.dart';
 import 'package:workaxis/features/platform_dashboard/domain/models/platform_dashboard_summary.dart';
-import 'package:workaxis/features/platform_dashboard/domain/models/recent_organization_summary.dart';
 import 'package:workaxis/features/platform_dashboard/domain/repositories/platform_dashboard_repository.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_data_source.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 
 /// Mock repository implementation for platform overview data.
 class MockPlatformDashboardRepository implements PlatformDashboardRepository {
@@ -28,10 +29,13 @@ class MockPlatformDashboardRepository implements PlatformDashboardRepository {
   }
 
   @override
-  Future<List<RecentOrganizationSummary>> getRecentOrganizations() async {
+  Future<List<CustomerOrganization>> getRecentOrganizations({
+    String? query,
+    OrganizationStatus? status,
+  }) async {
     if (delay > Duration.zero) {
       await Future<void>.delayed(delay);
     }
-    return dataSource.getRecentOrganizations();
+    return dataSource.getRecentOrganizations(query: query, status: status);
   }
 }

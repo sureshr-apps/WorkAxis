@@ -4,21 +4,22 @@ import 'package:workaxis/features/platform_organizations/domain/models/customer_
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_card_item.dart';
 
 /// Sliver of organization cards: one column, or [columns] equal-height
-/// columns on tablets. Rows are built lazily.
+/// columns on tablets. Rows are built lazily. [onEdit] and [onDelete] are
+/// optional and only passed where management is allowed.
 class OrganizationCardList extends StatelessWidget {
   const OrganizationCardList({
     super.key,
     required this.organizations,
     required this.columns,
     required this.onSelect,
-    required this.onEdit,
+    this.onEdit,
     this.onDelete,
   });
 
   final List<CustomerOrganization> organizations;
   final int columns;
   final ValueChanged<CustomerOrganization> onSelect;
-  final ValueChanged<CustomerOrganization> onEdit;
+  final ValueChanged<CustomerOrganization>? onEdit;
   final ValueChanged<CustomerOrganization>? onDelete;
 
   @override
@@ -31,10 +32,10 @@ class OrganizationCardList extends StatelessWidget {
         Widget cardAt(int index) => OrganizationCardItem(
           organization: organizations[index],
           onTap: () => onSelect(organizations[index]),
-          onEdit: () => onEdit(organizations[index]),
-          onDelete: onDelete != null
-              ? () => onDelete!(organizations[index])
-              : null,
+          onEdit: onEdit == null ? null : () => onEdit!(organizations[index]),
+          onDelete: onDelete == null
+              ? null
+              : () => onDelete!(organizations[index]),
         );
         if (columns == 1) return cardAt(row);
 

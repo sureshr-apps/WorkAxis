@@ -8,22 +8,40 @@ import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/empty_state.dart';
-import 'package:workaxis/features/platform_dashboard/domain/models/recent_organization_summary.dart';
-import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/recent_organizations/recent_organization_card.dart';
-import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/recent_organizations/recent_organization_rows.dart';
-import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/recent_organizations/recent_organizations_filter.dart';
-import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/recent_organizations/recent_organizations_filter_bar.dart';
+import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_card_list.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organizations_filter_bar.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organizations_table.dart';
 
-/// Structured panel of recent customer organizations with search, status
-/// filters and a table (desktop), cards (tablet) or rows (phone).
+/// Dashboard panel with the most recent customer organizations.
+///
+/// It shows the same table and cards as the Organizations tab. Search and the
+/// status filter are sent to the server, so they cover every organization, not
+/// just the newest rows. The counts on the filter chips are the platform totals.
 class RecentOrganizationsList extends StatefulWidget {
   const RecentOrganizationsList({
     super.key,
     required this.organizations,
+    required this.totalCount,
+    required this.activeCount,
+    required this.suspendedCount,
+    required this.onSearchChanged,
+    this.errorMessage,
     this.onViewAll,
   });
 
-  final List<RecentOrganizationSummary> organizations;
+  final List<CustomerOrganization> organizations;
+  final int totalCount;
+  final int activeCount;
+  final int suspendedCount;
+
+  /// Called with the current search text and status whenever either changes.
+  final void Function(String query, OrganizationStatus? status) onSearchChanged;
+
+  /// Failure from the last search; the previous rows stay visible.
+  final String? errorMessage;
   final VoidCallback? onViewAll;
 
   @override
@@ -34,24 +52,7 @@ class RecentOrganizationsList extends StatefulWidget {
 class _RecentOrganizationsListState extends State<RecentOrganizationsList> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
-  RecentOrganizationsFilter _filter = RecentOrganizationsFilter.all;
-
-  late List<RecentOrganizationSummary> _filtered;
-  late Map<RecentOrganizationsFilter, int> _counts;
-
-  @override
-  void initState() {
-    super.initState();
-    _recompute();
-  }
-
-  @override
-  void didUpdateWidget(covariant RecentOrganizationsList oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.organizations, widget.organizations)) {
-      _recompute();
-    }
-  }
+  OrganizationStatus? _status;
 
   @override
   void dispose() {
@@ -59,147 +60,155 @@ class _RecentOrganizationsListState extends State<RecentOrganizationsList> {
     super.dispose();
   }
 
-  void _recompute() {
-    _filtered = filterRecentOrganizations(
-      widget.organizations,
-      filter: _filter,
-      query: _query,
-    );
-    _counts = {
-      for (final f in RecentOrganizationsFilter.values)
-        f: widget.organizations.where(f.matches).length,
-    };
+  void _changeQuery(String value) {
+    setState(() => _query = value);
+    widget.onSearchChanged(_query, _status);
   }
 
-  void _update(VoidCallback change) => setState(() {
-    change();
-    _recompute();
-  });
+  void _changeStatus(OrganizationStatus? status) {
+    setState(() => _status = status);
+    widget.onSearchChanged(_query, _status);
+  }
+
+  void _openDetails(CustomerOrganization org) =>
+      context.push(AppRoutes.platformOrganizationDetailsPath(org.id));
 
   @override
   Widget build(BuildContext context) {
-    if (widget.organizations.isEmpty) {
-      return Container(
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
-          borderRadius: AppSpacing.roundedMd,
-          border: Border.all(color: AppColors.outlineSubtle),
-        ),
+    final hasFilter = _query.trim().isNotEmpty || _status != null;
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: AppSpacing.roundedMd,
+        border: Border.all(color: AppColors.outlineSubtle),
+        boxShadow: AppShadows.card,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.lg,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Recent Organizations',
+                  style: AppTypography.titleLarge.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                OrganizationsFilterBar(
+                  searchController: _searchController,
+                  onSearchChanged: _changeQuery,
+                  statusFilter: _status,
+                  onStatusFilterChanged: _changeStatus,
+                  totalCount: widget.totalCount,
+                  activeCount: widget.activeCount,
+                  suspendedCount: widget.suspendedCount,
+                ),
+              ],
+            ),
+          ),
+          if (widget.errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                0,
+                AppSpacing.xl,
+                AppSpacing.md,
+              ),
+              child: ErrorBanner(message: widget.errorMessage!),
+            ),
+          const Divider(color: AppColors.outlineSubtle, height: 1),
+          _RecentOrganizationResults(
+            organizations: widget.organizations,
+            onSelect: _openDetails,
+            emptyTitle: hasFilter
+                ? 'No matching organizations.'
+                : 'No organizations found.',
+            emptyIcon: hasFilter
+                ? Icons.search_off_outlined
+                : Icons.business_outlined,
+          ),
+          const Divider(color: AppColors.outlineSubtle, height: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.sm,
+            ),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: AppButton.outlined(
+                text: 'View All',
+                iconData: Icons.arrow_forward,
+                isFullWidth: false,
+                onPressed:
+                    widget.onViewAll ??
+                    () => context.go(AppRoutes.platformOrganizations),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The organizations as the Organizations tab lays them out: a table on wide
+/// layouts, one or two columns of cards otherwise.
+class _RecentOrganizationResults extends StatelessWidget {
+  const _RecentOrganizationResults({
+    required this.organizations,
+    required this.onSelect,
+    required this.emptyTitle,
+    required this.emptyIcon,
+  });
+
+  final List<CustomerOrganization> organizations;
+  final ValueChanged<CustomerOrganization> onSelect;
+  final String emptyTitle;
+  final IconData emptyIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    if (organizations.isEmpty) {
+      return Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
-        child: const EmptyState(
-          icon: Icons.business_outlined,
-          title: 'No organizations found.',
-        ),
+        child: EmptyState(icon: emptyIcon, title: emptyTitle),
       );
     }
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth >= AppBreakpoints.wideContent;
-        final isCompact = constraints.maxWidth < AppBreakpoints.mediumMin;
-        final isTablet = !isDesktop && !isCompact;
-
-        return Container(
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLowest,
-            borderRadius: AppSpacing.roundedMd,
-            border: Border.all(color: AppColors.outlineSubtle),
-            boxShadow: AppShadows.card,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl,
-                  vertical: AppSpacing.lg,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Recent Organizations',
-                      style: AppTypography.titleLarge.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    RecentOrganizationsFilterBar(
-                      isCompact: isCompact,
-                      searchController: _searchController,
-                      selected: _filter,
-                      counts: _counts,
-                      onSearchChanged: (v) => _update(() => _query = v),
-                      onSearchCleared: () => _update(() {
-                        _searchController.clear();
-                        _query = '';
-                      }),
-                      onFilterChanged: (f) => _update(() => _filter = f),
-                    ),
-                  ],
+        final width = constraints.maxWidth;
+        // Slivers need a scrollable parent; the dashboard scrolls the page, so
+        // this viewport only sizes itself to its content.
+        return CustomScrollView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          slivers: [
+            if (width >= AppBreakpoints.wideTable)
+              OrganizationsTable(
+                organizations: organizations,
+                onSelect: onSelect,
+                hasMore: false,
+                isLoadingMore: false,
+                onLoadMore: () {},
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                sliver: OrganizationCardList(
+                  organizations: organizations,
+                  columns: width >= AppBreakpoints.mediumMin ? 2 : 1,
+                  onSelect: onSelect,
                 ),
               ),
-              const Divider(color: AppColors.outlineSubtle, height: 1),
-              if (isDesktop) const RecentOrganizationsTableHeader(),
-              if (_filtered.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(AppSpacing.xl),
-                  child: EmptyState(
-                    icon: Icons.search_off_outlined,
-                    title: 'No matching organizations.',
-                  ),
-                )
-              else if (isTablet)
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Wrap(
-                    spacing: AppSpacing.md,
-                    runSpacing: AppSpacing.md,
-                    children: [
-                      for (final org in _filtered)
-                        SizedBox(
-                          width:
-                              (constraints.maxWidth -
-                                  AppSpacing.lg * 2 -
-                                  AppSpacing.md) /
-                              2,
-                          child: RecentOrganizationCard(org: org),
-                        ),
-                    ],
-                  ),
-                )
-              else
-                for (var i = 0; i < _filtered.length; i++)
-                  isDesktop
-                      ? RecentOrganizationDesktopRow(
-                          org: _filtered[i],
-                          isLast: i == _filtered.length - 1,
-                        )
-                      : RecentOrganizationCompactRow(
-                          org: _filtered[i],
-                          isLast: i == _filtered.length - 1,
-                        ),
-              const Divider(color: AppColors.outlineSubtle, height: 1),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl,
-                  vertical: AppSpacing.sm,
-                ),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: AppButton.outlined(
-                    text: 'View All',
-                    iconData: Icons.arrow_forward,
-                    isFullWidth: false,
-                    onPressed:
-                        widget.onViewAll ??
-                        () => context.go(AppRoutes.platformOrganizations),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          ],
         );
       },
     );

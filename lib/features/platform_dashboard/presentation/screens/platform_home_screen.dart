@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/controllers/platform_dashboard_controller.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/platform_kpi_carousel.dart';
@@ -25,7 +26,10 @@ class _PlatformHomeScreenState extends State<PlatformHomeScreen> {
       final controller = context.read<PlatformDashboardController>();
       // Reload on every entry so counts reflect organization or administrator
       // changes made elsewhere; loaded content stays visible while refreshing.
-      if (!controller.isLoading) controller.loadDashboard();
+      if (!controller.isLoading) {
+        controller.clearRecentSearch();
+        controller.loadDashboard();
+      }
     });
   }
 
@@ -60,6 +64,15 @@ class _PlatformHomeScreenState extends State<PlatformHomeScreen> {
                     onRetry: () => controller.loadDashboard(),
                   )
                 else if (controller.summary != null) ...[
+                  // A failed refresh keeps the last loaded content and says so.
+                  if (controller.hasError) ...[
+                    ErrorBanner(
+                      message:
+                          controller.errorMessage ??
+                          'Could not refresh the platform overview.',
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
                   // KPI Section with top border accents and progress telemetry
                   PlatformKpiCarousel(summary: controller.summary!),
                   const SizedBox(height: AppSpacing.xl),
@@ -67,6 +80,11 @@ class _PlatformHomeScreenState extends State<PlatformHomeScreen> {
                   // Recent Customer Organizations Master Table Panel
                   RecentOrganizationsList(
                     organizations: controller.recentOrganizations,
+                    totalCount: controller.summary!.totalOrganizations,
+                    activeCount: controller.summary!.activeOrganizations,
+                    suspendedCount: controller.summary!.suspendedOrganizations,
+                    errorMessage: controller.recentErrorMessage,
+                    onSearchChanged: controller.searchRecentOrganizations,
                   ),
                 ],
               ],

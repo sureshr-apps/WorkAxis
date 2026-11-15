@@ -19,6 +19,16 @@ import { optId, optText, pageVars, reqId } from "../vars";
 const LIST_COLUMNS = `id, name, code, category, country, status, currency, created_at AS "createdAt"`;
 
 /**
+ * Paged list rows also carry branch and member counts, so the Organizations
+ * list and the dashboard show the same numbers without a stats call per row.
+ * The subqueries reference the unaliased `organization` table that the paged
+ * query selects from.
+ */
+const PAGED_LIST_COLUMNS = `${LIST_COLUMNS},
+  (SELECT count(*)::int FROM branch b WHERE b.organization_id = organization.id) AS "branchCount",
+  (SELECT count(*)::int FROM organization_member m WHERE m.organization_id = organization.id) AS "memberCount"`;
+
+/**
  * Organization detail with its license plan. Columns are qualified because the
  * plan join also has id, name, description and status.
  */
@@ -64,10 +74,10 @@ export const organizationsOps: OperationRegistry = {
     requirePlatform(actor);
     const { limit, offset } = pageVars(vars);
     const q = new Query()
-      .contains("name", optText(vars, "nameContains", 200))
+      .containsAny(["name", "code"], optText(vars, "nameContains", 200))
       .eq("status", optString(vars, "status", 1, 50));
     const { rows, total } = await paged(db, {
-      columns: LIST_COLUMNS,
+      columns: PAGED_LIST_COLUMNS,
       from: "organization",
       q,
       orderBy: "created_at DESC, id DESC",

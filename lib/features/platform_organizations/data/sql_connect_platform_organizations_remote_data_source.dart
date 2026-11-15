@@ -48,9 +48,9 @@ class SqlConnectPlatformOrganizationsRemoteDataSource
             name: o.string('name'),
             code: o.string('code'),
             status: _status(o.string('status')),
-            // Counts are fetched on the detail page, not for every list row.
-            branchCount: null,
-            employeeCount: null,
+            // Counts come from the list query itself (see PAGED_LIST_COLUMNS).
+            branchCount: o.optInt('branchCount'),
+            employeeCount: o.optInt('memberCount'),
             createdAt: o.dateTime('createdAt'),
             category: _blankToNull(o.optString('category')),
           ),

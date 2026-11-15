@@ -12,7 +12,7 @@ import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
-import 'package:workaxis/core/widgets/form_breadcrumb.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/core/widgets/form_action_row.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
@@ -242,7 +242,7 @@ class _PlatformAdministratorFormScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  FormBreadcrumb(
+                  PageBreadcrumb(
                     backLabel: 'Platform Users',
                     currentLabel: widget.isEditing
                         ? 'Edit Platform Administrator'

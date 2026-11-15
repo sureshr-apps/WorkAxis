@@ -3,51 +3,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/features/platform_dashboard/data/mock_platform_dashboard_repository.dart';
 import 'package:workaxis/features/platform_dashboard/domain/models/platform_dashboard_summary.dart';
-import 'package:workaxis/features/platform_dashboard/domain/models/recent_organization_summary.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
+import 'package:workaxis/features/platform_organizations/domain/organization_filter.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/controllers/platform_dashboard_controller.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/screens/platform_home_screen.dart';
-import 'package:workaxis/features/platform_dashboard/presentation/screens/widgets/recent_organizations/recent_organizations_filter.dart';
 
-RecentOrganizationSummary _org(String name, String code, String status) =>
-    RecentOrganizationSummary(
-      id: code,
-      name: name,
-      code: code,
-      status: status,
-      branchCount: 1,
-      employeeCount: 2,
-      createdAt: DateTime(2026, 1, 15),
-    );
+CustomerOrganization _org(
+  String name,
+  String code,
+  OrganizationStatus status,
+) => CustomerOrganization(
+  id: code,
+  name: name,
+  code: code,
+  status: status,
+  branchCount: 1,
+  employeeCount: 2,
+  createdAt: DateTime(2026, 1, 15),
+);
 
 void main() {
-  group('filterRecentOrganizations', () {
+  group('filterOrganizations', () {
     final orgs = [
-      _org('Acme', 'ORG-A', 'active'),
-      _org('Beta Foods', 'ORG-B', 'suspended'),
-      _org('Gamma', 'ORG-G', 'active'),
+      _org('Acme', 'ORG-A', OrganizationStatus.active),
+      _org('Beta Foods', 'ORG-B', OrganizationStatus.suspended),
+      _org('Gamma', 'ORG-G', OrganizationStatus.active),
     ];
 
     test('filters by status and by name or code, case-insensitively', () {
       expect(
-        filterRecentOrganizations(
+        filterOrganizations(
           orgs,
-          filter: RecentOrganizationsFilter.suspended,
-          query: '',
+          status: OrganizationStatus.suspended,
         ).map((o) => o.name),
         ['Beta Foods'],
       );
+      expect(filterOrganizations(orgs, query: ' org-g ').map((o) => o.name), [
+        'Gamma',
+      ]);
       expect(
-        filterRecentOrganizations(
+        filterOrganizations(
           orgs,
-          filter: RecentOrganizationsFilter.all,
-          query: ' org-g ',
-        ).map((o) => o.name),
-        ['Gamma'],
-      );
-      expect(
-        filterRecentOrganizations(
-          orgs,
-          filter: RecentOrganizationsFilter.active,
+          status: OrganizationStatus.active,
           query: 'beta',
         ),
         isEmpty,
@@ -110,10 +108,12 @@ void main() {
       await pump(tester, const Size(1280, 900));
 
       await tester.enterText(find.byType(TextField), 'crestline');
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
       expect(find.text('Crestline Cold Storage'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField), 'zzz-no-match');
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
       expect(find.text('No matching organizations.'), findsOneWidget);
     });

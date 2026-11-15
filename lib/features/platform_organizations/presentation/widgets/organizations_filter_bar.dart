@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -6,6 +7,7 @@ import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
+import 'package:workaxis/features/platform_organizations/domain/organization_filter.dart';
 
 /// Search field and status filter chips for the organizations list.
 ///
@@ -37,6 +39,9 @@ class OrganizationsFilterBar extends StatelessWidget {
       controller: searchController,
       hintText: 'Search by name or code (e.g. Apex, ORG-APX)',
       onChanged: onSearchChanged,
+      inputFormatters: [
+        LengthLimitingTextInputFormatter(organizationSearchMaxLength),
+      ],
     );
     final chips = _FilterChips(
       current: statusFilter,

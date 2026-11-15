@@ -81,46 +81,4 @@ void main() {
     expect(stats.organizationsByStatus, {'active': 8, 'suspended': 2});
     expect(stats.platformAdminCount, 3);
   });
-
-  test('recent organizations fetch a page, then stats per row', () async {
-    gateway
-      ..respond('ListOrganizationsPaged', {
-        'organizations': [
-          {
-            'id': 'o1',
-            'name': 'Acme',
-            'code': 'ACME',
-            'category': null,
-            'country': 'India',
-            'status': 'active',
-            'currency': 'INR',
-            'createdAt': '2026-04-01T00:00:00Z',
-          },
-        ],
-        'total': [
-          {'_count': 1},
-        ],
-      })
-      ..respond('GetOrganizationStats', {
-        'branchCount': [
-          {'_count': 2},
-        ],
-        'memberCount': [
-          {'_count': 9},
-        ],
-      });
-
-    final recent = await DataConnectPlatformDashboardRemote(gateway: gateway)
-        .loadRecentOrganizations(limit: 5);
-
-    expect(gateway.singleVarsOf('ListOrganizationsPaged'), {
-      'limit': 5,
-      'offset': 0,
-    });
-    expect(gateway.singleVarsOf('GetOrganizationStats'), {'orgId': 'o1'});
-    final r = recent.single;
-    expect(r.branchCount, 2);
-    expect(r.employeeCount, 9);
-    expect(r.createdAt, DateTime.utc(2026, 4));
-  });
 }
