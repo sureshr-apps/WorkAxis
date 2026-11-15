@@ -3,8 +3,8 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/validation/contact_validators.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
+import 'package:workaxis/core/widgets/form_action_row.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_dialog_frame.dart';
 
@@ -120,16 +120,11 @@ class _OrganizationAdminPasswordDialogState
           ],
         ),
         actions: [
-          AppButton.outlined(
-            text: 'Cancel',
-            isFullWidth: false,
-            onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-          ),
-          AppButton.primary(
-            text: 'Reset password',
-            isFullWidth: false,
-            isLoading: _isSaving,
-            onPressed: _submit,
+          FormActionRow(
+            submitLabel: 'Reset password',
+            onCancel: () => Navigator.of(context).pop(),
+            onSubmit: _submit,
+            isBusy: _isSaving,
           ),
         ],
       ),

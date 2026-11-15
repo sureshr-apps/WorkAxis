@@ -8,12 +8,12 @@ import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
+import 'package:workaxis/core/widgets/form_breadcrumb.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/discard_changes_dialog.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/edit_organization_header.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_contact_fields.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_form_breadcrumb.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_form_error_banner.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_form_footer.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_form_state.dart';
@@ -220,7 +220,8 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    OrganizationFormBreadcrumb(
+                    FormBreadcrumb(
+                      backLabel: 'Organizations',
                       currentLabel: 'Edit Organization',
                       onBack: () => _handleCancel(org),
                     ),

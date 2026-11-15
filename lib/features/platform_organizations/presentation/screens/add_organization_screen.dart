@@ -7,9 +7,9 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
+import 'package:workaxis/core/widgets/form_breadcrumb.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_contact_fields.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_form_breadcrumb.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_form_error_banner.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_form_footer.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_form/organization_form_state.dart';
@@ -109,7 +109,8 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  OrganizationFormBreadcrumb(
+                  FormBreadcrumb(
+                    backLabel: 'Organizations',
                     currentLabel: 'Add Organization',
                     onBack: _goBack,
                   ),

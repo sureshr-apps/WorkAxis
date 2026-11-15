@@ -4,9 +4,9 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/validation/login_email.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/core/widgets/form_action_row.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
@@ -222,30 +222,21 @@ class _OrganizationMemberEditorDialogState
   @override
   Widget build(BuildContext context) {
     final title = _title;
-    final actions = [
-      AppButton.outlined(
-        text: 'Cancel',
-        onPressed: _busy ? null : () => Navigator.of(context).pop(false),
-      ),
-      AppButton.primary(
-        text: _editing ? 'Save changes' : 'Create account',
-        isLoading: _busy,
-        onPressed: _busy ? null : _save,
-      ),
-    ];
+    final footer = FormActionRow(
+      submitLabel: _editing ? 'Save changes' : 'Create account',
+      onCancel: () => Navigator.of(context).pop(false),
+      onSubmit: _busy ? null : _save,
+      isBusy: _busy,
+    );
 
     // No dismissal (back gesture, barrier tap, Escape) while a save is in flight.
     return PopScope(
       canPop: !_busy,
-      child: _buildDialog(context, title, actions),
+      child: _buildDialog(context, title, footer),
     );
   }
 
-  Widget _buildDialog(
-    BuildContext context,
-    String title,
-    List<Widget> actions,
-  ) {
+  Widget _buildDialog(BuildContext context, String title, Widget footer) {
     if (context.isCompact) {
       return Dialog.fullscreen(
         child: Scaffold(
@@ -254,13 +245,7 @@ class _OrganizationMemberEditorDialogState
           bottomNavigationBar: SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: Row(
-                children: [
-                  Expanded(child: actions.first),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: actions.last),
-                ],
-              ),
+              child: footer,
             ),
           ),
         ),
@@ -307,14 +292,7 @@ class _OrganizationMemberEditorDialogState
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  actions.first,
-                  const SizedBox(width: AppSpacing.sm),
-                  actions.last,
-                ],
-              ),
+              child: footer,
             ),
           ],
         ),

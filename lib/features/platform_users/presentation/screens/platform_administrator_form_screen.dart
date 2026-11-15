@@ -12,6 +12,8 @@ import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
+import 'package:workaxis/core/widgets/form_breadcrumb.dart';
+import 'package:workaxis/core/widgets/form_action_row.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 import 'package:workaxis/features/platform_users/presentation/controllers/platform_users_controller.dart';
@@ -186,6 +188,14 @@ class _PlatformAdministratorFormScreenState
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
 
+  void _goBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.platformUsers);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<PlatformUsersController>();
@@ -232,16 +242,14 @@ class _PlatformAdministratorFormScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: AppButton.outlined(
-                      text: 'Platform Users',
-                      iconData: Icons.arrow_back,
-                      isFullWidth: false,
-                      onPressed: () => context.go(AppRoutes.platformUsers),
-                    ),
+                  FormBreadcrumb(
+                    backLabel: 'Platform Users',
+                    currentLabel: widget.isEditing
+                        ? 'Edit Platform Administrator'
+                        : 'Add Platform Administrator',
+                    onBack: _goBack,
                   ),
-                  const SizedBox(height: AppSpacing.sm),
+                  const SizedBox(height: AppSpacing.md),
                   AppPageHeader(
                     eyebrow: 'Platform Access',
                     title: widget.isEditing
@@ -282,12 +290,13 @@ class _PlatformAdministratorFormScreenState
                     ),
                   ],
                   const SizedBox(height: AppSpacing.lg),
-                  _FormActions(
-                    isCompact: isCompact,
-                    isSaving: controller.isSaving,
-                    editing: widget.isEditing,
+                  FormActionRow(
+                    submitLabel: widget.isEditing
+                        ? 'Save Changes'
+                        : 'Create Administrator',
                     onCancel: () => context.go(AppRoutes.platformUsers),
-                    onSave: _save,
+                    onSubmit: _save,
+                    isBusy: controller.isSaving,
                   ),
                   const SizedBox(height: AppSpacing.xxl),
                 ],
@@ -296,55 +305,6 @@ class _PlatformAdministratorFormScreenState
           ),
         ),
       ),
-    );
-  }
-}
-
-class _FormActions extends StatelessWidget {
-  const _FormActions({
-    required this.isCompact,
-    required this.isSaving,
-    required this.editing,
-    required this.onCancel,
-    required this.onSave,
-  });
-
-  final bool isCompact;
-  final bool isSaving;
-  final bool editing;
-  final VoidCallback onCancel;
-  final VoidCallback onSave;
-
-  @override
-  Widget build(BuildContext context) {
-    final cancel = AppButton.outlined(
-      text: 'Cancel',
-      onPressed: isSaving ? null : onCancel,
-      isFullWidth: isCompact,
-    );
-    final save = AppButton.primary(
-      text: editing ? 'Save Changes' : 'Create Administrator',
-      onPressed: onSave,
-      isLoading: isSaving,
-      isFullWidth: isCompact,
-    );
-    if (isCompact) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          cancel,
-          const SizedBox(height: AppSpacing.sm),
-          save,
-        ],
-      );
-    }
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        cancel,
-        const SizedBox(width: AppSpacing.sm),
-        save,
-      ],
     );
   }
 }

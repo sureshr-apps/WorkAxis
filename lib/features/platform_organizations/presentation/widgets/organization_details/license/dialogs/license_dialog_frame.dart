@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/form_action_row.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/dialogs/license_form_fields.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_dialog_frame.dart';
 
@@ -46,16 +46,11 @@ class LicenseDialogFrame extends StatelessWidget {
         ],
       ),
       actions: [
-        AppButton.outlined(
-          text: 'Cancel',
-          isFullWidth: false,
-          onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-        ),
-        AppButton.primary(
-          text: submitLabel,
-          isFullWidth: false,
-          isLoading: isSaving,
-          onPressed: isSaving || !submitEnabled ? null : onSubmit,
+        FormActionRow(
+          submitLabel: submitLabel,
+          onCancel: () => Navigator.of(context).pop(),
+          onSubmit: isSaving || !submitEnabled ? null : onSubmit,
+          isBusy: isSaving,
         ),
       ],
     ),

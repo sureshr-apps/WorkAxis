@@ -3,9 +3,12 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/form_action_row.dart';
 
 /// Cancel / submit toolbar shared by the add and edit organization forms.
+///
+/// The actions stay on one row at every width; the encryption note sits to
+/// their left on wide layouts and beneath them on narrow ones.
 class OrganizationFormFooter extends StatelessWidget {
   const OrganizationFormFooter({
     super.key,
@@ -27,17 +30,12 @@ class OrganizationFormFooter extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isNarrow = constraints.maxWidth < AppBreakpoints.formSplit;
-        final cancel = AppButton.outlined(
-          text: 'Cancel',
-          isFullWidth: isNarrow,
-          onPressed: isLoading ? null : onCancel,
-        );
-        final submit = AppButton.primary(
-          text: submitLabel,
-          iconData: submitIcon,
-          isFullWidth: isNarrow,
-          isLoading: isLoading,
-          onPressed: onSubmit,
+        final actions = FormActionRow(
+          submitLabel: submitLabel,
+          submitIcon: submitIcon,
+          isBusy: isLoading,
+          onCancel: onCancel,
+          onSubmit: onSubmit,
         );
         const note = _EncryptionNote();
 
@@ -52,9 +50,7 @@ class OrganizationFormFooter extends StatelessWidget {
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    cancel,
-                    const SizedBox(height: AppSpacing.sm),
-                    submit,
+                    actions,
                     const SizedBox(height: AppSpacing.sm),
                     note,
                   ],
@@ -63,9 +59,7 @@ class OrganizationFormFooter extends StatelessWidget {
                   children: [
                     const Expanded(child: note),
                     const SizedBox(width: AppSpacing.md),
-                    cancel,
-                    const SizedBox(width: AppSpacing.md),
-                    submit,
+                    actions,
                   ],
                 ),
         );

@@ -3,14 +3,19 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 
-/// Breadcrumb "Organizations / current page" with a 48dp back target.
-class OrganizationFormBreadcrumb extends StatelessWidget {
-  const OrganizationFormBreadcrumb({
+/// Breadcrumb "← [backLabel] / [currentLabel]" shown above form screens.
+///
+/// The back target is a text link with a 48dp touch height, so it reads as
+/// navigation back to the list the form belongs to.
+class FormBreadcrumb extends StatelessWidget {
+  const FormBreadcrumb({
     super.key,
+    required this.backLabel,
     required this.currentLabel,
     required this.onBack,
   });
 
+  final String backLabel;
   final String currentLabel;
   final VoidCallback onBack;
 
@@ -20,7 +25,7 @@ class OrganizationFormBreadcrumb extends StatelessWidget {
       children: [
         Semantics(
           button: true,
-          label: 'Back to Organizations',
+          label: 'Back to $backLabel',
           child: InkWell(
             onTap: onBack,
             borderRadius: AppSpacing.roundedXs,
@@ -38,7 +43,7 @@ class OrganizationFormBreadcrumb extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   Text(
-                    'Organizations',
+                    backLabel,
                     style: AppTypography.bodySmall.copyWith(
                       fontWeight: FontWeight.w500,
                       color: AppColors.primary,

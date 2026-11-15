@@ -290,7 +290,7 @@ void main() {
 
     await tester.tap(find.text('Add Platform Administrator'));
     await tester.pumpAndSettle();
-    expect(find.text('Add Platform Administrator'), findsOneWidget);
+    expect(find.text('Add Platform Administrator'), findsWidgets);
 
     final formFields = find.byType(TextField);
     await tester.enterText(formFields.at(0), 'Jordan Kim');
@@ -309,7 +309,7 @@ void main() {
 
     await tester.tap(find.text('Edit Administrator'));
     await tester.pumpAndSettle();
-    expect(find.text('Edit Platform Administrator'), findsOneWidget);
+    expect(find.text('Edit Platform Administrator'), findsWidgets);
     await tester.enterText(find.byType(TextField).at(0), 'Jordan K. Kim');
     await tester.ensureVisible(find.text('Save Changes'));
     await tester.tap(find.text('Save Changes'));

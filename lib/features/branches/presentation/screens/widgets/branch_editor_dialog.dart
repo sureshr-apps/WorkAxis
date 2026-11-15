@@ -5,9 +5,9 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/errors/validation_exception.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/core/widgets/form_action_row.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/branches/domain/branch_geofence_validator.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
@@ -191,16 +191,11 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final title = _editing ? 'Edit branch' : 'Add branch';
-    final cancel = AppButton.outlined(
-      text: 'Cancel',
-      isFullWidth: context.isCompact,
-      onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-    );
-    final save = AppButton.primary(
-      text: _editing ? 'Save changes' : 'Create branch',
-      isFullWidth: context.isCompact,
-      isLoading: _saving || widget.isSaving,
-      onPressed: _save,
+    final footer = FormActionRow(
+      submitLabel: _editing ? 'Save changes' : 'Create branch',
+      onCancel: () => Navigator.of(context).pop(false),
+      onSubmit: _save,
+      isBusy: _saving || widget.isSaving,
     );
 
     if (context.isCompact) {
@@ -216,13 +211,7 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
           bottomNavigationBar: SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: Row(
-                children: [
-                  Expanded(child: cancel),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: save),
-                ],
-              ),
+              child: footer,
             ),
           ),
         ),
@@ -265,14 +254,7 @@ class _BranchEditorDialogState extends State<BranchEditorDialog> {
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  cancel,
-                  const SizedBox(width: AppSpacing.sm),
-                  save,
-                ],
-              ),
+              child: footer,
             ),
           ],
         ),

@@ -54,4 +54,8 @@ abstract final class AppBreakpoints {
 
   /// Content width at which branch snapshot rows show their progress bar.
   static const double snapshotBarMin = 420.0;
+
+  /// Width below which a form's Cancel and submit buttons share one row (the
+  /// submit button takes two thirds). Wider rows keep both at natural width.
+  static const double formActionsShareWidth = 480.0;
 }

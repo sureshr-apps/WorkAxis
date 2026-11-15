@@ -9,11 +9,11 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
+import 'package:workaxis/core/widgets/form_action_row.dart';
 import 'package:workaxis/features/plans/domain/license_plan_policy.dart';
 import 'package:workaxis/features/plans/domain/models/license_plan.dart';
 import 'package:workaxis/features/plans/domain/models/license_plan_draft.dart';
@@ -304,24 +304,12 @@ class _LicensePlanFormState extends State<_LicensePlanForm> {
           ],
           ...fields,
           const SizedBox(height: AppSpacing.xl),
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              AppButton.outlined(
-                text: 'Cancel',
-                isFullWidth: false,
-                onPressed: isBusy ? null : widget.onCancel,
-              ),
-              AppButton.primary(
-                text: _isEditing ? 'Save Changes' : 'Create Plan',
-                iconData: _isEditing ? Icons.check : Icons.add_circle_outline,
-                isFullWidth: false,
-                isLoading: isBusy,
-                onPressed: isBusy ? null : _submit,
-              ),
-            ],
+          FormActionRow(
+            submitLabel: _isEditing ? 'Save Changes' : 'Create Plan',
+            submitIcon: _isEditing ? Icons.check : Icons.add_circle_outline,
+            onCancel: widget.onCancel,
+            onSubmit: isBusy ? null : _submit,
+            isBusy: isBusy,
           ),
         ],
       ),
