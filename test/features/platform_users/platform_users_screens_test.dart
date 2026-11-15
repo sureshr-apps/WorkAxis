@@ -137,6 +137,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('on a phone, reset password and suspend access share one row', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await controller.loadAdministrators();
+    final administrator = controller.administrators.firstWhere(
+      (a) => a.status == AccountStatus.active,
+    );
+
+    await pump(
+      tester,
+      PlatformAdministratorDetailsScreen(administratorId: administrator.id),
+    );
+    await tester.pumpAndSettle();
+
+    final reset = tester.getRect(
+      find.widgetWithText(OutlinedButton, 'Reset password'),
+    );
+    final suspend = tester.getRect(
+      find.widgetWithText(OutlinedButton, 'Suspend access'),
+    );
+    expect(reset.top, closeTo(suspend.top, 1));
+    expect(reset.right, lessThan(suspend.left));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('reset password validates, calls the controller and confirms', (
     tester,
   ) async {
