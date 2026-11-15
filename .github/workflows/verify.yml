@@ -1,6 +1,6 @@
 # Reusable quality gate: static analysis and tests for the app and the functions.
 # Called by ci.yml (pull requests) and deploy.yml (pushes to main) so both run
-# exactly the same checks.
+# exactly the same checks. The Flutter tests run as two parallel shards.
 name: Verify
 
 on:
@@ -13,10 +13,10 @@ env:
   FLUTTER_VERSION: "3.47.0"
 
 jobs:
-  flutter:
-    name: Flutter analyze and test
+  flutter-analyze:
+    name: Format and analyze
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -34,8 +34,33 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+  flutter-test:
+    name: Test (shard ${{ matrix.shard }} of 2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # Test files are sorted by size and dealt alternately to the two shards,
+      # so both shards finish at about the same time.
       - name: Test
-        run: flutter test
+        run: |
+          files=$(find test -name '*_test.dart' -printf '%s %p\n' \
+            | sort -rn \
+            | awk -v shard="${{ matrix.shard }}" 'NR % 2 == shard { print $2 }')
+          flutter test $files
 
   functions:
     name: Functions build and test

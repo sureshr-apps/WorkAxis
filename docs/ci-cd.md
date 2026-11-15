@@ -10,7 +10,7 @@ except the Cloud SQL connection used for migrations (see "Database access").
 |---|---|---|
 | `verify.yml` | called by the two below | `dart format` check, `flutter analyze`, `flutter test`; functions `npm test` (tsc + node tests); Firestore rules tests in the emulator |
 | `ci.yml` | pull requests and pushes to any branch except `main` | runs `verify.yml` only. No secrets, nothing deployed |
-| `deploy.yml` | push to `main`, or run manually | verify, then database migrations, then functions + Firestore rules/indexes + Storage rules. The web build and Hosting deploy run in parallel with the backend. In parallel with the backend, a signed Android APK and a signed AAB are built as two parallel jobs (`android.yml`) and uploaded as workflow artifacts |
+| `deploy.yml` | push to `main`, or run manually | `changes` detects what the push touched. `verify` always runs (analysis, two test shards, functions, rules). Then only what changed deploys: database migrations (`functions/db`), functions + Firestore/Storage rules and indexes (`functions/`, rules, indexes), web build and Hosting (`lib/`, `web/`, `assets/`, `pubspec`, `firebase.json`). The signed Android APK and App Bundle (`app` changes) are built as two parallel jobs from `android.yml` and do not wait for `verify`. A manual run deploys everything |
 
 Deployments are serialised (`concurrency: deploy-main`) and are never cancelled
 midway. The Android `versionCode` is `100 + the workflow run number`, so each build

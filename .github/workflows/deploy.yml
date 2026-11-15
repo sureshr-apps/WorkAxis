@@ -1,7 +1,10 @@
-# Runs on every push to main (and on demand):
-#   verify -> database migrations -> backend deploy
-#   verify -> web build and deploy (in parallel with the backend)
-#   verify -> signed Android builds (APK and App Bundle, in parallel)
+# Runs on every push to main (and on demand). Only the parts a push touches run:
+#   changes -> verify (always)
+#   verify + changes -> database migrations (functions/db changed)
+#   verify + changes + database -> backend deploy (functions or rules changed)
+#   verify + changes -> web build and deploy (app code or hosting config changed)
+#   changes -> signed Android APK and App Bundle (app code changed)
+# A manual run (workflow_dispatch) deploys everything.
 #
 # Google Cloud access is keyless: the GitHub OIDC token is exchanged through
 # Workload Identity Federation for the workaxis-deployer service account, and
@@ -27,12 +30,47 @@ env:
   FIREBASE_PROJECT: workaxis-app
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      database: ${{ steps.filter.outputs.database }}
+      backend: ${{ steps.filter.outputs.backend }}
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Compares the commits in this push. Anything else (a manual run, or a
+      # push whose previous commit is unknown) counts as changed everywhere.
+      - id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            changed=$(git diff --name-only "$BEFORE" "$GITHUB_SHA")
+          else
+            changed=$(git ls-files)
+          fi
+          matches() {
+            if printf '%s\n' "$changed" | grep -Eq "$1"; then echo true; else echo false; fi
+          }
+          {
+            echo "database=$(matches '^functions/db/')"
+            echo "backend=$(matches '^(functions/|firebase\.json$|firestore\.rules$|firestore\.indexes\.json$|storage\.rules$|\.firebaserc$)')"
+            echo "app=$(matches '^(lib/|web/|android/|assets/|pubspec\.(yaml|lock)$|firebase\.json$)')"
+          } >> "$GITHUB_OUTPUT"
+
   verify:
     uses: ./.github/workflows/verify.yml
 
   database:
     name: Apply database migrations
-    needs: verify
+    needs: [verify, changes]
+    if: ${{ needs.changes.outputs.database == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -70,7 +108,9 @@ jobs:
 
   backend:
     name: Deploy functions, rules and indexes
-    needs: [verify, database]
+    needs: [verify, changes, database]
+    # database is skipped when no migration changed; that must not block the deploy.
+    if: ${{ always() && needs.verify.result == 'success' && needs.changes.outputs.backend == 'true' && (needs.database.result == 'success' || needs.database.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -103,7 +143,8 @@ jobs:
 
   web:
     name: Build and deploy web
-    needs: verify
+    needs: [verify, changes]
+    if: ${{ always() && needs.verify.result == 'success' && needs.changes.outputs.app == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -136,7 +177,10 @@ jobs:
 
   android:
     name: Android
-    needs: verify
+    # Not gated on verify, so the builds run alongside the checks. If verify
+    # fails, the deploy jobs do not run; check verify before installing an APK.
+    needs: [changes]
+    if: ${{ needs.changes.outputs.app == 'true' }}
     strategy:
       fail-fast: false
       matrix:
