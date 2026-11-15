@@ -3,6 +3,7 @@ import { afterEach, it } from "node:test";
 import { setDbForTests } from "../db";
 import { DomainError } from "../errors";
 import { FakeDb } from "./fakeDb";
+import { capacityDb } from "./licenseFixtures";
 import {
   deleteMemberByAuthUid,
   getMemberByAuthUid,
@@ -30,6 +31,11 @@ it("getMemberByAuthUid maps the row and splits active branches", async () => {
         employeeCode: "EMP-10001",
         organizationId: "o1",
         organizationStatus: "active",
+        licenseUsable: true,
+        licenseStartDate: "2026-01-01",
+        licenseExpiryDate: "2027-12-31",
+        licensePlanStatus: "active",
+        licenseToday: "2026-11-15",
       },
     ])
     .when("FROM user_branch_assignment a", [
@@ -50,6 +56,11 @@ it("getMemberByAuthUid maps the row and splits active branches", async () => {
     employeeCode: "EMP-10001",
     organizationId: "o1",
     organizationStatus: "active",
+    licenseUsable: true,
+    licenseStartDate: "2026-01-01",
+    licenseExpiryDate: "2027-12-31",
+    licensePlanStatus: "active",
+    licenseToday: "2026-11-15",
     branchIds: ["b1", "b2"],
     activeBranchIds: ["b1"],
   });
@@ -80,7 +91,7 @@ const employeeCodeViolation = () =>
 
 it("insertMember skips codes already taken manually", async () => {
   let seq = 10000;
-  const db = new FakeDb()
+  const db = capacityDb()
     .whenCall((c) =>
       c.sql.includes("SET employee_code_seq") ? [{ employee_code_seq: ++seq }] : undefined,
     )
@@ -92,17 +103,18 @@ it("insertMember skips codes already taken manually", async () => {
 });
 
 it("insertMember stores a supplied employee code without allocating", async () => {
-  const db = new FakeDb();
+  const db = capacityDb();
   setDbForTests(db);
   assert.equal(await insertMember(newMember({ employeeCode: " HR-7 " }), []), "HR-7");
-  assert.equal(db.calls.length, 1);
-  assert.doesNotMatch(db.calls[0].sql, /employee_code_seq/);
-  assert.equal(db.calls[0].params.at(-1), "HR-7");
+  const insert = db.calls.find((c) => c.sql.startsWith("INSERT INTO organization_member"));
+  assert.ok(insert);
+  assert.equal(db.calls.some((c) => /employee_code_seq/.test(c.sql)), false);
+  assert.equal(insert.params.at(-1), "HR-7");
 });
 
 it("insertMember maps an employee-code unique violation to a conflict", async () => {
   setDbForTests(
-    new FakeDb().whenCall((c) => {
+    capacityDb().whenCall((c) => {
       if (c.sql.startsWith("INSERT INTO organization_member")) throw employeeCodeViolation();
       return undefined;
     }),
@@ -115,7 +127,7 @@ it("insertMember maps an employee-code unique violation to a conflict", async ()
 
 it("insertMember leaves other unique violations untouched", async () => {
   setDbForTests(
-    new FakeDb().whenCall((c) => {
+    capacityDb().whenCall((c) => {
       if (c.sql.startsWith("INSERT INTO organization_member")) {
         throw Object.assign(new Error("duplicate key"), {
           code: "23505",
@@ -152,7 +164,7 @@ it("updateMember writes employeeCode and maps its unique violation", async () =>
 });
 
 it("insertMember allocates the employee code in the same transaction as the insert", async () => {
-  const db = new FakeDb().when("SET employee_code_seq", [{ employee_code_seq: 10007 }]);
+  const db = capacityDb().when("SET employee_code_seq", [{ employee_code_seq: 10007 }]);
   setDbForTests(db);
   const code = await insertMember(
     {
@@ -168,18 +180,21 @@ it("insertMember allocates the employee code in the same transaction as the inse
   );
   assert.equal(code, "EMP-10007");
   assert.equal(db.transactions, 1);
-  assert.equal(db.calls.length, 4);
-  assert.match(
-    norm(db.calls[0].sql),
-    /^UPDATE organization SET employee_code_seq = employee_code_seq \+ 1 WHERE id = \$1 RETURNING/,
-  );
-  assert.deepEqual(db.calls[0].params, ["o1"]);
-  assert.match(db.calls[1].sql, /SELECT 1 FROM organization_member/);
+  assert.equal(db.calls.length, 6);
+  // The license row is locked and the active count read before any allocation or insert.
+  assert.match(db.calls[0].sql, /FOR UPDATE OF ol/);
+  assert.match(db.calls[1].sql, /FROM organization_member/);
   assert.match(
     norm(db.calls[2].sql),
+    /^UPDATE organization SET employee_code_seq = employee_code_seq \+ 1 WHERE id = \$1 RETURNING/,
+  );
+  assert.deepEqual(db.calls[2].params, ["o1"]);
+  assert.match(db.calls[3].sql, /SELECT 1 FROM organization_member/);
+  assert.match(
+    norm(db.calls[4].sql),
     /^INSERT INTO organization_member \(id, auth_uid, organization_id, full_name, username, email, role, employee_code, status\)/,
   );
-  assert.deepEqual(db.calls[2].params, [
+  assert.deepEqual(db.calls[4].params, [
     "m1",
     "u1",
     "o1",
@@ -189,8 +204,8 @@ it("insertMember allocates the employee code in the same transaction as the inse
     "branchManager",
     "EMP-10007",
   ]);
-  assert.match(db.calls[3].sql, /INSERT INTO user_branch_assignment/);
-  assert.deepEqual(db.calls[3].params, ["m1", ["b1", "b2"]]);
+  assert.match(db.calls[5].sql, /INSERT INTO user_branch_assignment/);
+  assert.deepEqual(db.calls[5].params, ["m1", ["b1", "b2"]]);
 });
 
 it("insertMember without branches skips the assignment insert", async () => {

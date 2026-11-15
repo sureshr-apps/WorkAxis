@@ -2,21 +2,23 @@ import 'package:workaxis/core/backend/data_gateway.dart';
 import 'package:workaxis/core/backend/json_reader.dart';
 import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/core/validation/login_email.dart';
+import 'package:workaxis/features/platform_organizations/data/organization_license_mapper.dart';
 import 'package:workaxis/features/platform_organizations/data/platform_organizations_remote_data_source.dart';
-import 'package:workaxis/features/platform_organizations/domain/license_event_parser.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/create_organization_request.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/license_history_event.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_license.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_license_requests.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/repositories/platform_organizations_repository.dart';
+import 'package:workaxis/features/plans/domain/models/license_plan.dart';
 
 /// [PlatformOrganizationsRemoteDataSource] backed by the data gateway
 /// (`ListOrganizationsPaged`, `GetPlatformStats`, `GetOrganizationById`,
-/// `GetOrganizationStats`, `ListMembersByOrgPaged`,
-/// `GetCommercialAgreementByOrg`, `ListLicenseEventsByOrg`,
-/// `CreateOrganization`, `UpdateOrganization`).
+/// `GetOrganizationStats`, `ListMembersByOrgPaged`, `CreateOrganization`,
+/// `UpdateOrganization` and the license operations).
 class SqlConnectPlatformOrganizationsRemoteDataSource
     implements PlatformOrganizationsRemoteDataSource {
   SqlConnectPlatformOrganizationsRemoteDataSource({required this._gateway});
@@ -116,32 +118,85 @@ class SqlConnectPlatformOrganizationsRemoteDataSource
   }
 
   @override
-  Future<OrganizationLicenseDetails?> getLicense(String organizationId) async {
-    final (agreements, events, org) = await (
-      _gateway.call('GetCommercialAgreementByOrg', {'orgId': organizationId}),
-      _gateway.call('ListLicenseEventsByOrg', {'orgId': organizationId}),
-      _gateway.call('GetOrganizationById', {'id': organizationId}),
-    ).wait;
-    final agreement = agreements.objects('commercialAgreements').firstOrNull;
-    if (agreement == null) return null;
+  Future<OrganizationLicense?> getLicense(String organizationId) async {
+    final data = await _gateway.call(
+      'GetOrganizationLicense',
+      OrganizationLicenseMapper.organizationVars(organizationId),
+    );
+    final license = data.optObject('organizationLicense');
+    return license == null ? null : OrganizationLicenseMapper.license(license);
+  }
 
-    final history = [
-      for (final e in events.objects('licenseEvents')) _historyEntry(e),
+  @override
+  Future<List<LicenseHistoryEvent>> getLicenseHistory(
+    String organizationId,
+  ) async {
+    final data = await _gateway.call(
+      'GetOrganizationLicenseHistory',
+      OrganizationLicenseMapper.organizationVars(organizationId),
+    );
+    return [
+      for (final event in data.objects('licenseHistory'))
+        OrganizationLicenseMapper.historyEvent(event),
     ];
-    return OrganizationLicenseDetails(
-      planName: agreement.string('planName'),
-      status: agreement.string('status'),
-      level: LicenseEventParser.level(agreement.string('planTier')) ?? 1,
-      agreementId: agreement.string('agreementReference'),
-      agreementStart: agreement.dateOnly('startDate'),
-      agreementExpiry: agreement.dateOnly('expiryDate'),
-      maximumStores: agreement.integer('maxStores'),
-      maximumUsers: agreement.integer('maxUsers'),
-      negotiatedPrice: agreement.number('negotiatedPrice'),
-      annualMaintenancePrice: agreement.number('annualMaintenancePrice'),
-      currencyCode:
-          org.optObject('organization')?.optString('currency') ?? 'INR',
-      history: history,
+  }
+
+  @override
+  Future<List<LicensePlan>> listActiveLicensePlans() async {
+    final data = await _gateway.call(
+      'ListLicensePlans',
+      OrganizationLicenseMapper.listLicensePlansVars(status: PlanStatus.active),
+    );
+    return [
+      for (final plan in data.objects('licensePlans'))
+        OrganizationLicenseMapper.licensePlan(plan),
+    ];
+  }
+
+  @override
+  Future<void> assignLicense(
+    String organizationId,
+    AssignLicenseRequest request,
+  ) async {
+    await _gateway.call(
+      'AssignOrganizationLicense',
+      OrganizationLicenseMapper.assignVars(organizationId, request),
+    );
+  }
+
+  @override
+  Future<void> changeLicensePlan(
+    String organizationId,
+    ChangeLicensePlanRequest request,
+  ) async {
+    await _gateway.call(
+      'ChangeOrganizationLicensePlan',
+      OrganizationLicenseMapper.changePlanVars(organizationId, request),
+    );
+  }
+
+  @override
+  Future<void> modifyCommercialTerms(
+    String organizationId,
+    ModifyCommercialTermsRequest request,
+  ) async {
+    await _gateway.call(
+      'ModifyOrganizationCommercialTerms',
+      OrganizationLicenseMapper.modifyCommercialTermsVars(
+        organizationId,
+        request,
+      ),
+    );
+  }
+
+  @override
+  Future<void> renewLicense(
+    String organizationId,
+    RenewLicenseRequest request,
+  ) async {
+    await _gateway.call(
+      'RenewOrganizationLicense',
+      OrganizationLicenseMapper.renewVars(organizationId, request),
     );
   }
 
@@ -186,23 +241,6 @@ class SqlConnectPlatformOrganizationsRemoteDataSource
       'contactPhone': (organization.contactPhone ?? '').trim(),
       'address': (organization.address ?? '').trim(),
     });
-  }
-
-  LicenseHistoryEntry _historyEntry(Map<String, dynamic> e) {
-    final occurredAt = e.dateTime('createdAt');
-    final period = LicenseEventParser.period(e.string('validityPeriod'));
-    return LicenseHistoryEntry(
-      event: e.string('eventType'),
-      occurredAt: occurredAt,
-      planName: e.string('planName'),
-      level: LicenseEventParser.level(e.string('planTier')) ?? 1,
-      periodStart: period?.start ?? occurredAt,
-      periodEnd: period?.end ?? occurredAt,
-      stores: e.integer('storesCount'),
-      users: e.integer('usersCount'),
-      negotiatedPrice: e.number('oneTimePrice'),
-      annualMaintenancePrice: e.number('annualMaintenancePrice'),
-    );
   }
 
   bool _has(String? value) => value != null && value.trim().isNotEmpty;

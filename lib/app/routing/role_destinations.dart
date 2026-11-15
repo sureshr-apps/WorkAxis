@@ -21,6 +21,12 @@ abstract final class RoleDestinations {
       selectedIcon: Icons.business,
       route: AppRoutes.platformOrganizations,
     ),
+    const AppNavDestination(
+      label: 'Plans',
+      icon: Icons.layers_outlined,
+      selectedIcon: Icons.layers,
+      route: AppRoutes.platformPlans,
+    ),
     if (isOwner)
       const AppNavDestination(
         label: 'Platform Users',

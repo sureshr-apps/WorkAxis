@@ -8,7 +8,6 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/empty_state.dart';
-import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
@@ -114,7 +113,10 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
                 const SizedBox(height: AppSpacing.md),
                 OrganizationDetailsHeader(
                   organization: organization,
-                  planName: controller.selectedLicenseDetails?.planName,
+                  planName: controller.license
+                      .licenseFor(organization.id)
+                      ?.plan
+                      .name,
                   isActionLoading: controller.isActionLoading,
                   onEdit: () {
                     controller.clearActionError();
@@ -153,8 +155,10 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
       case OrganizationDetailsTab.overview:
         return OrganizationOverviewTab(
           organization: organization,
-          license: controller.selectedLicenseDetails,
           onUpload: _showUnavailable,
+          onDelete: controller.isActionLoading
+              ? null
+              : () => _confirmDelete(organization, controller),
         );
       case OrganizationDetailsTab.administrators:
         final flow = OrganizationAdminFlow(
@@ -172,29 +176,9 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
               flow.dispatch(context, admin, action),
         );
       case OrganizationDetailsTab.license:
-        final license = controller.selectedLicenseDetails;
-        if (controller.isDetailLoading) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(AppSpacing.xl),
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-        if (controller.detailErrorMessage != null) {
-          return ErrorBanner(
-            message: controller.detailErrorMessage!,
-            onRetry: () => controller.loadOrganizationDetails(organization.id),
-          );
-        }
-        if (license == null) {
-          return OrganizationLicenseEmptyState(
-            onAssignLicense: () => _showUnavailable('Assign License'),
-          );
-        }
         return OrganizationLicenseTab(
-          license: license,
-          onAction: _showUnavailable,
+          organization: organization,
+          controller: controller.license,
         );
     }
   }

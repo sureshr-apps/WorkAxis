@@ -4,8 +4,8 @@ import 'package:workaxis/features/platform_organizations/domain/models/customer_
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
+import 'package:workaxis/features/platform_organizations/domain/repositories/organization_license_repository.dart';
 
 /// Organization counts per status (platform-wide, unaffected by list filters).
 class OrganizationStatusCounts {
@@ -20,7 +20,10 @@ class OrganizationStatusCounts {
 }
 
 /// Contract for managing platform customer organizations.
-abstract interface class PlatformOrganizationsRepository {
+/// Also covers each organization's license ([OrganizationLicenseRepository]),
+/// so one repository instance serves both the details page and its license tab.
+abstract interface class PlatformOrganizationsRepository
+    implements OrganizationLicenseRepository {
   /// One page of organizations filtered on the server by name and status.
   Future<PageResult<CustomerOrganization>> getOrganizationsPage({
     String? query,
@@ -35,11 +38,6 @@ abstract interface class PlatformOrganizationsRepository {
   /// Retrieves a single organization with its branch/member counts and
   /// administrators.
   Future<CustomerOrganization?> getOrganizationById(String id);
-
-  /// Retrieves the license and commercial terms for one organization.
-  Future<OrganizationLicenseDetails?> getOrganizationLicenseDetails(
-    String organizationId,
-  );
 
   /// Creates a customer organization; returns what the server saved.
   Future<CustomerOrganization> createOrganization(

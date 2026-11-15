@@ -136,8 +136,11 @@ void main() {
         expect(find.byType(OrganizationCardItem), findsWidgets);
         expect(find.byType(OrganizationsTable), findsNothing);
 
-        // Details > link present on cards
-        expect(find.text('Details'), findsWidgets);
+        // Phones: a chevron replaces the Edit / Delete / Details actions.
+        expect(find.byIcon(Icons.chevron_right_rounded), findsWidgets);
+        expect(find.text('Details'), findsNothing);
+        expect(find.byIcon(Icons.edit_outlined), findsNothing);
+        expect(find.byIcon(Icons.delete_outline), findsNothing);
       },
     );
 

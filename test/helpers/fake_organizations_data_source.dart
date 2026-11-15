@@ -5,7 +5,11 @@ import 'package:workaxis/features/platform_organizations/domain/models/create_or
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
+import 'package:workaxis/features/platform_organizations/data/mock_organization_license_store.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/license_history_event.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_license.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_license_requests.dart';
+import 'package:workaxis/features/plans/domain/models/license_plan.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/repositories/platform_organizations_repository.dart';
 
@@ -23,12 +27,13 @@ class FakeOrganizationsDataSource
           for (final a in org.admins) a.copyWith(authUid: 'uid-${a.id}'),
         ],
       );
-      _licenses[org.id] = seed.getLicenseDetails(org.id);
     }
   }
 
   final Map<String, CustomerOrganization> _orgs = {};
-  final Map<String, OrganizationLicenseDetails?> _licenses = {};
+
+  /// Seeded with Acme's Plus license, like the mock data source.
+  final MockOrganizationLicenseStore _licenses = MockOrganizationLicenseStore();
   int _next = 1;
   final List<CustomerOrganization> updates = [];
 
@@ -74,8 +79,41 @@ class FakeOrganizationsDataSource
   Future<CustomerOrganization?> getById(String id) async => _orgs[id];
 
   @override
-  Future<OrganizationLicenseDetails?> getLicense(String organizationId) async =>
-      _licenses[organizationId];
+  Future<OrganizationLicense?> getLicense(String organizationId) async =>
+      _licenses.getLicense(organizationId);
+
+  @override
+  Future<List<LicenseHistoryEvent>> getLicenseHistory(
+    String organizationId,
+  ) async => _licenses.getHistory(organizationId);
+
+  @override
+  Future<List<LicensePlan>> listActiveLicensePlans() async =>
+      _licenses.activePlans();
+
+  @override
+  Future<void> assignLicense(
+    String organizationId,
+    AssignLicenseRequest request,
+  ) async => _licenses.assign(organizationId, request);
+
+  @override
+  Future<void> changeLicensePlan(
+    String organizationId,
+    ChangeLicensePlanRequest request,
+  ) async => _licenses.changePlan(organizationId, request);
+
+  @override
+  Future<void> modifyCommercialTerms(
+    String organizationId,
+    ModifyCommercialTermsRequest request,
+  ) async => _licenses.modifyCommercialTerms(organizationId, request);
+
+  @override
+  Future<void> renewLicense(
+    String organizationId,
+    RenewLicenseRequest request,
+  ) async => _licenses.renew(organizationId, request);
 
   @override
   Future<String> create(

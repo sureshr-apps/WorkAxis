@@ -7,11 +7,14 @@ import 'package:workaxis/core/validation/contact_validators.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/license_history_event.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_license.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_license_requests.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_admin_rules.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_validator.dart';
 import 'package:workaxis/features/platform_organizations/domain/repositories/platform_organizations_repository.dart';
+import 'package:workaxis/features/plans/domain/models/license_plan.dart';
 
 /// Mock repository implementation for Platform Customer Organizations.
 /// Applies the same validation as production.
@@ -60,11 +63,41 @@ class MockPlatformOrganizationsRepository
   }
 
   @override
-  Future<OrganizationLicenseDetails?> getOrganizationLicenseDetails(
+  Future<OrganizationLicense?> getLicense(String organizationId) async =>
+      _dataSource.licenses.getLicense(organizationId);
+
+  @override
+  Future<List<LicenseHistoryEvent>> getHistory(String organizationId) async =>
+      _dataSource.licenses.getHistory(organizationId);
+
+  @override
+  Future<List<LicensePlan>> getActiveLicensePlans() async =>
+      _dataSource.licenses.activePlans();
+
+  @override
+  Future<void> assignLicense(
     String organizationId,
-  ) async {
-    return _dataSource.getLicenseDetails(organizationId);
-  }
+    AssignLicenseRequest request,
+  ) async => _dataSource.licenses.assign(organizationId, request);
+
+  @override
+  Future<void> changePlan(
+    String organizationId,
+    ChangeLicensePlanRequest request,
+  ) async => _dataSource.licenses.changePlan(organizationId, request);
+
+  @override
+  Future<void> modifyCommercialTerms(
+    String organizationId,
+    ModifyCommercialTermsRequest request,
+  ) async =>
+      _dataSource.licenses.modifyCommercialTerms(organizationId, request);
+
+  @override
+  Future<void> renewLicense(
+    String organizationId,
+    RenewLicenseRequest request,
+  ) async => _dataSource.licenses.renew(organizationId, request);
 
   @override
   Future<CustomerOrganization> createOrganization(

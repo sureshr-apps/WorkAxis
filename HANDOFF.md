@@ -185,6 +185,27 @@ The following files have uncommitted changes in the repository (`git status -s`)
   adb install -r build\app\outputs\flutter-apk\app-release.apk
   ```
 
+- **Android Emulators Configured on this Machine**:
+  - `OnePlus_Pad_3`: OnePlus Pad 3 (Tablet: 2800x2000, 320 dpi landscape, 4GB RAM, WHPX accelerated)
+  - `Pixel_10_API_34`: Google Pixel 10 (Phone: 1080x2424, 420 dpi portrait, 3GB RAM, WHPX accelerated)
+  - Launch commands:
+    ```powershell
+    flutter emulators --launch OnePlus_Pad_3
+    flutter emulators --launch Pixel_10_API_34
+    ```
+  - **Important Note on Machine DNS (Cloudflare WARP)**:
+    This Windows host runs Cloudflare WARP (`127.0.2.2`). By default, QEMU tries to forward guest DNS to `127.0.2.2`, which is unreachable from inside the emulator's virtual NAT bridge.
+    - **Fix inside Android**: Private DNS is enabled in Android settings (`dns.google`), which routes DNS-over-TLS directly through port 853 and bypasses host loopback DNS:
+      ```powershell
+      adb shell settings put global private_dns_mode hostname
+      adb shell settings put global private_dns_specifier dns.google
+      ```
+    - **Alternative direct launch flag**: If ever cold-booting without snapshots or wiped:
+      ```powershell
+      & "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd Pixel_10_API_34 -dns-server 8.8.8.8,1.1.1.1
+      ```
+
+
 ## 2026-11-15 - Data layer moved off Data Connect
 
 - Firebase Data Connect, `dataconnect/`, `lib/dataconnect_generated` and the `firebase_data_connect` package are gone. Relational data is plain PostgreSQL reached only from Cloud Functions through `SqlExecutor` (`functions/src/db`). The app calls one callable, `dataOp` (`functions/src/data`), via `DataGateway` (`lib/core/backend/data_gateway.dart`). Schema: `functions/db/migrations/001_init.sql`, runner `functions/db/migrate.mjs`, seed `functions/db/seed/seed_data.sql`.

@@ -6,20 +6,22 @@ import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/kpi/app_kpi_card.dart';
 import 'package:workaxis/core/widgets/kpi/responsive_kpi_section.dart';
+import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
 
 class OrganizationOverviewTab extends StatelessWidget {
   const OrganizationOverviewTab({
     super.key,
     required this.organization,
-    required this.license,
     required this.onUpload,
+    this.onDelete,
   });
 
   final CustomerOrganization organization;
-  final OrganizationLicenseDetails? license;
   final ValueChanged<String> onUpload;
+
+  /// Null hides the delete action (e.g. while another action is running).
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +30,6 @@ class OrganizationOverviewTab extends StatelessWidget {
         if (constraints.maxWidth >= 900) {
           final contentWidth = constraints.maxWidth - AppSpacing.lg;
           final profileWidth = contentWidth * 7 / 12;
-          final detailsWidth = contentWidth * 5 / 12;
 
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -38,6 +39,7 @@ class OrganizationOverviewTab extends StatelessWidget {
                 child: _OrganizationProfileCard(
                   organization: organization,
                   compactRows: profileWidth < 500,
+                  onDelete: onDelete,
                 ),
               ),
               const SizedBox(width: AppSpacing.lg),
@@ -45,15 +47,9 @@ class OrganizationOverviewTab extends StatelessWidget {
                 flex: 5,
                 child: Column(
                   children: [
-                    _OrganizationMetrics(
-                      organization: organization,
-                      license: license,
-                    ),
+                    _OrganizationMetrics(organization: organization),
                     const SizedBox(height: AppSpacing.md),
-                    _BrandingAndPaymentCard(
-                      onUpload: onUpload,
-                      narrowAssets: detailsWidth < 360,
-                    ),
+                    _BrandingCard(onUpload: onUpload),
                   ],
                 ),
               ),
@@ -62,20 +58,17 @@ class OrganizationOverviewTab extends StatelessWidget {
         }
 
         final profileWidth = constraints.maxWidth - AppSpacing.lg * 2;
-        final detailsWidth = constraints.maxWidth - AppSpacing.md * 2;
         return Column(
           children: [
             _OrganizationProfileCard(
               organization: organization,
               compactRows: profileWidth < 500,
+              onDelete: onDelete,
             ),
             const SizedBox(height: AppSpacing.md),
-            _OrganizationMetrics(organization: organization, license: license),
+            _OrganizationMetrics(organization: organization),
             const SizedBox(height: AppSpacing.md),
-            _BrandingAndPaymentCard(
-              onUpload: onUpload,
-              narrowAssets: detailsWidth < 360,
-            ),
+            _BrandingCard(onUpload: onUpload),
           ],
         );
       },
@@ -87,10 +80,12 @@ class _OrganizationProfileCard extends StatelessWidget {
   const _OrganizationProfileCard({
     required this.organization,
     required this.compactRows,
+    this.onDelete,
   });
 
   final CustomerOrganization organization;
   final bool compactRows;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -126,38 +121,28 @@ class _OrganizationProfileCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.kpiPositiveBackground,
-                    borderRadius: BorderRadius.circular(100),
-                    border: Border.all(
-                      color: AppColors.statusActiveBorder,
-                      width: 1,
+                StatusChip(
+                  label: organization.status.displayName.toUpperCase(),
+                  type: organization.isActive
+                      ? StatusType.active
+                      : StatusType.urgent,
+                ),
+                if (onDelete != null) ...[
+                  const SizedBox(width: AppSpacing.xs),
+                  IconButton(
+                    tooltip: 'Delete organization',
+                    onPressed: onDelete,
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.statusUrgentText,
+                      size: 20,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: AppSpacing.minTouchTarget,
+                      minHeight: AppSpacing.minTouchTarget,
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.verified_outlined,
-                        size: 12,
-                        color: AppColors.kpiPositive,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Entity Verified',
-                        style: AppTypography.labelSmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.kpiPositive,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                ],
               ],
             ),
           ),
@@ -233,17 +218,6 @@ class _OrganizationProfileCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Flexible(
-                              flex: 2,
-                              child: Text(
-                                'Platform Contact',
-                                textAlign: TextAlign.end,
-                                style: AppTypography.labelSmall.copyWith(
-                                  color: AppColors.kpiMuted,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -273,17 +247,6 @@ class _OrganizationProfileCard extends StatelessWidget {
                                 style: AppTypography.labelMedium.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.kpiValue,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Flexible(
-                              flex: 2,
-                              child: Text(
-                                'Direct Operations Line',
-                                textAlign: TextAlign.end,
-                                style: AppTypography.labelSmall.copyWith(
-                                  color: AppColors.kpiMuted,
                                 ),
                               ),
                             ),
@@ -395,13 +358,9 @@ class _ProfileLabel extends StatelessWidget {
 }
 
 class _OrganizationMetrics extends StatelessWidget {
-  const _OrganizationMetrics({
-    required this.organization,
-    required this.license,
-  });
+  const _OrganizationMetrics({required this.organization});
 
   final CustomerOrganization organization;
-  final OrganizationLicenseDetails? license;
 
   @override
   Widget build(BuildContext context) {
@@ -429,14 +388,10 @@ class _OrganizationMetrics extends StatelessWidget {
   }
 }
 
-class _BrandingAndPaymentCard extends StatelessWidget {
-  const _BrandingAndPaymentCard({
-    required this.onUpload,
-    required this.narrowAssets,
-  });
+class _BrandingCard extends StatelessWidget {
+  const _BrandingCard({required this.onUpload});
 
   final ValueChanged<String> onUpload;
-  final bool narrowAssets;
 
   @override
   Widget build(BuildContext context) {
@@ -444,45 +399,15 @@ class _BrandingAndPaymentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
-            ),
-            decoration: const BoxDecoration(
-              color: AppColors.surfaceContainerLow,
-              border: Border(
-                bottom: BorderSide(color: AppColors.outlineSubtle),
-              ),
-            ),
-            child: Text(
-              'BRANDING & PAYMENT',
-              style: AppTypography.labelMedium.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.4,
-                color: AppColors.onSurface,
-              ),
-            ),
-          ),
+          const _BrandingHeader(),
           Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _BrandAssetRow(
-                  title: 'Organization Logo',
-                  description: 'PNG, JPEG, or WebP up to 2 MB. Used in organization identity and printed receipts.',
-                  icon: Icons.image_outlined,
-                  narrow: narrowAssets,
-                  onUpload: () => onUpload('Organization Logo'),
-                ),
+                _LogoUploadCard(onUpload: () => onUpload('Organization Logo')),
                 const SizedBox(height: AppSpacing.md),
-                _BrandAssetRow(
-                  title: 'Payment QR Code',
-                  description: 'PNG, JPEG, or WebP up to 1 MB. Printed on customer receipts for scan-and-pay.',
-                  icon: Icons.qr_code_2_outlined,
-                  narrow: narrowAssets,
-                  onUpload: () => onUpload('Payment QR Code'),
-                ),
+                const _PrinterNote(),
               ],
             ),
           ),
@@ -492,71 +417,87 @@ class _BrandingAndPaymentCard extends StatelessWidget {
   }
 }
 
-class _BrandAssetRow extends StatelessWidget {
-  const _BrandAssetRow({
-    required this.title,
-    required this.description,
-    required this.icon,
-    required this.narrow,
-    required this.onUpload,
-  });
+class _BrandingHeader extends StatelessWidget {
+  const _BrandingHeader();
 
-  final String title;
-  final String description;
-  final IconData icon;
-  final bool narrow;
-  final VoidCallback onUpload;
-
-  Widget _buildPlaceholder({double? height, double width = 104}) {
-    return InkWell(
-      onTap: onUpload,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
-          border: Border.all(color: AppColors.outlineVariant, width: 1.5),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-        ),
-        child: Center(child: Icon(icon, size: 38, color: AppColors.secondary)),
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        border: Border(bottom: BorderSide(color: AppColors.outlineSubtle)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.primaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.palette_outlined,
+              size: 18,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'BRANDING & IDENTITY',
+              style: AppTypography.labelMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: AppColors.onSurface,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _LogoUploadCard extends StatelessWidget {
+  const _LogoUploadCard({required this.onUpload});
+
+  final VoidCallback onUpload;
 
   @override
   Widget build(BuildContext context) {
     final details = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        Text(
+          'SVG, PNG, or WebP',
+          style: AppTypography.bodySmall.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.onSurface,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Up to 2 MB • Recommended 512×512px',
+          style: AppTypography.labelSmall.copyWith(color: AppColors.secondary),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
-            Text(
-              title,
-              style: AppTypography.bodyMedium.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppColors.onSurface,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              description,
-              style: AppTypography.labelSmall.copyWith(
-                height: 1.35,
-                color: AppColors.secondary,
-              ),
+            AppButton.primary(
+              text: 'Upload',
+              iconData: Icons.file_upload_outlined,
+              isFullWidth: false,
+              onPressed: onUpload,
             ),
           ],
-        ),
-        const SizedBox(height: 10),
-        AppButton.primary(
-          text: 'Upload',
-          iconData: Icons.upload_outlined,
-          isFullWidth: false,
-          onPressed: onUpload,
         ),
       ],
     );
@@ -566,25 +507,175 @@ class _BrandAssetRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         border: Border.all(color: AppColors.outlineSubtle),
-        borderRadius: AppSpacing.roundedSm,
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: narrow
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildPlaceholder(height: 104, width: 104),
-                const SizedBox(height: AppSpacing.md),
-                details,
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildPlaceholder(height: 104, width: 104),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: details),
-              ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            runSpacing: 4,
+            children: [
+              Text(
+                'Organization Logo',
+                style: AppTypography.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.onSurface,
+                ),
+              ),
+              const _RequiredBadge(),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Used for digital invoices, store receipts, and invoice headers.',
+            style: AppTypography.labelMedium.copyWith(
+              height: 1.4,
+              color: AppColors.secondary,
             ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _LogoPreview(),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(child: details),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequiredBadge extends StatelessWidget {
+  const _RequiredBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.statusPendingContainer,
+        border: Border.all(color: AppColors.statusPendingBorder),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        'Required',
+        style: AppTypography.labelSmall.copyWith(
+          fontWeight: FontWeight.w600,
+          color: AppColors.statusPendingText,
+        ),
+      ),
+    );
+  }
+}
+
+/// Dashed placeholder where the logo preview will appear.
+class _LogoPreview extends StatelessWidget {
+  const _LogoPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: const _DashedRoundedRectPainter(
+        color: AppColors.outlineVariant,
+        radius: 10,
+      ),
+      child: SizedBox(
+        width: 104,
+        height: 104,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.add_photo_alternate_outlined,
+              size: 26,
+              color: AppColors.secondary,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Preview',
+              style: AppTypography.labelSmall.copyWith(
+                color: AppColors.secondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedRoundedRectPainter extends CustomPainter {
+  const _DashedRoundedRectPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const dash = 6.0;
+    const gap = 4.0;
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        canvas.drawPath(metric.extractPath(distance, distance + dash), paint);
+        distance += dash + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRoundedRectPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
+}
+
+class _PrinterNote extends StatelessWidget {
+  const _PrinterNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.primaryContainer.withValues(alpha: 0.35),
+        border: Border.all(
+          color: AppColors.primaryContainer.withValues(alpha: 0.8),
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Logos will automatically adapt to monochrome thermal printers '
+              '(80mm & 58mm).',
+              style: AppTypography.labelMedium.copyWith(
+                height: 1.4,
+                color: AppColors.secondary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

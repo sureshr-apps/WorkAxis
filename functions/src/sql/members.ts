@@ -1,7 +1,9 @@
 import { getDb, isUniqueViolation, type SqlExecutor } from "../db";
 import { conflict } from "../errors";
+import { LICENSE_TODAY_SQL } from "../licenses/licenseStatus";
 import { validateEmployeeCode } from "../util/employeeProfile";
 import type { AccountStatus, Role } from "../auth/roles";
+import { assertMemberAllowed } from "./licenses";
 
 export interface MemberRecord {
   id: string;
@@ -16,6 +18,17 @@ export interface MemberRecord {
   employeeCode?: string;
   organizationId?: string;
   organizationStatus?: string;
+  /**
+   * The organization has a license whose plan is active and whose dates include
+   * today (Asia/Kolkata). Always false for members without an organization.
+   */
+  licenseUsable: boolean;
+  /** The organization's license dates (YYYY-MM-DD) and plan status; absent when there is no license. */
+  licenseStartDate?: string;
+  licenseExpiryDate?: string;
+  licensePlanStatus?: string;
+  /** Today's date in the license time zone, as SQL evaluated it for this read (YYYY-MM-DD). */
+  licenseToday: string;
   branchIds: string[];
   /** Branch ids whose branch row is active. */
   activeBranchIds: string[];
@@ -33,6 +46,11 @@ interface MemberRow {
   employeeCode: string | null;
   organizationId: string | null;
   organizationStatus: string | null;
+  licenseUsable: boolean | null;
+  licenseStartDate: string | null;
+  licenseExpiryDate: string | null;
+  licensePlanStatus: string | null;
+  licenseToday: string;
 }
 
 interface AssignmentRow {
@@ -44,9 +62,18 @@ interface AssignmentRow {
 const MEMBER_SELECT = `
   SELECT m.id, m.auth_uid AS "authUid", m.full_name AS "fullName", m.username,
          m.email, m.phone, m.role, m.status, m.employee_code AS "employeeCode",
-         o.id AS "organizationId", o.status AS "organizationStatus"
+         o.id AS "organizationId", o.status AS "organizationStatus",
+         COALESCE(lp.status = 'active'
+                  AND ol.start_date <= ${LICENSE_TODAY_SQL}
+                  AND ol.expiry_date >= ${LICENSE_TODAY_SQL}, false) AS "licenseUsable",
+         to_char(ol.start_date, 'YYYY-MM-DD') AS "licenseStartDate",
+         to_char(ol.expiry_date, 'YYYY-MM-DD') AS "licenseExpiryDate",
+         lp.status AS "licensePlanStatus",
+         to_char(${LICENSE_TODAY_SQL}, 'YYYY-MM-DD') AS "licenseToday"
     FROM organization_member m
-    LEFT JOIN organization o ON o.id = m.organization_id`;
+    LEFT JOIN organization o ON o.id = m.organization_id
+    LEFT JOIN organization_license ol ON ol.organization_id = o.id
+    LEFT JOIN license_plan lp ON lp.id = ol.plan_id`;
 
 async function loadMembers(
   db: SqlExecutor,
@@ -87,6 +114,11 @@ function toRecord(r: MemberRow, branches: AssignmentRow[]): MemberRecord {
     employeeCode: r.employeeCode ?? undefined,
     organizationId: r.organizationId ?? undefined,
     organizationStatus: r.organizationStatus ?? undefined,
+    licenseUsable: r.licenseUsable === true,
+    licenseStartDate: r.licenseStartDate ?? undefined,
+    licenseExpiryDate: r.licenseExpiryDate ?? undefined,
+    licensePlanStatus: r.licensePlanStatus ?? undefined,
+    licenseToday: r.licenseToday,
     branchIds: branches.map((b) => b.branchId),
     activeBranchIds: branches
       .filter((b) => b.branchStatus === "active")
@@ -204,6 +236,8 @@ export async function insertMember(
   const db = await getDb();
   try {
     return await db.transaction(async (tx) => {
+      // Adding an active member is refused at the plan's user limit, under the license row lock.
+      if (member.organizationId) await assertMemberAllowed(tx, member.organizationId, null);
       const employeeCode =
         manualCode ??
         (member.organizationId ? await allocateEmployeeCode(tx, member.organizationId) : undefined);
@@ -271,11 +305,35 @@ async function applyPatch(
   }
 }
 
+/**
+ * Reactivating a suspended member counts against the plan's user limit. A member
+ * that is already active is not counted again.
+ */
+async function assertCanActivate(tx: SqlExecutor, memberId: string): Promise<void> {
+  const [current] = await tx.query<{ organizationId: string | null; status: AccountStatus }>(
+    `SELECT organization_id AS "organizationId", status FROM organization_member WHERE id = $1`,
+    [memberId],
+  );
+  if (!current || current.status === "active" || !current.organizationId) return;
+  await assertMemberAllowed(tx, current.organizationId, memberId);
+}
+
+/** Applies a patch; a status change to active is capacity-checked in the same transaction. */
+async function applyGuardedPatch(
+  tx: SqlExecutor,
+  memberId: string,
+  patch: MemberPatch,
+): Promise<void> {
+  if (patch.status === "active") await assertCanActivate(tx, memberId);
+  await applyPatch(tx, memberId, patch);
+}
+
 export async function updateMember(
   memberId: string,
   patch: MemberPatch,
 ): Promise<void> {
-  await applyPatch(await getDb(), memberId, patch);
+  const db = await getDb();
+  await db.transaction((tx) => applyGuardedPatch(tx, memberId, patch));
 }
 
 async function clearAssignments(
@@ -320,7 +378,7 @@ export async function updateMemberWithAssignments(
 ): Promise<void> {
   const db = await getDb();
   await db.transaction(async (tx) => {
-    await applyPatch(tx, memberId, patch);
+    await applyGuardedPatch(tx, memberId, patch);
     await clearAssignments(tx, memberId);
     await insertAssignments(tx, memberId, branchIds);
   });

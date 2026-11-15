@@ -34,6 +34,8 @@ const member: MemberRecord = {
   status: "active",
   organizationId: "o1",
   organizationStatus: "active",
+  licenseUsable: true,
+  licenseToday: "2026-11-15",
   branchIds: ["b1"],
   activeBranchIds: ["b1"],
 };

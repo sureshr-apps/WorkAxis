@@ -20,6 +20,7 @@ import 'package:workaxis/features/employees/domain/repositories/organization_mem
 import 'package:workaxis/features/organization_dashboard/presentation/controllers/organization_dashboard_controller.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/controllers/platform_dashboard_controller.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
+import 'package:workaxis/features/plans/presentation/controllers/license_plans_controller.dart';
 import 'package:workaxis/features/platform_users/presentation/controllers/platform_users_controller.dart';
 import 'package:workaxis/features/reports/presentation/controllers/reports_controller.dart';
 import 'package:workaxis/features/returns/presentation/controllers/returns_controller.dart';
@@ -49,6 +50,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
   late final AccessController _accessController;
   late final BranchContextController _branchController;
   late final PlatformDashboardController _platformController;
+  late final LicensePlansController _licensePlansController;
   late final PlatformOrganizationsController _platformOrganizationsController;
   late final PlatformUsersController _platformUsersController;
   late final OrganizationDashboardController _orgController;
@@ -79,6 +81,9 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
     );
     _platformOrganizationsController = PlatformOrganizationsController(
       repository: repos.platformOrganizationsRepository,
+    );
+    _licensePlansController = LicensePlansController(
+      repository: repos.licensePlansRepository,
     );
     _platformUsersController = PlatformUsersController(
       repository: repos.platformUsersRepository,
@@ -120,6 +125,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
       branch: _branchController,
       sessionScoped: [
         _platformController,
+        _licensePlansController,
         _platformOrganizationsController,
         _platformUsersController,
         _orgController,
@@ -151,6 +157,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
     _branchController.dispose();
     _platformController.dispose();
     _platformOrganizationsController.dispose();
+    _licensePlansController.dispose();
     _platformUsersController.dispose();
     _orgController.dispose();
     _branchDashboardController.dispose();
@@ -187,6 +194,9 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
         ),
         ChangeNotifierProvider<PlatformOrganizationsController>.value(
           value: _platformOrganizationsController,
+        ),
+        ChangeNotifierProvider<LicensePlansController>.value(
+          value: _licensePlansController,
         ),
         ChangeNotifierProvider<PlatformUsersController>.value(
           value: _platformUsersController,

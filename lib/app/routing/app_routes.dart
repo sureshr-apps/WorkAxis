@@ -20,6 +20,12 @@ abstract final class AppRoutes {
   static String platformOrganizationEditPath(String id) =>
       '/platform/organizations/$id/edit';
 
+  static const String platformPlans = '/platform/plans';
+  static const String platformPlansAdd = '/platform/plans/add';
+  static const String platformPlanEdit = '/platform/plans/:id/edit';
+
+  static String platformPlanEditPath(String id) => '/platform/plans/$id/edit';
+
   static const String platformUsers = '/platform/users';
   static const String platformUsersAdd = '/platform/users/add';
   static const String platformUserDetails = '/platform/users/:id';

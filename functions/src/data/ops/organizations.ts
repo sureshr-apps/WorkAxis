@@ -18,9 +18,20 @@ import { optId, optText, pageVars, reqId } from "../vars";
 
 const LIST_COLUMNS = `id, name, code, category, country, status, currency, created_at AS "createdAt"`;
 
-const DETAIL_COLUMNS = `${LIST_COLUMNS}, logo_url AS "logoUrl", tax_identification AS "taxIdentification",
-  description, contact_name AS "contactName", contact_email AS "contactEmail",
-  contact_phone AS "contactPhone", address`;
+/**
+ * Organization detail with its license plan. Columns are qualified because the
+ * plan join also has id, name, description and status.
+ */
+const DETAIL_SQL = `SELECT o.id, o.name, o.code, o.category, o.country, o.status, o.currency,
+    o.created_at AS "createdAt", o.logo_url AS "logoUrl",
+    o.tax_identification AS "taxIdentification", o.description,
+    o.contact_name AS "contactName", o.contact_email AS "contactEmail",
+    o.contact_phone AS "contactPhone", o.address,
+    ol.plan_id AS "planId", p.name AS "planName"
+  FROM organization o
+  LEFT JOIN organization_license ol ON ol.organization_id = o.id
+  LEFT JOIN license_plan p ON p.id = ol.plan_id
+  WHERE o.id = $1`;
 
 const STATUSES = ["active", "suspended"] as const;
 
@@ -69,11 +80,7 @@ export const organizationsOps: OperationRegistry = {
   GetOrganizationById: async ({ db, actor }, vars) => {
     const id = reqId(vars, "id");
     if (!isPlatform(actor) && actor.organizationId !== id) throw denied();
-    const organization = await selectOne(
-      db,
-      `SELECT ${DETAIL_COLUMNS} FROM organization WHERE id = $1`,
-      [id],
-    );
+    const organization = await selectOne(db, DETAIL_SQL, [id]);
     return { organization };
   },
 

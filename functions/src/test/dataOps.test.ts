@@ -37,9 +37,11 @@ describe("dispatch", () => {
       "GetMyMember", "ListMembersByOrg", "ListMembersByOrgPaged", "ListMembersByBranchPaged",
       "GetMemberById", "ListReturnsByBranch", "ListReturnsByBranchPaged", "ListReturnsByOrgPaged",
       "ListMyReturns", "GetOrganizationDashboardCounts", "GetReturnCountsByBranch", "GetBranchStats",
-      "GetCommercialAgreementByOrg", "ListLicenseEventsByOrg", "ListPlatformMembersPaged",
-      "CreateOrganization", "UpdateOrganization", "CreateCommercialAgreement",
-      "UpdateCommercialAgreement", "CreateLicenseEvent", "CreateReturnRecord", "SubmitReturn",
+      "ListPlatformMembersPaged", "CreateOrganization", "UpdateOrganization",
+      "CreateReturnRecord", "SubmitReturn", "ListLicensePlans", "CreateLicensePlan",
+      "UpdateLicensePlan", "ChangeLicensePlanStatus", "DeleteLicensePlan", "GetOrganizationLicense",
+      "GetOrganizationLicenseHistory", "AssignOrganizationLicense", "ChangeOrganizationLicensePlan",
+      "ModifyOrganizationCommercialTerms", "RenewOrganizationLicense",
       "UpdateReturnRecordReview", "UpdateReturnRecordStatus",
     ];
     for (const name of expected) assert.ok(operations[name], name);
@@ -227,37 +229,5 @@ describe("dashboards ops", () => {
     })) as { returnRecords: unknown[] };
     assert.deepEqual(res.returnRecords, [{ branchId: "b1", status: "pending", _count: 4 }]);
     assert.deepEqual(db.calls[0].params, ["o1", "2026-01-01T00:00:00.000Z", "2026-02-01T00:00:00.000Z"]);
-  });
-});
-
-describe("commercial ops", () => {
-  it("restricts writes to platform roles and validates enums", async () => {
-    const vars = {
-      orgId: "o1", eventType: "RENEWED", planName: "P", planTier: "T", validityPeriod: "1y",
-      storesCount: 1, usersCount: 2, oneTimePrice: 1, annualMaintenancePrice: 1,
-    };
-    await denies(run(new FakeDb(), orgAdmin, "CreateLicenseEvent", vars));
-    await assert.rejects(
-      run(new FakeDb(), platform, "CreateLicenseEvent", { ...vars, eventType: "BOGUS" }),
-      (e: { code?: string }) => e.code === "invalid-argument",
-    );
-    const db = new FakeDb().when("insert into license_event", [{ id: "le1" }]);
-    assert.deepEqual(await run(db, platform, "CreateLicenseEvent", vars), { licenseEvent_insert: { id: "le1" } });
-  });
-
-  it("updates only provided agreement fields and returns null when missing", async () => {
-    const db = new FakeDb();
-    const res = await run(db, platform, "UpdateCommercialAgreement", { id: "c1", planName: "Gold", maxUsers: 9 });
-    assert.deepEqual(res, { commercialAgreement_update: null });
-    assert.match(db.calls[0].sql, /SET plan_name = \$2, max_users = \$3 WHERE id = \$1/);
-    assert.deepEqual(db.calls[0].params, ["c1", "Gold", 9]);
-  });
-
-  it("lets an Org Admin read only their own agreement", async () => {
-    await denies(run(new FakeDb(), orgAdmin, "GetCommercialAgreementByOrg", { orgId: "o2" }));
-    const db = new FakeDb().when("from commercial_agreement", [{ id: "c1" }]);
-    assert.deepEqual(await run(db, orgAdmin, "GetCommercialAgreementByOrg", { orgId: "o1" }), {
-      commercialAgreements: [{ id: "c1" }],
-    });
   });
 });

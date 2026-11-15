@@ -14,11 +14,15 @@ import 'package:workaxis/features/platform_organizations/domain/models/customer_
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/license_history_event.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_license.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_license_requests.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_admin_rules.dart';
+import 'package:workaxis/features/platform_organizations/domain/organization_license_rules.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_validator.dart';
 import 'package:workaxis/features/platform_organizations/domain/repositories/platform_organizations_repository.dart';
+import 'package:workaxis/features/plans/domain/models/license_plan.dart';
 
 /// Production [PlatformOrganizationsRepository].
 ///
@@ -62,9 +66,43 @@ class SqlConnectPlatformOrganizationsRepository
       _guard(() => _dataSource.getById(id));
 
   @override
-  Future<OrganizationLicenseDetails?> getOrganizationLicenseDetails(
+  Future<OrganizationLicense?> getLicense(String organizationId) =>
+      _guard(() => _dataSource.getLicense(organizationId));
+
+  @override
+  Future<List<LicenseHistoryEvent>> getHistory(String organizationId) => _guard(
+    () async => OrganizationLicenseRules.newestFirst(
+      await _dataSource.getLicenseHistory(organizationId),
+    ),
+  );
+
+  @override
+  Future<List<LicensePlan>> getActiveLicensePlans() =>
+      _guard(_dataSource.listActiveLicensePlans);
+
+  @override
+  Future<void> assignLicense(
     String organizationId,
-  ) => _guard(() => _dataSource.getLicense(organizationId));
+    AssignLicenseRequest request,
+  ) => _guard(() => _dataSource.assignLicense(organizationId, request));
+
+  @override
+  Future<void> changePlan(
+    String organizationId,
+    ChangeLicensePlanRequest request,
+  ) => _guard(() => _dataSource.changeLicensePlan(organizationId, request));
+
+  @override
+  Future<void> modifyCommercialTerms(
+    String organizationId,
+    ModifyCommercialTermsRequest request,
+  ) => _guard(() => _dataSource.modifyCommercialTerms(organizationId, request));
+
+  @override
+  Future<void> renewLicense(
+    String organizationId,
+    RenewLicenseRequest request,
+  ) => _guard(() => _dataSource.renewLicense(organizationId, request));
 
   @override
   Future<CustomerOrganization> createOrganization(

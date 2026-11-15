@@ -1,5 +1,6 @@
 import { onCall } from "firebase-functions/v2/https";
 import { resolveActor } from "../auth/actor";
+import { reprojectAfterLicenseChange } from "../accounts/licenseProjection";
 import { callableOptions } from "../config";
 import { runOperation } from "../data/dispatch";
 import { operations } from "../data/registry";
@@ -20,6 +21,7 @@ export const dataOp = onCall(callableOptions, (request) =>
     const actor = await resolveActor(request);
     const db = await getDb();
     const data = await runOperation(operations, { db, actor }, request.data);
+    await reprojectAfterLicenseChange(request.data);
     return { data };
   }),
 );

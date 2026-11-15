@@ -4,7 +4,6 @@ import 'package:workaxis/core/errors/validation_exception.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_organizations/data/sql_connect_platform_organizations_repository.dart';
-import 'package:workaxis/features/platform_organizations/domain/license_event_parser.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/create_organization_request.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
@@ -145,17 +144,6 @@ void main() {
           ),
         ),
       );
-    });
-  });
-
-  group('LicenseEventParser', () {
-    test('parses level and validity period', () {
-      expect(LicenseEventParser.level('Level 2'), 2);
-      expect(LicenseEventParser.level('Gold'), isNull);
-      final period = LicenseEventParser.period('2026-11-07 to 2027-11-07')!;
-      expect(period.start, DateTime(2026, 11, 7));
-      expect(period.end, DateTime(2027, 11, 7));
-      expect(LicenseEventParser.period('1 Year'), isNull);
     });
   });
 }

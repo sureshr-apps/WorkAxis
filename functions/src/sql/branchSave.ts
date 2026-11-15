@@ -1,6 +1,7 @@
 import { getDb } from "../db";
 import { invalid, notFound, precondition } from "../errors";
 import type { parseBranchSave, ManagerAssignment } from "../branches/savePlan";
+import { assertStoreAllowed } from "./licenses";
 
 type Plan = ReturnType<typeof parseBranchSave>;
 
@@ -75,8 +76,8 @@ export async function commitBranchSave(plan: Plan, currentIds: string[]) {
   const db = await getDb();
 
   await db.transaction(async (tx) => {
-    const existing = await tx.query<{ organizationId: string }>(
-      `SELECT organization_id AS "organizationId" FROM branch WHERE id = $1 FOR UPDATE`,
+    const existing = await tx.query<{ organizationId: string; status: string }>(
+      `SELECT organization_id AS "organizationId", status FROM branch WHERE id = $1 FOR UPDATE`,
       [branchId],
     );
     const branchOk = plan.creating
@@ -135,6 +136,13 @@ export async function commitBranchSave(plan: Plan, currentIds: string[]) {
       if (removedRows.some((r) => Number(r.otherBranches) === 0)) {
         throw invalid("A manager must keep at least one branch.");
       }
+    }
+
+    // Creating a store, or making a suspended one active, is a capacity change.
+    const becomingActive = data.status === "active";
+    const previousStatus = existing[0]?.status;
+    if (plan.creating || (becomingActive && previousStatus !== "active")) {
+      await assertStoreAllowed(tx, orgId, branchId, becomingActive);
     }
 
     const cols = BRANCH_COLUMNS.filter(([k]) => data[k] !== undefined);

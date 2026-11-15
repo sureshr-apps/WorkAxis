@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { logger } from "firebase-functions/v2";
 import { getAuth } from "firebase-admin/auth";
+import { effectiveStatus } from "../auth/actor";
 import { applyClaims, buildClaims } from "../auth/claims";
 import type { NormalizedIdentity } from "../auth/aliasKeys";
-import type { Role } from "../auth/roles";
+import type { AccountStatus, Role } from "../auth/roles";
 import { conflict } from "../errors";
 import { releaseAliases, reserveAliasesTx, writeProfile } from "../firestore/userStore";
 import {
@@ -80,14 +81,16 @@ export async function runProvision(plan: ProvisionPlan): Promise<ProvisionResult
   }
   if (!member) throw new Error("Member row missing after insert.");
 
-  await upsertAuthUser(plan);
+  // A resumed request must not re-enable a member whose license has lapsed.
+  const status = effectiveStatus(member);
+  await upsertAuthUser(plan, status);
   await applyClaims(
     uid,
     buildClaims({
       role: plan.role,
       organizationId: plan.organizationId,
       branchIds: plan.branchIds,
-      status: "active",
+      status,
     }),
   );
   await writeProfile(member, {
@@ -115,15 +118,16 @@ export async function runProvision(plan: ProvisionPlan): Promise<ProvisionResult
   };
 }
 
-async function upsertAuthUser(plan: ProvisionPlan): Promise<void> {
+async function upsertAuthUser(plan: ProvisionPlan, status: AccountStatus): Promise<void> {
   const auth = getAuth();
+  const disabled = status !== "active";
   try {
     await auth.getUser(plan.uid);
     await auth.updateUser(plan.uid, {
       email: plan.identity.loginEmail,
       password: plan.password,
       displayName: plan.fullName,
-      disabled: false,
+      disabled,
     });
   } catch (e) {
     if ((e as { code?: string }).code !== "auth/user-not-found") throw mapAuthError(e);
@@ -134,6 +138,7 @@ async function upsertAuthUser(plan: ProvisionPlan): Promise<void> {
         password: plan.password,
         displayName: plan.fullName,
         emailVerified: false,
+        disabled,
       });
     } catch (ce) {
       throw mapAuthError(ce);

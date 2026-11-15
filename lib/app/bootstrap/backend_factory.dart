@@ -6,6 +6,10 @@ import 'package:workaxis/features/access/data/sql_connect_access_remote_data_sou
 import 'package:workaxis/features/branches/data/sql_connect_branches_remote_data_source.dart';
 import 'package:workaxis/features/employees/data/sql_connect_organization_members_remote_data_source.dart';
 import 'package:workaxis/features/platform_organizations/data/sql_connect_platform_organizations_remote_data_source.dart';
+import 'package:workaxis/features/plans/data/mock_license_plans_repository.dart';
+import 'package:workaxis/features/plans/data/sql_connect_license_plans_remote_data_source.dart';
+import 'package:workaxis/features/plans/data/sql_connect_license_plans_repository.dart';
+import 'package:workaxis/features/plans/domain/repositories/license_plans_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:workaxis/app/config/backend_config.dart';
 import 'package:workaxis/core/storage/attachment_storage.dart';
@@ -70,6 +74,7 @@ class BackendRepositories {
     required this.accessRepository,
     required this.platformRepository,
     required this.platformOrganizationsRepository,
+    required this.licensePlansRepository,
     required this.platformUsersRepository,
     required this.orgRepository,
     required this.branchRepository,
@@ -87,6 +92,7 @@ class BackendRepositories {
   final AccessRepository accessRepository;
   final PlatformDashboardRepository platformRepository;
   final PlatformOrganizationsRepository platformOrganizationsRepository;
+  final LicensePlansRepository licensePlansRepository;
   final PlatformUsersRepository platformUsersRepository;
   final OrganizationDashboardRepository orgRepository;
   final BranchDashboardRepository branchRepository;
@@ -145,6 +151,9 @@ class BackendFactory {
               ),
               functions: callables,
             ),
+        licensePlansRepository: SqlConnectLicensePlansRepository(
+          dataSource: SqlConnectLicensePlansRemoteDataSource(gateway: data),
+        ),
         platformUsersRepository: SqlConnectPlatformUsersRepository(
           dataSource: SqlConnectPlatformUsersRemoteDataSource(gateway: data),
           accounts: accounts,
@@ -228,6 +237,7 @@ class BackendFactory {
       platformOrganizationsRepository: MockPlatformOrganizationsRepository(
         dataSource: organizationsDataSource,
       ),
+      licensePlansRepository: MockLicensePlansRepository(),
       platformUsersRepository: MockPlatformUsersRepository(),
       orgRepository: delay == null
           ? MockOrganizationDashboardRepository()

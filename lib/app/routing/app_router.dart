@@ -24,6 +24,8 @@ import 'package:workaxis/features/platform_organizations/presentation/screens/ad
 import 'package:workaxis/features/platform_organizations/presentation/screens/edit_organization_screen.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organization_details_screen.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organizations_list_screen.dart';
+import 'package:workaxis/features/plans/presentation/screens/license_plan_form_screen.dart';
+import 'package:workaxis/features/plans/presentation/screens/license_plans_screen.dart';
 import 'package:workaxis/features/platform_users/presentation/screens/platform_administrator_details_screen.dart';
 import 'package:workaxis/features/platform_users/presentation/screens/platform_administrator_form_screen.dart';
 import 'package:workaxis/features/platform_users/presentation/screens/platform_users_list_screen.dart';
@@ -122,6 +124,22 @@ GoRouter createAppRouter({
                     },
                   ),
                 ],
+              ),
+            ],
+          ),
+          GoRoute(
+            path: AppRoutes.platformPlans,
+            builder: (context, state) => const LicensePlansScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (context, state) => const LicensePlanFormScreen(),
+              ),
+              GoRoute(
+                path: ':id/edit',
+                builder: (context, state) => LicensePlanFormScreen(
+                  planId: state.pathParameters['id'] ?? '',
+                ),
               ),
             ],
           ),

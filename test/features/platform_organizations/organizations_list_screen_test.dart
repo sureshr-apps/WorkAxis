@@ -83,18 +83,19 @@ void main() {
     expect(find.text('Edit org-acme'), findsOneWidget);
   });
 
-  testWidgets('card Edit action opens the edit route on phones', (
+  testWidgets('tapping a card on phones opens the details route', (
     tester,
   ) async {
     await _pumpList(tester, size: const Size(390, 844));
 
     expect(find.byType(OrganizationCardItem), findsWidgets);
-    final edit = find.byTooltip('Edit Acme Corporation');
-    await tester.ensureVisible(edit);
-    await tester.tap(edit);
+    expect(find.byTooltip('Edit Acme Corporation'), findsNothing);
+    final card = find.widgetWithText(OrganizationCardItem, 'Acme Corporation');
+    await tester.ensureVisible(card);
+    await tester.tap(card);
     await tester.pumpAndSettle();
 
-    expect(find.text('Edit org-acme'), findsOneWidget);
+    expect(find.text('Details org-acme'), findsOneWidget);
   });
 
   testWidgets('Load more appends the next page from the controller', (

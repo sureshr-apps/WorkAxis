@@ -10,6 +10,9 @@ import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 
+/// Text scale above which the two header buttons stack instead of sharing a row.
+const double _stackButtonsTextScale = 1.15;
+
 /// Breadcrumb row: back link, organization name and code.
 class OrganizationDetailsBreadcrumb extends StatelessWidget {
   const OrganizationDetailsBreadcrumb({
@@ -99,38 +102,284 @@ class OrganizationDetailsHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= AppBreakpoints.detailsSplit;
-        final identity = _Identity(
-          organization: organization,
-          planName: planName,
-          onCopyCode: onCopyCode,
-        );
-        final actions = _Actions(
-          organization: organization,
-          isWide: isWide,
-          isActionLoading: isActionLoading,
-          onEdit: onEdit,
-          onToggleStatus: onToggleStatus,
-          onDelete: onDelete,
-        );
+        if (!isWide) {
+          return _HeaderPanel(
+            child: _StackedHeader(
+              organization: organization,
+              planName: planName,
+              isActionLoading: isActionLoading,
+              onEdit: onEdit,
+              onToggleStatus: onToggleStatus,
+              onCopyCode: onCopyCode,
+              onDelete: onDelete,
+            ),
+          );
+        }
         return _HeaderPanel(
-          child: isWide
-              ? Row(
-                  children: [
-                    Expanded(child: identity),
-                    const SizedBox(width: AppSpacing.md),
-                    actions,
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    identity,
-                    const SizedBox(height: AppSpacing.md),
-                    actions,
-                  ],
+          child: Row(
+            children: [
+              Expanded(
+                child: _Identity(
+                  organization: organization,
+                  planName: planName,
+                  onCopyCode: onCopyCode,
                 ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              _Actions(
+                organization: organization,
+                isActionLoading: isActionLoading,
+                onEdit: onEdit,
+                onToggleStatus: onToggleStatus,
+                onDelete: onDelete,
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+}
+
+/// Phone and narrow-tablet layout.
+///
+/// Identity on top (avatar, name, status) with the delete icon in the corner;
+/// code, created date and tier in a quiet strip; the two everyday actions as
+/// equal-width buttons along the bottom.
+class _StackedHeader extends StatelessWidget {
+  const _StackedHeader({
+    required this.organization,
+    required this.planName,
+    required this.isActionLoading,
+    required this.onEdit,
+    required this.onToggleStatus,
+    required this.onCopyCode,
+    this.onDelete,
+  });
+
+  final CustomerOrganization organization;
+  final String? planName;
+  final bool isActionLoading;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleStatus;
+  final VoidCallback onCopyCode;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final edit = AppButton.outlined(
+      // Short label on phones: two equal buttons share the width.
+      text: context.isCompact ? 'Edit' : 'Edit Organization',
+      iconData: Icons.edit_outlined,
+      onPressed: onEdit,
+    );
+    final status = AppButton.outlined(
+      text: organization.isActive ? 'Suspend' : 'Reactivate',
+      iconData: organization.isActive
+          ? Icons.power_settings_new
+          : Icons.refresh,
+      onPressed: isActionLoading ? null : onToggleStatus,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Avatar(initials: organization.initials),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    organization.name,
+                    style: AppTypography.headlineMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  _CopyableCode(code: organization.code, onCopy: onCopyCode),
+                ],
+              ),
+            ),
+            if (onDelete != null)
+              _DeleteIconButton(
+                organizationName: organization.name,
+                onPressed: isActionLoading ? null : onDelete,
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _MetadataStrip(
+          createdAt: AppFormatters.formatDate(organization.createdAt),
+          tier: planName ?? 'Unassigned',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        // Two equal buttons side by side; with large text they do not fit, so
+        // they stack full width instead of squeezing their labels.
+        if (MediaQuery.textScalerOf(context).scale(1) > _stackButtonsTextScale)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              edit,
+              const SizedBox(height: AppSpacing.sm),
+              status,
+            ],
+          )
+        else
+          Row(
+            children: [
+              Expanded(child: edit),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: status),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+/// Delete shortcut in the top-right corner of the header. The action asks for
+/// confirmation in a dialog before anything is removed.
+class _DeleteIconButton extends StatelessWidget {
+  const _DeleteIconButton({
+    required this.organizationName,
+    required this.onPressed,
+  });
+
+  final String organizationName;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Delete $organizationName',
+      onPressed: onPressed,
+      icon: const Icon(
+        Icons.delete_outline,
+        color: AppColors.statusUrgentText,
+        size: 22,
+      ),
+      constraints: const BoxConstraints(
+        minWidth: AppSpacing.minTouchTarget,
+        minHeight: AppSpacing.minTouchTarget,
+      ),
+    );
+  }
+}
+
+/// License tier on the left and created date right-aligned, as one quiet strip.
+/// The wrap only breaks onto two lines when large text leaves no room.
+class _MetadataStrip extends StatelessWidget {
+  const _MetadataStrip({required this.createdAt, required this.tier});
+
+  final String createdAt;
+  final String tier;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: AppSpacing.roundedSm,
+        border: Border.all(
+          color: AppColors.outlineSubtle.withValues(alpha: 0.6),
+        ),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        spacing: AppSpacing.md,
+        runSpacing: AppSpacing.xs,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _Metadata(
+            icon: Icons.workspace_premium_outlined,
+            label: 'Tier: $tier',
+          ),
+          _Metadata(
+            icon: Icons.calendar_today_outlined,
+            label: 'Created $createdAt',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Organization code that copies itself when tapped.
+class _CopyableCode extends StatelessWidget {
+  const _CopyableCode({required this.code, required this.onCopy});
+
+  final String code;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Copy organization code',
+      child: InkWell(
+        onTap: onCopy,
+        borderRadius: AppSpacing.roundedXs,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  code,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelMono.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const Icon(
+                Icons.copy_outlined,
+                size: 14,
+                color: AppColors.secondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.initials});
+
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 56,
+      height: 56,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.tertiaryContainer.withValues(alpha: 0.1),
+        border: Border.all(
+          color: AppColors.tertiaryContainer.withValues(alpha: 0.25),
+        ),
+        borderRadius: AppSpacing.roundedSm,
+      ),
+      child: Text(
+        initials,
+        style: AppTypography.titleLarge.copyWith(
+          fontWeight: FontWeight.w700,
+          color: AppColors.tertiary,
+        ),
+      ),
     );
   }
 }
@@ -150,25 +399,7 @@ class _Identity extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 56,
-          height: 56,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.tertiaryContainer.withValues(alpha: 0.1),
-            border: Border.all(
-              color: AppColors.tertiaryContainer.withValues(alpha: 0.25),
-            ),
-            borderRadius: AppSpacing.roundedSm,
-          ),
-          child: Text(
-            organization.initials,
-            style: AppTypography.titleLarge.copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.tertiary,
-            ),
-          ),
-        ),
+        _Avatar(initials: organization.initials),
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Column(
@@ -215,10 +446,10 @@ class _Identity extends StatelessWidget {
   }
 }
 
+/// Wide layout actions: edit, status and delete in one row.
 class _Actions extends StatelessWidget {
   const _Actions({
     required this.organization,
-    required this.isWide,
     required this.isActionLoading,
     required this.onEdit,
     required this.onToggleStatus,
@@ -226,7 +457,6 @@ class _Actions extends StatelessWidget {
   });
 
   final CustomerOrganization organization;
-  final bool isWide;
   final bool isActionLoading;
   final VoidCallback onEdit;
   final VoidCallback onToggleStatus;
@@ -264,16 +494,6 @@ class _Actions extends StatelessWidget {
           )
         : null;
 
-    if (!isWide) {
-      // Buttons keep their natural width and wrap onto a second line instead
-      // of squeezing labels (narrow phones, large text scale).
-      return Wrap(
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.xs,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [edit, status, ?delete],
-      );
-    }
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -320,17 +540,26 @@ class _CodeBadge extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
+      // Flexible so a long code shrinks (with an ellipsis) instead of
+      // overflowing in narrow columns or at large text sizes.
+      Flexible(
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLow,
+            border: Border.all(color: AppColors.outlineSubtle),
+            borderRadius: AppSpacing.roundedSm,
+          ),
+          child: Text(
+            code,
+            style: AppTypography.labelMono,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
-          border: Border.all(color: AppColors.outlineSubtle),
-          borderRadius: AppSpacing.roundedSm,
-        ),
-        child: Text(code, style: AppTypography.labelMono),
       ),
       if (onCopy != null)
         IconButton(

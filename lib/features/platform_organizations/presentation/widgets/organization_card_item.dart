@@ -4,6 +4,7 @@ import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
+import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 
@@ -16,8 +17,9 @@ const BoxConstraints _touchTarget = BoxConstraints(
 
 /// Card for a customer organization on smartphone and tablet widths.
 ///
-/// Tapping the card (or "Details") opens the organization; the pencil button
-/// opens the edit form.
+/// Tapping the card opens the organization on every width. Smartphones
+/// (compact width) show a chevron beside the status and nothing else; wider
+/// layouts also show edit, delete and "Details" actions.
 class OrganizationCardItem extends StatelessWidget {
   const OrganizationCardItem({
     super.key,
@@ -34,6 +36,7 @@ class OrganizationCardItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = context.isCompact;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
@@ -76,61 +79,76 @@ class OrganizationCardItem extends StatelessWidget {
                       organization.status.displayName,
                       width: 96,
                     ),
+                    // Phones show only a chevron: the whole card is the
+                    // tap target and edit/delete live on the details page.
+                    if (compact) ...const [
+                      SizedBox(width: AppSpacing.xs),
+                      Padding(
+                        padding: EdgeInsets.only(top: AppSpacing.xxs),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          size: 24,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _MetricsRow(organization: organization),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    IconButton(
-                      tooltip: 'Edit ${organization.name}',
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        size: 18,
-                        color: AppColors.secondary,
-                      ),
-                      constraints: _touchTarget,
-                      onPressed: onEdit,
-                    ),
-                    if (onDelete != null)
+                if (!compact) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
                       IconButton(
-                        tooltip: 'Delete ${organization.name}',
+                        tooltip: 'Edit ${organization.name}',
                         icon: const Icon(
-                          Icons.delete_outline,
+                          Icons.edit_outlined,
                           size: 18,
-                          color: AppColors.statusUrgentText,
+                          color: AppColors.secondary,
                         ),
                         constraints: _touchTarget,
-                        onPressed: onDelete,
+                        onPressed: onEdit,
                       ),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        minHeight: AppSpacing.minTouchTarget,
-                      ),
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Details',
-                              style: AppTypography.labelMedium.copyWith(
-                                fontWeight: FontWeight.w600,
+                      if (onDelete != null)
+                        IconButton(
+                          tooltip: 'Delete ${organization.name}',
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: AppColors.statusUrgentText,
+                          ),
+                          constraints: _touchTarget,
+                          onPressed: onDelete,
+                        ),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minHeight: AppSpacing.minTouchTarget,
+                        ),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Details',
+                                style: AppTypography.labelMedium.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                size: 16,
                                 color: AppColors.primary,
                               ),
-                            ),
-                            const Icon(
-                              Icons.chevron_right_rounded,
-                              size: 16,
-                              color: AppColors.primary,
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

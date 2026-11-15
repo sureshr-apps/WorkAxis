@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:workaxis/core/backend/callable_functions.dart';
+import 'package:workaxis/core/backend/data_gateway.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/core/validation/login_email.dart';
@@ -23,15 +24,18 @@ import 'package:workaxis/features/authentication/domain/repositories/authenticat
 ///   Display fields (name, username, phone) come from the `users/{uid}`
 ///   projection. SQL is re-checked by the access repository afterwards.
 /// - Fails closed: missing or unknown claims, or a non-active status, deny
-///   the session and sign the user out.
+///   the session and sign the user out. When the claims refuse a session, the
+///   server's access check supplies the reason (for example a lapsed license).
 class FirebaseAuthRepository implements AuthenticationRepository {
   FirebaseAuthRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     CallableFunctions? functions,
+    DataGateway? dataGateway,
   }) : _customAuth = auth,
        _customFirestore = firestore,
-       _customFunctions = functions;
+       _customFunctions = functions,
+       _customDataGateway = dataGateway;
 
   static const _invalidCredentials = 'Invalid username or password.';
   static const _profileUnavailable =
@@ -39,16 +43,24 @@ class FirebaseAuthRepository implements AuthenticationRepository {
   static const _suspended =
       'Your account is suspended. Please contact your administrator.';
 
+  /// Data operation that resolves the caller from SQL; the server refuses it
+  /// with the specific reason when the member may not use the platform.
+  static const _accessCheckOperation = 'GetMyMember';
+
   final FirebaseAuth? _customAuth;
   final FirebaseFirestore? _customFirestore;
   final CallableFunctions? _customFunctions;
+  final DataGateway? _customDataGateway;
   CallableFunctions? _defaultFunctions;
+  DataGateway? _defaultDataGateway;
 
   FirebaseAuth get _auth => _customAuth ?? FirebaseAuth.instance;
   FirebaseFirestore get _firestore =>
       _customFirestore ?? FirebaseFirestore.instance;
   CallableFunctions get _functions =>
       _customFunctions ?? (_defaultFunctions ??= FirebaseCallableFunctions());
+  DataGateway get _dataGateway =>
+      _customDataGateway ?? (_defaultDataGateway ??= CallableDataGateway());
 
   @override
   Future<AuthenticationResult> signIn({
@@ -87,15 +99,16 @@ class FirebaseAuthRepository implements AuthenticationRepository {
       }
 
       final session = await _loadSession(firebaseUser, forceRefresh: true);
-      if (session == null) {
+      if (session == null || session.user.status != AccountStatus.active) {
+        // Claims are a projection of SQL, so the server's answer is the
+        // reason to show; the generic text applies only when it has none.
+        final serverReason = await _serverAccessRefusal();
         await _safeSignOut();
-        return const AuthenticationResult.failure(
-          errorMessage: _profileUnavailable,
+        return AuthenticationResult.failure(
+          errorMessage:
+              serverReason ??
+              (session == null ? _profileUnavailable : _suspended),
         );
-      }
-      if (session.user.status != AccountStatus.active) {
-        await _safeSignOut();
-        return const AuthenticationResult.failure(errorMessage: _suspended);
       }
       return AuthenticationResult.success(
         user: session.user,
@@ -207,6 +220,27 @@ class FirebaseAuthRepository implements AuthenticationRepository {
       throw const _IdentifierRejected();
     } on NotFoundException {
       throw const _IdentifierRejected();
+    }
+  }
+
+  /// Asks the server whether the signed-in member may use the platform and
+  /// returns the refusal message it gives, as received. Null when the server
+  /// accepts the member or the check fails without a user-facing reason.
+  Future<String?> _serverAccessRefusal() async {
+    try {
+      await _dataGateway.call(_accessCheckOperation);
+      return null;
+    } on AccessDeniedException catch (e) {
+      return e.hasCustomUserMessage ? e.userMessage : null;
+    } catch (e, st) {
+      developer.log(
+        'Access check after sign-in failed',
+        name: 'workaxis.auth',
+        level: 900,
+        error: e,
+        stackTrace: st,
+      );
+      return null;
     }
   }
 

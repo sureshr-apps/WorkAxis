@@ -1,28 +1,24 @@
 import 'package:workaxis/core/errors/validation_exception.dart';
+import 'package:workaxis/features/platform_organizations/data/mock_organization_license_store.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/create_organization_request.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
 
 /// In-memory mock data source for Platform Customer Organizations.
 class MockPlatformOrganizationsDataSource {
   final List<CustomerOrganization> _organizations = [];
-  // Crestline and newly created organizations start without an assigned plan.
-  final Set<String> _licenseAssignedOrganizationIds = {
-    'org-acme',
-    'org-apex',
-    'org-xyz',
-    'org-northern',
-    'org-metro',
-    'org-abc',
-  };
+
+  /// License state. Only Acme is licensed (on Plus); every other organization,
+  /// including Crestline and newly created ones, starts without a license.
+  final MockOrganizationLicenseStore licenses;
   int _nextGeneratedOrganizationNumber = 1;
   int _nextAdminNumber = 1;
 
-  MockPlatformOrganizationsDataSource() {
+  MockPlatformOrganizationsDataSource({MockOrganizationLicenseStore? licenses})
+    : licenses = licenses ?? MockOrganizationLicenseStore() {
     _initDefaultData();
   }
 
@@ -225,52 +221,6 @@ class MockPlatformOrganizationsDataSource {
     }
   }
 
-  OrganizationLicenseDetails? getLicenseDetails(String id) {
-    final organization = getById(id);
-    if (organization == null || !_licenseAssignedOrganizationIds.contains(id)) {
-      return null;
-    }
-
-    final today = DateTime.now();
-    final start = DateTime(today.year, today.month, today.day);
-    final expiry = DateTime(start.year + 1, start.month, start.day);
-    final maximumStores = organization.branchCount == 0
-        ? 1
-        : organization.branchCount ?? 1;
-    final maximumUsers = (organization.employeeCount ?? 0) < 15
-        ? 15
-        : organization.employeeCount ?? 15;
-    final agreementId = 'AGR-${organization.code}';
-    final historyDate = DateTime(start.year, start.month, start.day, 10, 45);
-
-    return OrganizationLicenseDetails(
-      planName: 'Basic',
-      status: 'Active',
-      level: 1,
-      agreementId: agreementId,
-      agreementStart: start,
-      agreementExpiry: expiry,
-      maximumStores: maximumStores,
-      maximumUsers: maximumUsers,
-      negotiatedPrice: 40000,
-      annualMaintenancePrice: 5000,
-      history: [
-        LicenseHistoryEntry(
-          event: 'License Assigned',
-          occurredAt: historyDate,
-          planName: 'Basic',
-          level: 1,
-          periodStart: start,
-          periodEnd: expiry,
-          stores: maximumStores,
-          users: maximumUsers,
-          negotiatedPrice: 40000,
-          annualMaintenancePrice: 5000,
-        ),
-      ],
-    );
-  }
-
   CustomerOrganization create(CreateOrganizationRequest request) {
     final organization = _createOrganizationWithGeneratedIdentifiers(request);
     _organizations.insert(0, organization);
@@ -341,7 +291,7 @@ class MockPlatformOrganizationsDataSource {
       throw ValidationException('Organization not found.');
     }
     _organizations.removeAt(index);
-    _licenseAssignedOrganizationIds.remove(id);
+    licenses.remove(id);
   }
 
   /// Adds an administrator the way the account callables would: the server

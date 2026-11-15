@@ -98,10 +98,7 @@ void main() {
       expect(secondCreated?.id, 'org-generated-002');
       expect(secondCreated?.code, 'ORG-002');
       expect(secondCreated?.taxIdentification, isNull);
-      expect(
-        await repository.getOrganizationLicenseDetails(secondCreated!.id),
-        isNull,
-      );
+      expect(await repository.getLicense(secondCreated!.id), isNull);
     });
 
     test('updates organization status (suspend and reactivate)', () async {
@@ -358,57 +355,61 @@ void main() {
       expect(find.text('Elena Lindqvist'), findsOneWidget);
     });
 
-    testWidgets('renders license details when License tab is selected', (
-      tester,
-    ) async {
-      final repository = MockPlatformOrganizationsRepository();
-      final controller = PlatformOrganizationsController(
-        repository: repository,
-      );
-      await controller.loadOrganizationDetails('org-acme');
+    testWidgets(
+      'renders license summary, plan and history on the License tab',
+      (tester) async {
+        final repository = MockPlatformOrganizationsRepository();
+        final controller = PlatformOrganizationsController(
+          repository: repository,
+        );
+        await controller.loadOrganizationDetails('org-acme');
 
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.binding.setSurfaceSize(const Size(1280, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(
-        buildDetailsTestWidget(controller: controller, orgId: 'org-acme'),
-      );
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          buildDetailsTestWidget(controller: controller, orgId: 'org-acme'),
+        );
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('License'));
-      await tester.pumpAndSettle();
+        expect(find.text('Tier: Plus'), findsOneWidget);
 
-      expect(find.text('PLAN ENTITLEMENTS'), findsOneWidget);
-      expect(find.text('COMMERCIAL AGREEMENT'), findsOneWidget);
-      expect(find.text('Negotiated Price (One-time)'), findsOneWidget);
-      expect(find.text('Annual Maintenance Price'), findsOneWidget);
+        await tester.tap(find.text('License'));
+        await tester.pumpAndSettle();
 
-      // Verify Negotiated Price and Annual Maintenance Price cards have the exact same height
-      final negotiatedLabel = find.text('Negotiated Price (One-time)');
-      final annualLabel = find.text('Annual Maintenance Price');
-      final negotiatedCard = find
-          .ancestor(of: negotiatedLabel, matching: find.byType(Container))
-          .first;
-      final annualCard = find
-          .ancestor(of: annualLabel, matching: find.byType(Container))
-          .first;
-      expect(
-        tester.getSize(negotiatedCard).height,
-        equals(tester.getSize(annualCard).height),
-      );
+        expect(find.text('PLAN ENTITLEMENTS'), findsOneWidget);
+        expect(find.text('Maximum Stores'), findsOneWidget);
+        expect(find.text('Negotiated Price (One-time)'), findsOneWidget);
+        expect(find.text('Annual Maintenance Price'), findsOneWidget);
+        expect(find.text('LICENSE HISTORY'), findsOneWidget);
+        expect(find.text('LICENSE ASSIGNED'), findsOneWidget);
+        expect(find.text('ANNUAL MAINTENANCE'), findsOneWidget);
 
-      expect(find.text('LICENSE HISTORY'), findsOneWidget);
-      expect(find.text('EVENT'), findsOneWidget);
-      expect(find.text('ANNUAL MAINTENANCE'), findsOneWidget);
+        // The two term figures sit side by side with equal heights.
+        final oneTimeCard = find
+            .ancestor(
+              of: find.text('Negotiated Price (One-time)'),
+              matching: find.byType(Container),
+            )
+            .first;
+        final maintenanceCard = find
+            .ancestor(
+              of: find.text('Annual Maintenance Price'),
+              matching: find.byType(Container),
+            )
+            .first;
+        expect(
+          tester.getSize(oneTimeCard).height,
+          equals(tester.getSize(maintenanceCard).height),
+        );
 
-      // Verify the table expands to fill available card width (greater than the 1110px legacy limit on 1280px surface)
-      final eventHeadingFinder = find.text('EVENT');
-      final tableHeaderRow = find
-          .ancestor(of: eventHeadingFinder, matching: find.byType(Row))
-          .first;
-      final headerWidth = tester.getSize(tableHeaderRow).width;
-      expect(headerWidth, greaterThan(1110.0));
-    });
+        // The history table spans the available card width on a wide surface.
+        final tableHeaderRow = find
+            .ancestor(of: find.text('EVENT'), matching: find.byType(Row))
+            .first;
+        expect(tester.getSize(tableHeaderRow).width, greaterThan(1110.0));
+      },
+    );
 
     testWidgets('shows the no-license state for an unlicensed organization', (
       tester,
@@ -437,7 +438,8 @@ void main() {
 
       await tester.tap(find.text('Assign License'));
       await tester.pumpAndSettle();
-      expect(find.text('Assign License is not available yet.'), findsOneWidget);
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.text('License plan'), findsOneWidget);
     });
 
     testWidgets('shows empty state when organization has no assigned admins', (
@@ -555,10 +557,10 @@ void main() {
                 'Viewport ${entry.key} should not throw layout or BoxConstraints exceptions',
           );
 
-          final editBtn = find.widgetWithText(
-            OutlinedButton,
-            'Edit Organization',
-          );
+          final editLabel = entry.key == 'compact'
+              ? 'Edit'
+              : 'Edit Organization';
+          final editBtn = find.widgetWithText(OutlinedButton, editLabel);
           expect(
             editBtn,
             findsOneWidget,

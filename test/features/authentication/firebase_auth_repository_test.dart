@@ -1,7 +1,9 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:workaxis/core/backend/functions_error_mapper.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/authentication/data/firebase_auth_repository.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
@@ -9,6 +11,7 @@ import 'package:workaxis/features/authentication/domain/models/authentication_re
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
 import '../../helpers/fake_callable_functions.dart';
+import '../../helpers/fake_data_gateway.dart';
 
 /// Auth double whose email/password sign-in always fails with [code].
 class _RejectingAuth extends MockFirebaseAuth {
@@ -34,6 +37,7 @@ void main() {
   group('FirebaseAuthRepository', () {
     late FakeFirebaseFirestore firestore;
     late FakeCallableFunctions functions;
+    late FakeDataGateway gateway;
     late MockFirebaseAuth auth;
     late FirebaseAuthRepository repository;
 
@@ -65,6 +69,7 @@ void main() {
           return {'email': email};
         },
       });
+      gateway = FakeDataGateway()..respond('GetMyMember', {});
       auth =
           authOverride ??
           MockFirebaseAuth(mockUser: userWith(claims), signedIn: false);
@@ -72,6 +77,7 @@ void main() {
         auth: auth,
         firestore: firestore,
         functions: functions,
+        dataGateway: gateway,
       );
     }
 
@@ -234,6 +240,60 @@ void main() {
         contains('account is suspended'),
       );
       expect(auth.currentUser, isNull);
+    });
+
+    group('server refusal at sign-in', () {
+      const expiredMessage =
+          "Your organization's license has expired. Contact your administrator.";
+
+      /// Makes the server's access check refuse with [message], as a
+      /// `permission-denied` callable does.
+      void refuseAccessCheck(String message) {
+        gateway.handlers['GetMyMember'] = (_) => throw mapFunctionsError(
+          FirebaseFunctionsException(
+            code: 'permission-denied',
+            message: message,
+          ),
+          StackTrace.empty,
+        );
+      }
+
+      test(
+        'shows the server message when claims mark the session suspended',
+        () async {
+          build(claims: {..._validClaims, 'status': 'suspended'});
+          refuseAccessCheck(expiredMessage);
+          final result = await signIn();
+          expect(
+            (result as AuthenticationFailure).errorMessage,
+            expiredMessage,
+          );
+          expect(gateway.calls.map((c) => c.op), ['GetMyMember']);
+          expect(auth.currentUser, isNull);
+        },
+      );
+
+      test('shows the server message when claims are missing', () async {
+        build(claims: {});
+        refuseAccessCheck(expiredMessage);
+        final result = await signIn();
+        expect((result as AuthenticationFailure).errorMessage, expiredMessage);
+        expect(auth.currentUser, isNull);
+      });
+
+      test(
+        'keeps the claim message when the access check has no reason',
+        () async {
+          build(claims: {..._validClaims, 'status': 'suspended'});
+          gateway.handlers['GetMyMember'] = (_) =>
+              throw const NetworkException();
+          final result = await signIn();
+          expect(
+            (result as AuthenticationFailure).errorMessage,
+            contains('account is suspended'),
+          );
+        },
+      );
     });
 
     for (final entry in {

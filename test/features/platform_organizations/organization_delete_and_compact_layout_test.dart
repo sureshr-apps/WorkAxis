@@ -166,7 +166,7 @@ void main() {
       );
 
       expect(tester.takeException(), isNull);
-      for (final label in ['Edit Organization', 'Suspend']) {
+      for (final label in ['Edit', 'Suspend']) {
         final button = find.widgetWithText(OutlinedButton, label);
         expect(button, findsOneWidget);
         expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
@@ -193,8 +193,9 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Acme Corporation'), findsWidgets);
-      final edit = find.byTooltip('Edit Acme Corporation');
-      expect(tester.getSize(edit).width, greaterThanOrEqualTo(48));
+      // Phones have no per-card actions: the whole card is the tap target.
+      expect(find.byTooltip('Edit Acme Corporation'), findsNothing);
+      expect(find.byIcon(Icons.chevron_right_rounded), findsWidgets);
     });
   });
 }

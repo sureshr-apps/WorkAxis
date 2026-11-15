@@ -154,11 +154,13 @@ void runPlatformOrganizationsContract(
       expect(remaining.any((o) => o.id == 'org-acme'), isFalse);
     });
 
-    test('license details exist for licensed organizations only', () async {
-      final license = await repo.getOrganizationLicenseDetails('org-acme');
+    test('license exists for licensed organizations only', () async {
+      final license = await repo.getLicense('org-acme');
       expect(license, isNotNull);
-      expect(license!.history, isNotEmpty);
-      expect(await repo.getOrganizationLicenseDetails('org-crestline'), isNull);
+      expect(license!.plan.name, 'Plus');
+      expect(await repo.getHistory('org-acme'), isNotEmpty);
+      expect(await repo.getLicense('org-crestline'), isNull);
+      expect(await repo.getHistory('org-crestline'), isEmpty);
     });
 
     group('administrators', () {

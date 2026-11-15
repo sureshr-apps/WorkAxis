@@ -3,19 +3,21 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/license_history_event.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_display.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_formatters.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_shared_widgets.dart';
 
-/// Audit log of license events: a table when wide, cards otherwise.
+/// Audit log of license events, newest first: a table when wide, cards otherwise.
 class LicenseHistoryPanel extends StatelessWidget {
-  const LicenseHistoryPanel({super.key, required this.license});
+  const LicenseHistoryPanel({super.key, required this.history});
 
-  final OrganizationLicenseDetails license;
+  /// Already ordered newest first.
+  final List<LicenseHistoryEvent> history;
 
   @override
   Widget build(BuildContext context) {
-    final count = license.history.length;
+    final count = history.length;
     return LicensePanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -37,45 +39,84 @@ class LicenseHistoryPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  'Audit log of license events with the referenced plan '
-                  '(shown as currently defined), validity periods, one-time '
-                  'price, and annual maintenance price.',
+                  'Audit log of license events with the referenced plan (shown '
+                  'as currently defined), validity periods, one-time price, and '
+                  'annual maintenance price.',
                   style: licenseBodyStyle,
                 ),
               ],
             ),
           ),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth >= AppBreakpoints.wideTable) {
-                return _HistoryTable(history: license.history);
-              }
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md,
-                  0,
-                  AppSpacing.md,
-                  AppSpacing.md,
-                ),
-                child: Column(
-                  children: [
-                    for (final entry in license.history)
-                      _HistoryCard(entry: entry),
-                  ],
-                ),
-              );
-            },
-          ),
+          if (history.isEmpty)
+            const _EmptyHistory()
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth >= AppBreakpoints.wideTable) {
+                  return _HistoryTable(history: history);
+                }
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    0,
+                    AppSpacing.md,
+                    AppSpacing.md,
+                  ),
+                  child: Column(
+                    children: [
+                      for (final event in history) _HistoryCard(event: event),
+                    ],
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );
   }
 }
 
+class _EmptyHistory extends StatelessWidget {
+  const _EmptyHistory();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        border: Border.all(color: AppColors.outlineSubtle),
+        borderRadius: AppSpacing.roundedSm,
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.history, size: 24, color: AppColors.outline),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'No License History Recorded',
+            style: AppTypography.labelMedium.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'History events are recorded when a license is assigned, changed, '
+            'modified, or renewed.',
+            style: licenseBodyStyle,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _HistoryTable extends StatelessWidget {
   const _HistoryTable({required this.history});
 
-  final List<LicenseHistoryEntry> history;
+  final List<LicenseHistoryEvent> history;
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +151,7 @@ class _HistoryTable extends StatelessWidget {
         ),
         for (var i = 0; i < history.length; i++) ...[
           if (i > 0) const Divider(height: 1, color: AppColors.outlineSubtle),
-          _HistoryRow(entry: history[i]),
+          _HistoryRow(event: history[i]),
         ],
       ],
     );
@@ -118,9 +159,9 @@ class _HistoryTable extends StatelessWidget {
 }
 
 class _HistoryRow extends StatelessWidget {
-  const _HistoryRow({required this.entry});
+  const _HistoryRow({required this.event});
 
-  final LicenseHistoryEntry entry;
+  final LicenseHistoryEvent event;
 
   @override
   Widget build(BuildContext context) {
@@ -133,18 +174,18 @@ class _HistoryRow extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
         children: [
-          Expanded(flex: 13, child: _EventBadge(label: entry.event)),
+          Expanded(flex: 13, child: _EventBadge(label: event.eventType.label)),
           Expanded(
             flex: 16,
             child: Text(
-              LicenseFormatters.dateTime(entry.occurredAt),
+              LicenseFormatters.eventTime(event.eventAt),
               style: mono,
             ),
           ),
           Expanded(
             flex: 10,
             child: Text(
-              '${entry.planName}\nLevel ${entry.level}',
+              '${event.planName}\nLevel ${event.planLevel}',
               style: AppTypography.labelSmall.copyWith(
                 color: AppColors.onSurface,
               ),
@@ -153,15 +194,14 @@ class _HistoryRow extends StatelessWidget {
           Expanded(
             flex: 18,
             child: Text(
-              '${LicenseFormatters.date(entry.periodStart)} to '
-              '${LicenseFormatters.date(entry.periodEnd)}',
+              LicenseFormatters.period(event.startDate, event.expiryDate),
               style: mono,
             ),
           ),
           Expanded(
             flex: 7,
             child: Text(
-              '${entry.stores}',
+              '${event.maxStores}',
               textAlign: TextAlign.center,
               style: value,
             ),
@@ -169,7 +209,7 @@ class _HistoryRow extends StatelessWidget {
           Expanded(
             flex: 7,
             child: Text(
-              '${entry.users}',
+              '${event.maxUsers}',
               textAlign: TextAlign.center,
               style: value,
             ),
@@ -177,7 +217,7 @@ class _HistoryRow extends StatelessWidget {
           Expanded(
             flex: 14,
             child: Text(
-              LicenseFormatters.money(entry.negotiatedPrice),
+              LicenseFormatters.money(event.negotiatedPrice),
               textAlign: TextAlign.right,
               style: value,
             ),
@@ -185,7 +225,7 @@ class _HistoryRow extends StatelessWidget {
           Expanded(
             flex: 15,
             child: Text(
-              LicenseFormatters.money(entry.annualMaintenancePrice),
+              LicenseFormatters.money(event.maintenancePrice),
               textAlign: TextAlign.right,
               style: value,
             ),
@@ -197,9 +237,9 @@ class _HistoryRow extends StatelessWidget {
 }
 
 class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({required this.entry});
+  const _HistoryCard({required this.event});
 
-  final LicenseHistoryEntry entry;
+  final LicenseHistoryEvent event;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -210,27 +250,36 @@ class _HistoryCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: _EventBadge(label: entry.event)),
-              Text(
-                '${entry.planName} · Level ${entry.level}',
-                style: licenseLabelStyle,
+              Expanded(child: _EventBadge(label: event.eventType.label)),
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(
+                child: Text(
+                  '${event.planName} · Level ${event.planLevel}',
+                  style: licenseLabelStyle,
+                  textAlign: TextAlign.end,
+                ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            LicenseFormatters.dateTime(entry.occurredAt),
+            LicenseFormatters.eventTime(event.eventAt),
             style: licenseBodyStyle,
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '${LicenseFormatters.date(entry.periodStart)} to '
-            '${LicenseFormatters.date(entry.periodEnd)}',
+            LicenseFormatters.period(event.startDate, event.expiryDate),
             style: licenseBodyStyle,
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '${entry.stores} stores · ${entry.users} users',
+            '${event.maxStores} stores · ${event.maxUsers} users',
+            style: licenseBodyStyle,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'One-time ${LicenseFormatters.money(event.negotiatedPrice)} · '
+            'Annual maintenance ${LicenseFormatters.money(event.maintenancePrice)}',
             style: licenseBodyStyle,
           ),
         ],

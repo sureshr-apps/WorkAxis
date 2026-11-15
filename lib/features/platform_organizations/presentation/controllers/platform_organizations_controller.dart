@@ -11,10 +11,10 @@ import 'package:workaxis/features/platform_organizations/domain/models/customer_
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
-import 'package:workaxis/features/platform_organizations/domain/models/organization_license_details.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_admin_rules.dart';
 import 'package:workaxis/features/platform_organizations/domain/repositories/platform_organizations_repository.dart';
+import 'package:workaxis/features/platform_organizations/presentation/controllers/organization_license_controller.dart';
 
 /// Controller for Platform Organization Management.
 ///
@@ -22,6 +22,9 @@ import 'package:workaxis/features/platform_organizations/domain/repositories/pla
 /// independently: each has its own loading flag, error and stale-response
 /// guard, so opening a detail page never flips the list into a loading/error
 /// state (or vice versa).
+///
+/// The selected organization's license is handled by [license], a
+/// sub-controller whose notifications this controller forwards.
 class PlatformOrganizationsController extends ChangeNotifier
     with SafeNotifier
     implements SessionScoped {
@@ -31,7 +34,13 @@ class PlatformOrganizationsController extends ChangeNotifier
     required this.repository,
     this.searchDebounce = const Duration(milliseconds: 300),
     this.pageSize = defaultPageSize,
-  });
+  }) {
+    license = OrganizationLicenseController(repository: repository);
+    license.addListener(notifyListeners);
+  }
+
+  /// License of the selected organization (summary, plan and history).
+  late final OrganizationLicenseController license;
 
   /// Delay before a search/filter change reloads from the server.
   final Duration searchDebounce;
@@ -57,7 +66,6 @@ class PlatformOrganizationsController extends ChangeNotifier
   List<CustomerOrganization> _allOrganizations = const [];
   List<CustomerOrganization> _filteredOrganizations = const [];
   CustomerOrganization? _selectedOrganization;
-  OrganizationLicenseDetails? _selectedLicenseDetails;
   bool _isListLoading = false;
   bool _isDetailLoading = false;
   bool _isActionLoading = false;
@@ -70,8 +78,6 @@ class PlatformOrganizationsController extends ChangeNotifier
 
   List<CustomerOrganization> get organizations => _filteredOrganizations;
   CustomerOrganization? get selectedOrganization => _selectedOrganization;
-  OrganizationLicenseDetails? get selectedLicenseDetails =>
-      _selectedLicenseDetails;
 
   /// Whether the organization list is loading.
   bool get isListLoading => _isListLoading;
@@ -243,20 +249,22 @@ class PlatformOrganizationsController extends ChangeNotifier
     _detailErrorMessage = null;
     if (_selectedOrganization?.id != id) {
       _selectedOrganization = null;
-      _selectedLicenseDetails = null;
     }
     notifyListeners();
 
     try {
       final org = await repository.getOrganizationById(id);
-      final license = org == null
-          ? null
-          : await repository.getOrganizationLicenseDetails(id);
       if (!_detailRequests.isCurrent(token)) return null;
       _selectedOrganization = org;
-      _selectedLicenseDetails = license;
       _isDetailLoading = false;
       notifyListeners();
+      // Not awaited: the license has its own loading state, so the organization
+      // page is usable while it loads.
+      if (org == null) {
+        license.clear();
+      } else {
+        unawaited(license.load(org.id));
+      }
       return org;
     } catch (e, st) {
       if (!_detailRequests.isCurrent(token)) return null;
@@ -394,7 +402,7 @@ class PlatformOrganizationsController extends ChangeNotifier
     _applyFilter();
     if (_selectedOrganization?.id == id) {
       _selectedOrganization = null;
-      _selectedLicenseDetails = null;
+      license.clear();
     }
   }
 
@@ -562,7 +570,7 @@ class PlatformOrganizationsController extends ChangeNotifier
     _allOrganizations = const [];
     _filteredOrganizations = const [];
     _selectedOrganization = null;
-    _selectedLicenseDetails = null;
+    license.clear();
     _isListLoading = false;
     _isDetailLoading = false;
     _isActionLoading = false;
@@ -577,6 +585,8 @@ class PlatformOrganizationsController extends ChangeNotifier
   @override
   void dispose() {
     _debounce?.cancel();
+    license.removeListener(notifyListeners);
+    license.dispose();
     super.dispose();
   }
 }

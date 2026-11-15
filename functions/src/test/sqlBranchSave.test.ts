@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, it } from "node:test";
 import { setDbForTests } from "../db";
 import { FakeDb } from "./fakeDb";
+import { capacityDb } from "./licenseFixtures";
 import { DomainError } from "../errors";
 import { parseBranchSave } from "../branches/savePlan";
 import {
@@ -37,7 +38,8 @@ const BRANCH_LOCK = "FROM branch WHERE id = $1 FOR UPDATE";
 
 /** A database where every guard passes for an update of b1 with no managers. */
 function happyDb(): FakeDb {
-  return new FakeDb().when(BRANCH_LOCK, [{ organizationId: "o1" }]);
+  // An active branch that stays active needs no capacity check.
+  return new FakeDb().when(BRANCH_LOCK, [{ organizationId: "o1", status: "active" }]);
 }
 
 let db: FakeDb;
@@ -79,7 +81,7 @@ it("update runs every statement in one transaction and replaces manager assignme
 });
 
 it("create inserts the branch with idempotency columns instead of upserting", async () => {
-  setDbForTests((db = new FakeDb().when(BRANCH_LOCK, [])));
+  setDbForTests((db = capacityDb().when(BRANCH_LOCK, [])));
   const plan = createPlan();
   await commitBranchSave(plan, []);
   const insert = db.calls.find((c) => c.sql.startsWith("INSERT INTO branch"));

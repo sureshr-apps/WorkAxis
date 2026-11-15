@@ -17,6 +17,8 @@ function member(authUid: string): MemberRecord {
     role: "employee",
     status: "active",
     organizationId: "o1",
+    licenseUsable: true,
+    licenseToday: "2026-11-15",
     branchIds: [],
     activeBranchIds: [],
   };
