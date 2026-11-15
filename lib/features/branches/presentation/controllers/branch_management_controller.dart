@@ -141,6 +141,36 @@ class BranchManagementController extends ChangeNotifier
     }
   }
 
+  /// Deletes a branch; false (with [actionErrorMessage] set) when it is refused.
+  Future<bool> deleteBranch({
+    required UserAccessContext access,
+    required String branchId,
+  }) async {
+    final epoch = _scopeEpoch;
+    _isSaving = true;
+    _actionErrorMessage = null;
+    notifyListeners();
+    try {
+      await repository.deleteBranch(access: access, branchId: branchId);
+      if (!_isCurrentScope(epoch)) return false;
+      await loadBranches(access);
+      return true;
+    } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return false;
+      _actionErrorMessage = userMessageFor(
+        e,
+        st,
+        fallback: 'The branch could not be deleted. Please try again.',
+      );
+      return false;
+    } finally {
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<BranchRecord?> saveBranch({
     required UserAccessContext access,
     required BranchRecord branch,

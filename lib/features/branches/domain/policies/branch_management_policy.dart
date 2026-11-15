@@ -5,6 +5,10 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/branches/domain/branch_geofence_validator.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 
+/// Shown when a branch still has people or history; it is suspended instead of deleted.
+const String branchHasHistoryMessage =
+    'This branch has employees, returns or attendance records, so it cannot be deleted. Suspend it instead.';
+
 /// Authorization and validation for branch management, shared by the mock and
 /// production repositories.
 class BranchManagementPolicy {
