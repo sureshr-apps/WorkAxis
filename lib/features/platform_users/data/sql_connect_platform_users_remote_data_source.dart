@@ -75,6 +75,8 @@ class SqlConnectPlatformUsersRemoteDataSource
       phone: m.optString('phone'),
       status: _status(m.string('status')),
       createdAt: m.dateTime('createdAt'),
+      // Read from Firebase Auth by the server; null until the first sign-in.
+      lastActiveAt: m.optDateTime('lastSignInAt'),
     );
   }
 

@@ -46,6 +46,23 @@ void main() {
     expect(a.createdAt, DateTime.utc(2026, 2, 2, 10));
   });
 
+  test('maps the last sign-in time the server read from Auth', () async {
+    gateway.respond('ListPlatformMembersPaged', {
+      'organizationMembers': [
+        {..._admin(), 'lastSignInAt': '2026-11-15T09:30:00.000Z'},
+        _admin(),
+      ],
+      'total': [
+        {'_count': 2},
+      ],
+    });
+
+    final page = await source.listPage(limit: 20, offset: 0);
+
+    expect(page.items[0].lastActiveAt, DateTime.utc(2026, 11, 15, 9, 30));
+    expect(page.items[1].lastActiveAt, isNull);
+  });
+
   test('count requests one row filtered by status', () async {
     gateway.respond('ListPlatformMembersPaged', {
       'organizationMembers': <dynamic>[],

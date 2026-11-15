@@ -1,3 +1,4 @@
+import { lastSignInTimes } from "../../accounts/signInTimes";
 import { denied } from "../../errors";
 import { optString } from "../../util/input";
 import {
@@ -15,6 +16,24 @@ import { optText, pageVars, reqId } from "../vars";
 type Row = Record<string, unknown>;
 
 const LIST_COLS = memberCols("m", MEMBER_LIST_FIELDS);
+
+const PLATFORM_ROLES = new Set(["platformOwner", "platformAdmin"]);
+
+/**
+ * Adds lastSignInAt to platform members, read from Firebase Auth (the only place
+ * sign-ins are recorded). Other members are returned unchanged, so their sign-in
+ * times are never exposed.
+ */
+async function withLastSignIn(members: Row[]): Promise<Row[]> {
+  const platform = members.filter((m) => PLATFORM_ROLES.has(String(m.role)));
+  if (platform.length === 0) return members;
+  const times = await lastSignInTimes(platform.map((m) => String(m.authUid ?? "")));
+  return members.map((m) =>
+    PLATFORM_ROLES.has(String(m.role))
+      ? { ...m, lastSignInAt: times.get(String(m.authUid ?? "")) ?? null }
+      : m,
+  );
+}
 
 // Data Connect `contains` was case-sensitive; here name filters use ILIKE with
 // literal %/_ escaping so search is case-insensitive.
@@ -120,8 +139,9 @@ export const membersOps: OperationRegistry = {
       (actor.role === "branchManager" && assigned.some((b) => actor.branchIds.includes(b)));
     if (!allowed) throw denied("Member not found or access denied.");
     const { organizationId, ...rest } = member;
+    const [signedIn] = await withLastSignIn([rest]);
     return {
-      organizationMember: { ...rest, organization: organizationId ? { id: organizationId } : null },
+      organizationMember: { ...signedIn, organization: organizationId ? { id: organizationId } : null },
     };
   },
 
@@ -141,6 +161,6 @@ export const membersOps: OperationRegistry = {
       limit,
       offset,
     });
-    return { organizationMembers: rows, total };
+    return { organizationMembers: await withLastSignIn(rows), total };
   },
 };

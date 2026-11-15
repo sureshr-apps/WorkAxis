@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Actor } from "../auth/roles";
+import { setSignInLookupForTests } from "../accounts/signInTimes";
 import { runOperation } from "../data/dispatch";
 import { operations } from "../data/registry";
 import { FakeDb } from "./fakeDb";
@@ -71,6 +72,23 @@ describe("organizations ops", () => {
     assert.match(list.sql, /AS "branchCount"/);
     assert.match(list.sql, /AS "memberCount"/);
     assert.deepEqual(list.params, ["%50\\%\\_off%", 5, 10]);
+  });
+
+  it("platform administrator rows carry the last sign-in time from Auth", async () => {
+    setSignInLookupForTests(async (uids) => new Map(uids.map((uid) => [uid, "2026-11-15T10:00:00.000Z"])));
+    try {
+      const db = new FakeDb()
+        .when("count(*)", [{ _count: 1 }])
+        .when("from organization_member m", [
+          { id: "m1", authUid: "u1", role: "platformAdmin", fullName: "Admin" },
+        ]);
+      const res = (await run(db, platform, "ListPlatformMembersPaged", { limit: 5, offset: 0 })) as {
+        organizationMembers: { lastSignInAt: string | null }[];
+      };
+      assert.equal(res.organizationMembers[0].lastSignInAt, "2026-11-15T10:00:00.000Z");
+    } finally {
+      setSignInLookupForTests(undefined);
+    }
   });
 
   it("creates an organization with defaults and maps duplicate codes", async () => {
