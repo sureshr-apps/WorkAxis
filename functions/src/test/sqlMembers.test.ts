@@ -192,7 +192,7 @@ it("insertMember allocates the employee code in the same transaction as the inse
   assert.match(db.calls[3].sql, /SELECT 1 FROM organization_member/);
   assert.match(
     norm(db.calls[4].sql),
-    /^INSERT INTO organization_member \(id, auth_uid, organization_id, full_name, username, email, role, employee_code, status\)/,
+    /^INSERT INTO organization_member \(id, auth_uid, organization_id, full_name, username, email, role, employee_code, status, created_at\)/,
   );
   assert.deepEqual(db.calls[4].params, [
     "m1",
@@ -204,7 +204,7 @@ it("insertMember allocates the employee code in the same transaction as the inse
     "branchManager",
     "EMP-10007",
   ]);
-  assert.match(db.calls[5].sql, /INSERT INTO user_branch_assignment/);
+  assert.match(db.calls[5].sql, /INSERT INTO user_branch_assignment \(member_id, branch_id, assigned_at\)/);
   assert.deepEqual(db.calls[5].params, ["m1", ["b1", "b2"]]);
 });
 
@@ -224,6 +224,8 @@ it("insertMember without branches skips the assignment insert", async () => {
   );
   assert.equal(db.calls.length, 1);
   assert.doesNotMatch(db.calls[0].sql, /organization_id|employee_code/);
+  // Live tables have no SQL default for created_at, so the insert must set it.
+  assert.match(norm(db.calls[0].sql), /, status, created_at\) VALUES \(.*, 'active', now\(\)\)$/);
 });
 
 it("updateMemberWithAssignments patches, clears and reinserts in one transaction", async () => {

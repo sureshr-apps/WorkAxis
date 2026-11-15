@@ -87,6 +87,7 @@ it("create inserts the branch with idempotency columns instead of upserting", as
   const insert = db.calls.find((c) => c.sql.startsWith("INSERT INTO branch"));
   assert.ok(insert);
   assert.match(insert.sql, /creation_request_key, creation_fingerprint/);
+  assert.match(insert.sql, /, created_at\)/);
   assert.ok(insert.params.includes(plan.data.id));
   assert.ok(insert.params.includes(plan.creationFingerprint));
   assert.equal(db.transactions, 1);

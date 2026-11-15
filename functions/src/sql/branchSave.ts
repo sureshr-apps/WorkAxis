@@ -150,8 +150,8 @@ export async function commitBranchSave(plan: Plan, currentIds: string[]) {
       // Plain INSERT (not an upsert): a concurrent create with the same id must
       // fail with a unique violation so the caller can resolve the replay.
       await tx.query(
-        `INSERT INTO branch (${cols.map(([, c]) => c).join(", ")})
-         VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")})`,
+        `INSERT INTO branch (${[...cols.map(([, c]) => c), "created_at"].join(", ")})
+         VALUES (${[...cols.map((_, i) => `$${i + 1}`), "now()"].join(", ")})`,
         cols.map(([k]) => data[k]),
       );
     } else {
@@ -171,8 +171,8 @@ export async function commitBranchSave(plan: Plan, currentIds: string[]) {
     );
     if (wanted.length > 0) {
       await tx.query(
-        `INSERT INTO user_branch_assignment (member_id, branch_id)
-         SELECT unnest($1::text[]), $2`,
+        `INSERT INTO user_branch_assignment (member_id, branch_id, assigned_at)
+         SELECT unnest($1::text[]), $2, now()`,
         [wanted, branchId],
       );
     }

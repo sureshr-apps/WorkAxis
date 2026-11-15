@@ -213,8 +213,8 @@ async function insertAssignments(
 ): Promise<void> {
   if (branchIds.length === 0) return;
   await tx.query(
-    `INSERT INTO user_branch_assignment (member_id, branch_id)
-     SELECT $1, unnest($2::text[])`,
+    `INSERT INTO user_branch_assignment (member_id, branch_id, assigned_at)
+     SELECT $1, unnest($2::text[]), now()`,
     [memberId, branchIds],
   );
 }
@@ -253,14 +253,17 @@ export async function insertMember(
   }
 }
 
+// created_at is written explicitly: the live table came from Data Connect, whose
+// @default(expr: "request.time") was applied outside the database, so the column
+// has no SQL default and an omitted value violates NOT NULL.
 async function insertRow(
   tx: SqlExecutor,
   cols: ReadonlyArray<[keyof NewMember, string]>,
   values: unknown[],
 ): Promise<void> {
   await tx.query(
-    `INSERT INTO organization_member (${cols.map(([, c]) => c).join(", ")}, status)
-     VALUES (${values.map((_, i) => `$${i + 1}`).join(", ")}, 'active')`,
+    `INSERT INTO organization_member (${cols.map(([, c]) => c).join(", ")}, status, created_at)
+     VALUES (${values.map((_, i) => `$${i + 1}`).join(", ")}, 'active', now())`,
     values,
   );
 }
