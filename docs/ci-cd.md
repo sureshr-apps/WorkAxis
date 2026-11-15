@@ -10,15 +10,15 @@ except the Cloud SQL connection used for migrations (see "Database access").
 |---|---|---|
 | `verify.yml` | called by the two below | `dart format` check, `flutter analyze`, `flutter test`; functions `npm test` (tsc + node tests); Firestore rules tests in the emulator |
 | `ci.yml` | pull requests and pushes to any branch except `main` | runs `verify.yml` only. No secrets, nothing deployed |
-| `deploy.yml` | push to `main`, or run manually | `changes` detects what the push touched. `verify` always runs (analysis, two test shards, functions, rules). Then only what changed deploys: database migrations (`functions/db`), functions + Firestore/Storage rules and indexes (`functions/`, rules, indexes), web build and Hosting (`lib/`, `web/`, `assets/`, `pubspec`, `firebase.json`). The signed Android APK and App Bundle (`app` changes) are built as two parallel jobs from `android.yml` and do not wait for `verify`. A manual run deploys everything |
+| `deploy.yml` | push to `main`, or run manually | `changes` detects what the push touched. `verify` always runs (analysis, two test shards, functions, rules). Then only what changed deploys: database migrations (`functions/db`), functions + Firestore/Storage rules and indexes (`functions/`, rules, indexes), web build and Hosting (`lib/`, `web/`, `assets/`, `pubspec`, `firebase.json`). The signed Android APK (`app` changes) is built from `android.yml` and does not wait for `verify`. The App Bundle is built only on a manual run, for Play uploads. A manual run deploys everything |
 
 Deployments are serialised (`concurrency: deploy-main`) and are never cancelled
 midway. The Android `versionCode` is `100 + the workflow run number`, so each build
 installs over the previous one (the offset keeps it above early hand-made builds).
 
 Where to find the Android build: the run's page, section Artifacts,
-`workaxis-apk-<run number>` (APK for direct install) and
-`workaxis-appbundle-<run number>` (AAB for the Play Store). Artifacts are kept for 30 days. The repository is public, so artifacts
+`workaxis-apk-<run number>` (APK for direct install). The App Bundle (AAB, for the
+Play Store) is `workaxis-appbundle-<run number>` and exists only for manual runs. Artifacts are kept for 30 days. The repository is public, so artifacts
 are visible to any signed-in GitHub user; add a private release channel (for
 example Firebase App Distribution) before sharing builds more widely.
 

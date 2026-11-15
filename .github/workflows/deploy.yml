@@ -3,7 +3,8 @@
 #   verify + changes -> database migrations (functions/db changed)
 #   verify + changes + database -> backend deploy (functions or rules changed)
 #   verify + changes -> web build and deploy (app code or hosting config changed)
-#   changes -> signed Android APK and App Bundle (app code changed)
+#   changes -> signed Android APK (app code changed)
+#   changes -> signed App Bundle (manual run only)
 # A manual run (workflow_dispatch) deploys everything.
 #
 # Google Cloud access is keyless: the GitHub OIDC token is exchanged through
@@ -176,16 +177,22 @@ jobs:
           --non-interactive
 
   android:
-    name: Android
-    # Not gated on verify, so the builds run alongside the checks. If verify
+    name: Android APK
+    # Not gated on verify, so the build runs alongside the checks. If verify
     # fails, the deploy jobs do not run; check verify before installing an APK.
     needs: [changes]
     if: ${{ needs.changes.outputs.app == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [apk, appbundle]
     uses: ./.github/workflows/android.yml
     with:
-      target: ${{ matrix.target }}
+      target: apk
+    secrets: inherit
+
+  android-bundle:
+    name: Android App Bundle
+    # The App Bundle is for Play uploads, so it is built only on a manual run.
+    needs: [changes]
+    if: ${{ github.event_name == 'workflow_dispatch' && needs.changes.outputs.app == 'true' }}
+    uses: ./.github/workflows/android.yml
+    with:
+      target: appbundle
     secrets: inherit
