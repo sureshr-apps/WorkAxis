@@ -3,13 +3,11 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/widgets/organization_metrics_row.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 
-const double _wrapTextScale = 1.15;
-const double _wrapBelowScreenWidth = 400;
 const BoxConstraints _touchTarget = BoxConstraints(
   minWidth: AppSpacing.minTouchTarget,
   minHeight: AppSpacing.minTouchTarget,
@@ -95,7 +93,11 @@ class OrganizationCardItem extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _MetricsRow(organization: organization),
+                OrganizationMetricsRow(
+                  hubCount: organization.branchCount,
+                  staffCount: organization.employeeCount,
+                  onboardedOn: organization.createdAt,
+                ),
                 if (!compact) ...[
                   const SizedBox(height: AppSpacing.xs),
                   Row(
@@ -182,115 +184,6 @@ class _CodeBadge extends StatelessWidget {
           color: AppColors.primary,
         ),
       ),
-    );
-  }
-}
-
-class _MetricsRow extends StatelessWidget {
-  const _MetricsRow({required this.organization});
-
-  final CustomerOrganization organization;
-
-  @override
-  Widget build(BuildContext context) {
-    const divider = SizedBox(
-      height: 20,
-      child: VerticalDivider(width: 1, color: AppColors.outlineSubtle),
-    );
-    // Large text or a narrow phone cannot fit three metrics on one line, so
-    // they wrap (dividers dropped) instead of overflowing. Decided from
-    // MediaQuery because the card sits in an IntrinsicHeight, which cannot
-    // host a LayoutBuilder.
-    final crowded =
-        MediaQuery.textScalerOf(context).scale(1) > _wrapTextScale ||
-        MediaQuery.sizeOf(context).width < _wrapBelowScreenWidth;
-    final metrics = [
-      _Metric(
-        value: organization.branchCount?.toString() ?? '—',
-        label: 'hubs',
-        icon: Icons.storefront_outlined,
-      ),
-      _Metric(
-        value: organization.employeeCount?.toString() ?? '—',
-        label: 'staff',
-        icon: Icons.people_outline,
-      ),
-      _Metric(
-        value: AppFormatters.formatDate(organization.createdAt),
-        label: 'onboarded',
-        icon: Icons.calendar_today_outlined,
-        isDate: true,
-      ),
-    ];
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: AppSpacing.roundedSm,
-        border: Border.all(
-          color: AppColors.outlineSubtle.withValues(alpha: 0.6),
-        ),
-      ),
-      child: crowded
-          ? Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              spacing: AppSpacing.md,
-              runSpacing: AppSpacing.sm,
-              children: metrics,
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [metrics[0], divider, metrics[1], divider, metrics[2]],
-            ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({
-    required this.value,
-    required this.label,
-    required this.icon,
-    this.isDate = false,
-  });
-
-  final String value;
-  final String label;
-  final IconData icon;
-  final bool isDate;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: AppColors.secondary),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              value,
-              style: isDate
-                  ? AppTypography.labelSmall.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.onSurface,
-                    )
-                  : AppTypography.labelMono.copyWith(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-            ),
-          ],
-        ),
-        Text(
-          label,
-          style: AppTypography.labelSmall.copyWith(color: AppColors.secondary),
-        ),
-      ],
     );
   }
 }

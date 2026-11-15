@@ -8,7 +8,33 @@ import 'package:workaxis/features/access/presentation/controllers/access_control
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/access/presentation/screens/access_verification_screen.dart';
 import 'package:workaxis/features/authentication/data/mock_auth_repository.dart';
+import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/features/access/domain/models/user_access_context.dart';
+import 'package:workaxis/features/access/domain/repositories/access_repository.dart';
+import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
+
+/// Refuses every resolve the way the server does for a lapsed license.
+class _RefusingAccessRepository implements AccessRepository {
+  _RefusingAccessRepository(this.message);
+
+  final String message;
+
+  @override
+  Future<UserAccessContext> resolveCurrentUserAccess(AppUser user) {
+    throw AccessDeniedException('Callable permission-denied', message);
+  }
+
+  @override
+  Future<List<Never>> getAssignedBranches(String userId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<bool> validateBranchAccess({
+    required String userId,
+    required String branchId,
+  }) => throw UnimplementedError();
+}
 
 void main() {
   late MockAuthenticationRepository authRepo;
@@ -66,6 +92,28 @@ void main() {
   }
 
   group('AccessVerificationScreen Widget Tests', () {
+    testWidgets('shows the refusal reason from the server, not a guess', (
+      tester,
+    ) async {
+      const reason =
+          "Your organization's license has expired. Contact your administrator.";
+      accessController = AccessController(
+        accessRepository: _RefusingAccessRepository(reason),
+      );
+
+      await authController.signIn(
+        identifier: 'owner',
+        password: 'Password123!',
+      );
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      expect(find.text(reason), findsOneWidget);
+      expect(find.text('Check your connection and try again.'), findsNothing);
+      expect(find.text('Try Again'), findsOneWidget);
+    });
+
     testWidgets('shows loading state while resolving access', (tester) async {
       // Use small delay to capture verifying state
       accessRepo = MockAccessRepository(delay: const Duration(seconds: 1));

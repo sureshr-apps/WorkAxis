@@ -121,7 +121,9 @@ class _AccessVerificationScreenState extends State<AccessVerificationScreen> {
           child: ResponsiveContainer(
             maxWidth: AppBreakpoints.maxFormCardWidth,
             padding: const EdgeInsets.all(AppSpacing.xl),
-            child: hasError ? _buildErrorState() : _buildVerifyingState(),
+            child: hasError
+                ? _buildErrorState(accessController.errorMessage!)
+                : _buildVerifyingState(),
           ),
         ),
       ),
@@ -173,7 +175,9 @@ class _AccessVerificationScreenState extends State<AccessVerificationScreen> {
     );
   }
 
-  Widget _buildErrorState() {
+  /// Shows the access failure as the server or client worded it, so a blocked
+  /// member sees the reason (for example a lapsed license) rather than a guess.
+  Widget _buildErrorState(String message) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -212,7 +216,7 @@ class _AccessVerificationScreenState extends State<AccessVerificationScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Check your connection and try again.',
+              message,
               textAlign: TextAlign.center,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.onSurfaceVariant,
