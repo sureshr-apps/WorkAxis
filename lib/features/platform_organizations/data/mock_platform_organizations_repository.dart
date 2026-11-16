@@ -199,6 +199,18 @@ class MockPlatformOrganizationsRepository
   }
 
   @override
+  Future<CustomerOrganization> deleteOrganizationAdmin(
+    String organizationId,
+    String adminId,
+  ) async {
+    final org = _dataSource.getById(organizationId);
+    if (org != null) {
+      OrganizationAdminRules.checkDeletion(org.admins, adminId);
+    }
+    return _dataSource.removeAdmin(organizationId, adminId);
+  }
+
+  @override
   Future<CustomerOrganization> setOrganizationAdminStatus(
     String organizationId,
     String adminId,

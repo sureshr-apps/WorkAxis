@@ -15,4 +15,4 @@ enum OrganizationAdminStatus {
 }
 
 /// Actions a Platform user can take on an Organization Administrator.
-enum OrganizationAdminAction { edit, resetPassword, suspend, restore }
+enum OrganizationAdminAction { edit, resetPassword, suspend, restore, delete }

@@ -124,6 +124,44 @@ export function assertCanDeletePlatformAdministrator(actor: Actor, target: Targe
   }
 }
 
+/**
+ * Organization Administrators are removed by platform staff only. The rule
+ * covers only organization administrator accounts; customer roles and platform
+ * accounts are removed through their own flows.
+ */
+export function assertCanDeleteOrganizationAdmin(actor: Actor, target: Target): void {
+  if (!isPlatformRole(actor.role)) {
+    throw denied("Only platform staff can delete organization administrators.");
+  }
+  if (target.role !== "orgAdmin") {
+    throw denied("Only Organization Administrator accounts can be deleted here.");
+  }
+  if (target.uid !== undefined && target.uid === actor.uid) {
+    throw denied("You cannot delete your own account.");
+  }
+}
+
+/**
+ * An organization keeps at least one active administrator, so deleting the
+ * only active administrator is refused. Suspended administrators, and active
+ * ones while another active administrator remains, may be deleted.
+ */
+export function assertOrganizationKeepsActiveAdmin(
+  target: { id: string; role: Role; status: string },
+  orgMembers: readonly { id: string; role: Role; status: string }[],
+): void {
+  if (target.role !== "orgAdmin" || target.status !== "active") return;
+  const otherActiveAdmins = orgMembers.filter(
+    (m) => m.role === "orgAdmin" && m.status === "active" && m.id !== target.id,
+  );
+  if (otherActiveAdmins.length === 0) {
+    throw invalid(
+      "An organization must keep at least one active administrator. " +
+        "Add or reactivate another administrator first.",
+    );
+  }
+}
+
 /** May the actor manage kiosks / pairing for this branch? */
 export function assertCanManageBranch(
   actor: Actor,

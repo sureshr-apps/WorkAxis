@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  assertCanDeleteOrganizationAdmin,
   assertCanDeletePlatformAdministrator,
+  assertOrganizationKeepsActiveAdmin,
   assertCanManage,
   assertCanManageBranch,
   assertCanProvision,
@@ -150,3 +152,53 @@ describe("assertCanDeletePlatformAdministrator", () => {
     forbidden(() => assertCanDeletePlatformAdministrator(owner, t("platformAdmin", undefined, [], "owner")));
   });
 });
+
+describe("assertCanDeleteOrganizationAdmin", () => {
+  it("lets platform staff delete an organization administrator", () => {
+    allowed(() => assertCanDeleteOrganizationAdmin(owner, t("orgAdmin", "o1", [], "other")));
+    allowed(() => assertCanDeleteOrganizationAdmin(padmin, t("orgAdmin", "o1", [], "other")));
+  });
+
+  it("refuses customer roles and non-administrator targets", () => {
+    for (const a of [orgAdmin, bm, emp]) {
+      forbidden(() => assertCanDeleteOrganizationAdmin(a, t("orgAdmin", "o1", [], "other")));
+    }
+    forbidden(() => assertCanDeleteOrganizationAdmin(owner, t("branchManager", "o1", ["b1"], "other")));
+    forbidden(() => assertCanDeleteOrganizationAdmin(owner, t("platformAdmin", undefined, [], "other")));
+  });
+
+  it("refuses to delete the actor's own account", () => {
+    forbidden(() => assertCanDeleteOrganizationAdmin(owner, t("orgAdmin", "o1", [], "owner")));
+  });
+});
+
+describe("assertOrganizationKeepsActiveAdmin", () => {
+  const admin = (id: string, status: string) => ({ id, role: "orgAdmin" as Role, status });
+  const member = (id: string, role: Role, status: string) => ({ id, role, status });
+  const refused = (fn: () => void) => assert.throws(fn, { code: "invalid-argument" });
+
+  it("refuses to delete the only active administrator", () => {
+    refused(() => assertOrganizationKeepsActiveAdmin(admin("a1", "active"), [admin("a1", "active")]));
+  });
+
+  it("allows deleting an active administrator while another stays active", () => {
+    allowed(() =>
+      assertOrganizationKeepsActiveAdmin(admin("a1", "active"), [admin("a1", "active"), admin("a2", "active")]),
+    );
+  });
+
+  it("allows deleting a suspended administrator even when none else is active", () => {
+    allowed(() => assertOrganizationKeepsActiveAdmin(admin("a1", "suspended"), [admin("a1", "suspended")]));
+  });
+
+  it("ignores customer roles in the active count", () => {
+    refused(() =>
+      assertOrganizationKeepsActiveAdmin(admin("a1", "active"), [
+        admin("a1", "active"),
+        member("b1", "branchManager", "active"),
+        member("e1", "employee", "active"),
+      ]),
+    );
+  });
+});
+

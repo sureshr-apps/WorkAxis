@@ -60,6 +60,16 @@ class OrganizationAdminRules {
     return active.length == 1 && active.first.id == adminId;
   }
 
+  /// Throws when deleting [adminId] would leave no active admin.
+  static void checkDeletion(
+    List<OrganizationAdminUser> admins,
+    String adminId,
+  ) {
+    if (isLastActiveAdmin(admins, adminId)) {
+      throw ValidationException(lastActiveAdminMessage);
+    }
+  }
+
   /// Throws when moving [adminId] to [next] would leave no active admin.
   static void checkStatusChange(
     List<OrganizationAdminUser> admins,

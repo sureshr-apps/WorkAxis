@@ -30,8 +30,8 @@ class AdministratorActionButtons extends StatelessWidget {
   final OrganizationAdminUser administrator;
   final AdministratorActionCallback onAction;
 
-  /// Whether this administrator may be suspended (false for the last active
-  /// administrator).
+  /// Whether this administrator may be suspended. Only the tooltip depends on
+  /// it: a refused suspend is still tappable and explains itself on tap.
   final bool canSuspend;
   final bool enabled;
   final bool labelled;
@@ -67,7 +67,7 @@ class AdministratorActionButtons extends StatelessWidget {
           label: 'Suspend',
           icon: Icons.person_off_outlined,
           color: AppColors.statusUrgentText,
-          onPressed: enabled && canSuspend
+          onPressed: enabled
               ? () => onAction(administrator, OrganizationAdminAction.suspend)
               : null,
         )
@@ -81,6 +81,15 @@ class AdministratorActionButtons extends StatelessWidget {
               ? () => onAction(administrator, OrganizationAdminAction.restore)
               : null,
         ),
+      AccountCardAction(
+        tooltip: 'Delete administrator',
+        label: 'Delete',
+        icon: Icons.delete_outline,
+        color: AppColors.statusUrgentText,
+        onPressed: enabled
+            ? () => onAction(administrator, OrganizationAdminAction.delete)
+            : null,
+      ),
     ];
 
     if (labelled) return AccountCardActions(actions: actions);

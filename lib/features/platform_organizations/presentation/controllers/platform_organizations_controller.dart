@@ -499,6 +499,25 @@ class PlatformOrganizationsController extends ChangeNotifier
     },
   );
 
+  /// Permanently deletes an administrator. Deleting the only active
+  /// administrator is refused before any request is sent.
+  Future<bool> deleteAdministrator(String organizationId, String adminId) {
+    final selected = _selectedOrganization;
+    if (selected != null && selected.id == organizationId) {
+      try {
+        OrganizationAdminRules.checkDeletion(selected.admins, adminId);
+      } on Object catch (e, st) {
+        _actionErrorMessage = userMessageFor(e, st, fallback: '');
+        notifyListeners();
+        return Future.value(false);
+      }
+    }
+    return _runAdminAction(
+      fallback: 'The administrator could not be deleted. Please try again.',
+      body: () => repository.deleteOrganizationAdmin(organizationId, adminId),
+    );
+  }
+
   /// Suspends or reactivates an administrator. Suspending the last active
   /// administrator is refused before any request is sent.
   Future<bool> setAdministratorStatus(

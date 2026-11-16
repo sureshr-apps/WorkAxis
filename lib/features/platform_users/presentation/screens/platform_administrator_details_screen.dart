@@ -17,6 +17,7 @@ import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 import 'package:workaxis/features/platform_users/presentation/controllers/platform_users_controller.dart';
+import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_delete_flow.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_dialogs.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_users_panel.dart';
 
@@ -166,29 +167,12 @@ class _PlatformAdministratorDetailsScreenState
           .showSnackBar(SnackBar(content: Text(message)));
 
   Future<void> _deleteAdministrator(PlatformAdministrator administrator) async {
-    final controller = context.read<PlatformUsersController>();
-    final confirmed = await confirmAdministratorDelete(
+    final deleted = await confirmAndDeleteAdministrator(
       context,
-      administrator: administrator,
+      context.read<PlatformUsersController>(),
+      administrator,
     );
-    if (!confirmed || !mounted) return;
-    controller.clearActionError();
-    // Captured before leaving this screen: the messenger belongs to the app,
-    // so the confirmation still shows after the route changes.
-    final messenger = ScaffoldMessenger.of(context);
-    final deleted = await controller.deleteAdministrator(administrator.id);
-    if (!mounted) return;
-    if (!deleted) {
-      _toast(
-        controller.actionErrorMessage ??
-            'The administrator could not be deleted. Try again.',
-      );
-      return;
-    }
-    messenger.showSnackBar(
-      SnackBar(content: Text('${administrator.fullName} deleted.')),
-    );
-    context.go(AppRoutes.platformUsers);
+    if (deleted && mounted) context.go(AppRoutes.platformUsers);
   }
 
   Future<void> _changeStatus(

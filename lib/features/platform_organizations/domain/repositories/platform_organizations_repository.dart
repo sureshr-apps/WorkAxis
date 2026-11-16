@@ -87,6 +87,13 @@ abstract interface class PlatformOrganizationsRepository
     required String newPassword,
   });
 
+  /// Permanently removes [adminId] from the organization. Deleting the only
+  /// active administrator is rejected with a `ValidationException`.
+  Future<CustomerOrganization> deleteOrganizationAdmin(
+    String organizationId,
+    String adminId,
+  );
+
   /// Suspends or reactivates [adminId]. Suspending the last active
   /// administrator is rejected with a `ValidationException`.
   Future<CustomerOrganization> setOrganizationAdminStatus(

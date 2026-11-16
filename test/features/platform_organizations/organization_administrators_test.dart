@@ -245,7 +245,43 @@ void main() {
   });
 
   group('OrganizationDetailsScreen administrators tab', () {
-    testWidgets('the only active admin has a disabled suspend action', (
+    testWidgets(
+      'suspending the only active admin explains the refusal on tap',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1280, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final controller = PlatformOrganizationsController(
+          repository: MockPlatformOrganizationsRepository(),
+        );
+        addTearDown(controller.dispose);
+        await controller.loadOrganizationDetails('org-apex');
+
+        await tester.pumpWidget(_detailsHost(controller, 'org-apex'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Administrators'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byTooltip('The only active administrator cannot be suspended'),
+          findsOneWidget,
+        );
+        expect(find.byTooltip('Suspend administrator'), findsNothing);
+
+        await tester.tap(
+          find.byTooltip('The only active administrator cannot be suspended'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(OrganizationAdminRules.lastActiveAdminMessage),
+          findsOneWidget,
+        );
+        // No confirmation is offered, and the administrator stays active.
+        expect(find.text('Restore'), findsNothing);
+      },
+    );
+
+    testWidgets('deleting the only active administrator explains the refusal', (
       tester,
     ) async {
       await tester.binding.setSurfaceSize(const Size(1280, 900));
@@ -261,11 +297,54 @@ void main() {
       await tester.tap(find.text('Administrators'));
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byTooltip('Delete administrator').first);
+      await tester.pumpAndSettle();
+
       expect(
-        find.byTooltip('The only active administrator cannot be suspended'),
+        find.text(OrganizationAdminRules.lastActiveAdminMessage),
         findsOneWidget,
       );
-      expect(find.byTooltip('Suspend administrator'), findsNothing);
+      expect(find.text('Delete administrator?'), findsNothing);
+    });
+
+    testWidgets('deleting an administrator asks first, then removes the row', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = MockPlatformOrganizationsRepository();
+      final org = (await repository.getOrganizationsPage()).items.firstWhere(
+        (o) => o.admins.length >= 2,
+      );
+      final controller = PlatformOrganizationsController(
+        repository: repository,
+      );
+      addTearDown(controller.dispose);
+      await controller.loadOrganizationDetails(org.id);
+      final victimIndex = controller.selectedOrganization!.admins.indexWhere(
+        (a) => !controller.isLastActiveAdministrator(a.id),
+      );
+      final victim = controller.selectedOrganization!.admins[victimIndex];
+
+      await tester.pumpWidget(_detailsHost(controller, org.id));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Administrators'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Delete administrator').at(victimIndex));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete administrator?'), findsOneWidget);
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Delete administrator'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('${victim.name} deleted.'), findsOneWidget);
+      expect(
+        controller.selectedOrganization!.admins.any((a) => a.id == victim.id),
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('suspend then restore reflects the account state', (

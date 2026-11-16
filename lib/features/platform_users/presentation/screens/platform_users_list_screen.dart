@@ -21,6 +21,7 @@ import 'package:workaxis/features/platform_users/presentation/controllers/platfo
 import 'package:workaxis/features/platform_users/presentation/widgets/page_sliver_padding.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_action_menu.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_card.dart';
+import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_delete_flow.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_dialogs.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrators_table.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_users_toolbar.dart';
@@ -322,6 +323,12 @@ class _PlatformUsersListScreenState extends State<PlatformUsersListScreen> {
         _changeStatus(administrator, AccountStatus.suspended);
       case PlatformAdministratorAction.restore:
         _changeStatus(administrator, AccountStatus.active);
+      case PlatformAdministratorAction.delete:
+        confirmAndDeleteAdministrator(
+          context,
+          context.read<PlatformUsersController>(),
+          administrator,
+        );
     }
   }
 
