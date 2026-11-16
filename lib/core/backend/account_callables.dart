@@ -200,6 +200,13 @@ class AccountCallables {
     });
   }
 
+  /// Permanently deletes a Platform Administrator (`deletePlatformAdministrator`).
+  Future<void> deletePlatformAdministrator({required String targetUid}) async {
+    await _functions.call('deletePlatformAdministrator', {
+      'targetUid': targetUid,
+    });
+  }
+
   /// Permanently deletes a customer organization (`deleteOrganization`); the
   /// server removes the organization and its dependent records.
   Future<void> deleteOrganization(String organizationId) async {

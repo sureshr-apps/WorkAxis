@@ -305,6 +305,43 @@ class PlatformOrganizationsController extends ChangeNotifier
     }
   }
 
+  /// Uploads [localPath] as the organization's logo. Returns the saved
+  /// organization, or null with [actionErrorMessage] set.
+  Future<CustomerOrganization?> uploadLogo(
+    String organizationId,
+    String localPath,
+  ) async {
+    final epoch = _scopeEpoch;
+    _isActionLoading = true;
+    _actionErrorMessage = null;
+    notifyListeners();
+
+    try {
+      final updated = await repository.updateOrganizationLogo(
+        organizationId,
+        localPath,
+      );
+      if (!_isCurrentScope(epoch)) return null;
+      await loadOrganizations();
+      if (!_isCurrentScope(epoch)) return null;
+      _selectedOrganization = updated;
+      return updated;
+    } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return null;
+      _actionErrorMessage = userMessageFor(
+        e,
+        st,
+        fallback: 'The logo could not be uploaded. Please try again.',
+      );
+      return null;
+    } finally {
+      if (_isCurrentScope(epoch)) {
+        _isActionLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<CustomerOrganization?> updateOrganization(
     CustomerOrganization updatedOrg,
   ) async {

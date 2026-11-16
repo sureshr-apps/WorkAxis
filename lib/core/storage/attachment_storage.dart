@@ -2,12 +2,18 @@
 enum AttachmentKind {
   profilePhoto('profile-photos'),
   aadhaarDocument('aadhaar-documents'),
-  returnBill('return-bills');
+  returnBill('return-bills'),
+  organizationLogo('logo', maxMegabytes: 2);
 
-  const AttachmentKind(this.folder);
+  const AttachmentKind(this.folder, {this.maxMegabytes = 5});
 
   /// Folder below `organizations/{organizationId}/`; storage rules key off it.
   final String folder;
+
+  /// Upload limit. Mirrors the size check in `storage.rules`.
+  final int maxMegabytes;
+
+  int get maxBytes => maxMegabytes * 1024 * 1024;
 }
 
 /// Contract for storing and displaying attachments.

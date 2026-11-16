@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:workaxis/core/widgets/account_card/account_card.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -273,7 +274,8 @@ void main() {
 
         expect(find.byType(PlatformAdministratorCard), findsAtLeastNWidgets(2));
         expect(find.byType(PlatformAdministratorsTable), findsNothing);
-        expect(find.text('Details'), findsWidgets);
+        expect(find.byType(AccountCard), findsWidgets);
+        expect(find.text('Details'), findsNothing);
       },
     );
   });

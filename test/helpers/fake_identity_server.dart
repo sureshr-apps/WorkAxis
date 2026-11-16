@@ -71,6 +71,10 @@ class FakeIdentityServer implements CallableFunctions {
         return _setStatus(payload);
       case 'resetUserPassword':
         return {'uid': payload['targetUid']};
+      case 'deletePlatformAdministrator':
+        final uid = payload['targetUid'] as String;
+        _rows.remove(_byUid(uid).id);
+        return {'uid': uid, 'deleted': true};
       default:
         throw DatabaseException('Unknown callable $name');
     }

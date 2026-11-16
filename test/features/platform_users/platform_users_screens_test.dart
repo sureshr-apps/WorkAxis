@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/widgets/account_card/account_card.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/data/mock_platform_users_repository.dart';
 import 'package:workaxis/features/platform_users/domain/administrator_activity_label.dart';
@@ -27,6 +28,10 @@ class _FailingMutationsRepository extends MockPlatformUsersRepository {
     required String id,
     required String newPassword,
   }) => Future.error(StateError('backend unavailable'));
+
+  @override
+  Future<void> deleteAdministrator(String id) =>
+      Future.error(StateError('backend unavailable'));
 }
 
 void main() {
@@ -281,6 +286,140 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enter a valid email address.'), findsNothing);
   });
+
+  testWidgets(
+    'delete asks first, removes the administrator and returns to the list',
+    (tester) async {
+      await controller.loadAdministrators();
+      final administrator = controller.administrators.last;
+      final router = GoRouter(
+        initialLocation: '/platform/users/${administrator.id}',
+        routes: [
+          GoRoute(
+            path: AppRoutes.platformUsers,
+            builder: (context, state) =>
+                const Scaffold(body: Text('Platform users list')),
+          ),
+          GoRoute(
+            path: '/platform/users/:id',
+            builder: (context, state) => PlatformAdministratorDetailsScreen(
+              administratorId: state.pathParameters['id'] ?? '',
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      tester.view.physicalSize = const Size(1280, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<PlatformUsersController>.value(
+          value: controller,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete administrator?'), findsOneWidget);
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Delete administrator'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Platform users list'), findsOneWidget);
+      expect(find.text('${administrator.fullName} deleted.'), findsOneWidget);
+      expect(
+        controller.administrators.any((a) => a.id == administrator.id),
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a failed delete keeps the administrator open and shows the reason',
+    (tester) async {
+      controller.dispose();
+      controller = PlatformUsersController(
+        repository: _FailingMutationsRepository(),
+      );
+      await controller.loadAdministrators();
+      final administrator = controller.administrators.first;
+
+      await pump(
+        tester,
+        PlatformAdministratorDetailsScreen(administratorId: administrator.id),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Delete administrator'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.actionErrorMessage, isNotNull);
+      expect(find.text(controller.actionErrorMessage!), findsWidgets);
+      expect(find.byType(PlatformAdministratorDetailsScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'administrator cards use the organization card layout and actions',
+    (tester) async {
+      await controller.loadAdministrators();
+
+      await pump(
+        tester,
+        const PlatformUsersListScreen(),
+        size: const Size(390, 844),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AccountCard), findsWidgets);
+      expect(find.text('Edit'), findsWidgets);
+      expect(find.text('Reset Password'), findsWidgets);
+      expect(find.text('Suspend'), findsWidgets);
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'on a phone, Suspend opens its confirmation and then reports the change',
+    (tester) async {
+      await controller.loadAdministrators();
+      final administrator = controller.administrators.firstWhere(
+        (a) => a.status == AccountStatus.active,
+      );
+
+      await pump(
+        tester,
+        PlatformAdministratorDetailsScreen(administratorId: administrator.id),
+        size: const Size(390, 844),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Suspend'));
+      await tester.pumpAndSettle();
+      expect(find.text('Suspend access?'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Suspend access'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('${administrator.fullName} access suspended.'),
+        findsOneWidget,
+      );
+      expect(find.text('Restore'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final size in const [Size(390, 844), Size(768, 1024), Size(1280, 900)]) {
     testWidgets('list renders without overflow at ${size.width.toInt()}dp', (

@@ -11,7 +11,7 @@ PlatformAdministrator adminDraft({
   String username = 'new.admin',
   String fullName = 'New Admin',
   String email = '',
-  String? phone,
+  String? phone = '+15550009',
 }) => PlatformAdministrator(
   id: '',
   fullName: fullName,
@@ -90,6 +90,8 @@ void runPlatformUsersContract(
       await rejected(adminDraft(), 'short');
       await rejected(adminDraft(email: 'nope'));
       await rejected(adminDraft(phone: '12345'));
+      await rejected(adminDraft(phone: null));
+      await rejected(adminDraft(phone: '  '));
       await rejected(adminDraft(fullName: '  '));
     });
 
@@ -108,10 +110,26 @@ void runPlatformUsersContract(
           .items
           .single;
       final updated = await repo.updateAdministrator(
-        existing.copyWith(fullName: 'Marcus S.', username: 'hijacked'),
+        existing.copyWith(
+          fullName: 'Marcus S.',
+          username: 'hijacked',
+          phone: existing.phone ?? '+15550011',
+        ),
       );
       expect(updated.fullName, 'Marcus S.');
       expect(updated.username, existing.username);
+    });
+
+    test('delete removes the administrator from every lookup', () async {
+      final target = (await repo.getAdministratorsPage(query: 'marcus'))
+          .items
+          .single;
+      final before = await repo.countAdministrators();
+
+      await repo.deleteAdministrator(target.id);
+
+      expect(await repo.getAdministratorById(target.id), isNull);
+      expect(await repo.countAdministrators(), before - 1);
     });
 
     test('suspends and restores', () async {

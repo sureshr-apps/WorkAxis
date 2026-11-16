@@ -23,7 +23,8 @@ class PlatformAdministratorValidator {
     }
     final emailError = ContactValidators.optionalEmail(draft.email);
     if (emailError != null) throw ValidationException(emailError);
-    final phoneError = ContactValidators.optionalPhone(draft.phone);
+    // Phone is required for every platform administrator, on create and edit.
+    final phoneError = ContactValidators.requiredPhone(draft.phone);
     if (phoneError != null) throw ValidationException(phoneError);
     final phone = ContactValidators.normalizePhone(draft.phone);
     return draft.copyWith(

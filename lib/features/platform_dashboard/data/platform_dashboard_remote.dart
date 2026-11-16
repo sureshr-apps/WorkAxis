@@ -11,7 +11,7 @@ class PlatformStats {
   /// Organization count per lower-cased status.
   final Map<String, int> organizationsByStatus;
 
-  /// Members with role `platformOwner` or `platformAdmin`.
+  /// Members with role `platformAdmin` (the Platform Owner is excluded).
   final int platformAdminCount;
 }
 

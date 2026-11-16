@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
-import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/widgets/account_card/account_card_actions.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/administrators/administrator_parts.dart';
@@ -39,8 +39,8 @@ class AdministratorActionButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = administrator.status == OrganizationAdminStatus.active;
-    final actions = [
-      _ActionSpec(
+    final actions = <AccountCardAction>[
+      AccountCardAction(
         tooltip: 'Edit administrator',
         label: 'Edit',
         icon: Icons.edit_outlined,
@@ -49,7 +49,7 @@ class AdministratorActionButtons extends StatelessWidget {
             ? () => onAction(administrator, OrganizationAdminAction.edit)
             : null,
       ),
-      _ActionSpec(
+      AccountCardAction(
         tooltip: 'Reset password',
         label: 'Reset Password',
         icon: Icons.key_outlined,
@@ -60,7 +60,7 @@ class AdministratorActionButtons extends StatelessWidget {
             : null,
       ),
       if (isActive)
-        _ActionSpec(
+        AccountCardAction(
           tooltip: canSuspend
               ? 'Suspend administrator'
               : lastActiveAdminTooltip,
@@ -72,7 +72,7 @@ class AdministratorActionButtons extends StatelessWidget {
               : null,
         )
       else
-        _ActionSpec(
+        AccountCardAction(
           tooltip: 'Restore administrator',
           label: 'Restore',
           icon: Icons.how_to_reg_outlined,
@@ -83,13 +83,7 @@ class AdministratorActionButtons extends StatelessWidget {
         ),
     ];
 
-    if (labelled) {
-      return Wrap(
-        alignment: WrapAlignment.spaceEvenly,
-        runSpacing: AppSpacing.xs,
-        children: [for (final action in actions) _LabelledAction(spec: action)],
-      );
-    }
+    if (labelled) return AccountCardActions(actions: actions);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [for (final action in actions) _IconAction(spec: action)],
@@ -97,62 +91,19 @@ class AdministratorActionButtons extends StatelessWidget {
   }
 }
 
-/// One administrator action, shared by the icon and labelled presentations.
-class _ActionSpec {
-  const _ActionSpec({
-    required this.tooltip,
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onPressed,
-  });
-
-  final String tooltip;
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onPressed;
-}
-
 class _IconAction extends StatelessWidget {
   const _IconAction({required this.spec});
 
-  final _ActionSpec spec;
+  final AccountCardAction spec;
 
   @override
   Widget build(BuildContext context) => IconButton(
-    tooltip: spec.tooltip,
+    tooltip: spec.tooltip ?? spec.label,
     onPressed: spec.onPressed,
     icon: Icon(spec.icon, size: 20, color: AppColors.secondary),
     constraints: const BoxConstraints(
       minWidth: AppSpacing.minTouchTarget,
       minHeight: AppSpacing.minTouchTarget,
-    ),
-  );
-}
-
-class _LabelledAction extends StatelessWidget {
-  const _LabelledAction({required this.spec});
-
-  final _ActionSpec spec;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: spec.tooltip,
-    child: TextButton.icon(
-      onPressed: spec.onPressed,
-      icon: Icon(spec.icon, size: 18, color: spec.color),
-      label: Text(
-        spec.label,
-        style: AppTypography.labelMedium.copyWith(
-          fontWeight: FontWeight.w600,
-          color: spec.color,
-        ),
-      ),
-      style: TextButton.styleFrom(
-        minimumSize: const Size.square(AppSpacing.minTouchTarget),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      ),
     ),
   );
 }

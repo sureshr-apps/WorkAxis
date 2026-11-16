@@ -1,4 +1,7 @@
+import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/pagination/page_result.dart';
+import 'package:workaxis/core/storage/attachment_storage.dart';
+import 'package:workaxis/core/storage/mock_attachment_storage.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_data_source.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/create_organization_request.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
@@ -24,7 +27,11 @@ class MockPlatformOrganizationsRepository
 
   MockPlatformOrganizationsRepository({
     MockPlatformOrganizationsDataSource? dataSource,
-  }) : _dataSource = dataSource ?? MockPlatformOrganizationsDataSource();
+    AttachmentStorage? attachments,
+  }) : _dataSource = dataSource ?? MockPlatformOrganizationsDataSource(),
+       _attachments = attachments ?? const MockAttachmentStorage();
+
+  final AttachmentStorage _attachments;
 
   MockPlatformOrganizationsDataSource get dataSource => _dataSource;
 
@@ -127,6 +134,23 @@ class MockPlatformOrganizationsRepository
     OrganizationStatus newStatus,
   ) async {
     return _dataSource.setStatus(id, newStatus);
+  }
+
+  @override
+  Future<CustomerOrganization> updateOrganizationLogo(
+    String organizationId,
+    String localPath,
+  ) async {
+    final current = await getOrganizationById(organizationId);
+    if (current == null) {
+      throw NotFoundException('Organization not found');
+    }
+    final reference = await _attachments.upload(
+      localPath: localPath,
+      organizationId: organizationId,
+      kind: AttachmentKind.organizationLogo,
+    );
+    return updateOrganization(current.copyWith(logoUrl: reference));
   }
 
   @override

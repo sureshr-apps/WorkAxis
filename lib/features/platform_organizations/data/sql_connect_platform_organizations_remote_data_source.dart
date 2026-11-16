@@ -102,6 +102,7 @@ class SqlConnectPlatformOrganizationsRemoteDataSource
       contactPhone: _blankToNull(o.optString('contactPhone')),
       address: _blankToNull(o.optString('address')),
       taxIdentification: _blankToNull(o.optString('taxIdentification')),
+      logoUrl: _blankToNull(o.optString('logoUrl')),
       admins: [
         for (final m in admins.objects('organizationMembers'))
           OrganizationAdminUser(
@@ -240,6 +241,8 @@ class SqlConnectPlatformOrganizationsRemoteDataSource
       'contactEmail': (organization.contactEmail ?? '').trim(),
       'contactPhone': (organization.contactPhone ?? '').trim(),
       'address': (organization.address ?? '').trim(),
+      // Omitted unless set, so ordinary edits leave the logo unchanged.
+      if (organization.logoUrl != null) 'logoUrl': organization.logoUrl,
     });
   }
 

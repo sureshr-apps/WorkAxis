@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/validation_exception.dart';
+import 'package:workaxis/core/storage/attachment_storage.dart';
+import 'package:workaxis/core/storage/mock_attachment_storage.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_draft.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_organizations/data/sql_connect_platform_organizations_repository.dart';
@@ -23,7 +25,55 @@ void main() {
     return SqlConnectPlatformOrganizationsRepository(
       dataSource: source,
       functions: _statusFunctions(source, FakeCallableFunctions()),
+      attachments: const MockAttachmentStorage(),
     );
+  });
+
+  group('organization logo', () {
+    test(
+      'mock repository saves the uploaded reference on the organization',
+      () async {
+        final repository = MockPlatformOrganizationsRepository(
+          attachments: _RecordingAttachments(),
+        );
+        final id = (await repository.getOrganizationsPage()).items.first.id;
+
+        final updated = await repository.updateOrganizationLogo(
+          id,
+          '/picked/logo.png',
+        );
+
+        expect(updated.logoUrl, 'organizations/$id/logo/logo.png');
+        final stored = await repository.getOrganizationById(id);
+        expect(stored?.logoUrl, updated.logoUrl);
+      },
+    );
+
+    test('SQL repository uploads as an organization logo and persists the reference', () async {
+      final source = FakeOrganizationsDataSource();
+      final attachments = _RecordingAttachments();
+      final repo = SqlConnectPlatformOrganizationsRepository(
+        dataSource: source,
+        functions: _statusFunctions(source, FakeCallableFunctions()),
+        attachments: attachments,
+      );
+      final id = (await repo.getOrganizationsPage()).items.first.id;
+
+      await repo.updateOrganizationLogo(id, '/picked/logo.png');
+
+      expect(attachments.kinds, [AttachmentKind.organizationLogo]);
+      expect(source.updates.last.logoUrl, 'organizations/$id/logo/logo.png');
+    });
+
+    test('an unknown organization is reported as missing', () async {
+      final repository = MockPlatformOrganizationsRepository(
+        attachments: _RecordingAttachments(),
+      );
+      await expectLater(
+        repository.updateOrganizationLogo('missing', '/picked/logo.png'),
+        throwsA(isA<NotFoundException>()),
+      );
+    });
   });
 
   group('SqlConnectPlatformOrganizationsRepository specifics', () {
@@ -37,6 +87,7 @@ void main() {
       repo = SqlConnectPlatformOrganizationsRepository(
         dataSource: source,
         functions: functions,
+        attachments: const MockAttachmentStorage(),
       );
     });
 
@@ -133,6 +184,7 @@ void main() {
       final repoWithFailure = SqlConnectPlatformOrganizationsRepository(
         dataSource: _ThrowingSource(),
         functions: functions,
+        attachments: const MockAttachmentStorage(),
       );
       await expectLater(
         repoWithFailure.getOrganizationById('x'),
@@ -205,4 +257,22 @@ FakeCallableFunctions _statusFunctions(
 class _ThrowingSource extends FakeOrganizationsDataSource {
   @override
   Future<Never> getById(String id) => throw StateError('host=10.0.0.5');
+}
+
+/// Records the kinds of uploads and returns a predictable storage reference.
+class _RecordingAttachments implements AttachmentStorage {
+  final List<AttachmentKind> kinds = [];
+
+  @override
+  Future<String> upload({
+    required String localPath,
+    required String organizationId,
+    required AttachmentKind kind,
+  }) async {
+    kinds.add(kind);
+    return 'organizations/$organizationId/${kind.folder}/logo.png';
+  }
+
+  @override
+  Future<String> resolveUrl(String reference) async => reference;
 }

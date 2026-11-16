@@ -260,6 +260,31 @@ class PlatformUsersController extends ChangeNotifier
     }
   }
 
+  /// Permanently deletes the administrator [id]. Returns whether it succeeded;
+  /// failures populate [actionErrorMessage].
+  Future<bool> deleteAdministrator(String id) async {
+    final epoch = _scopeEpoch;
+    _isSaving = true;
+    _actionErrorMessage = null;
+    notifyListeners();
+    try {
+      await repository.deleteAdministrator(id);
+      if (!_isCurrentScope(epoch)) return false;
+      _removeLocally(id);
+      await _loadCounts();
+      return true;
+    } catch (error, st) {
+      if (!_isCurrentScope(epoch)) return false;
+      _actionErrorMessage = _friendlyError(error, st);
+      return false;
+    } finally {
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
+    }
+  }
+
   /// Sets a new password for the administrator [id]. Returns whether it
   /// succeeded; failures populate [actionErrorMessage].
   Future<bool> resetPassword({
@@ -368,6 +393,12 @@ class PlatformUsersController extends ChangeNotifier
     }
     _loaded = List.unmodifiable(next);
     _selectedAdministrator = changed;
+    _applyFilters();
+  }
+
+  void _removeLocally(String id) {
+    _loaded = List.unmodifiable(_loaded.where((item) => item.id != id));
+    if (_loadedTotal > 0) _loadedTotal -= 1;
     _applyFilters();
   }
 

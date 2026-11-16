@@ -30,6 +30,12 @@ class ContactValidators {
     return null;
   }
 
+  /// Like [optionalPhone], but a blank value is also an error.
+  static String? requiredPhone(String? value) {
+    if ((value?.trim() ?? '').isEmpty) return 'Enter the phone number.';
+    return optionalPhone(value);
+  }
+
   /// Strips spaces, dashes and brackets, matching the server's key
   /// normalization. Returns null for blank input.
   static String? normalizePhone(String? value) {

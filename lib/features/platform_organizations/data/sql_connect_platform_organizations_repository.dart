@@ -5,6 +5,7 @@ import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/core/ids/request_ids.dart';
 import 'package:workaxis/core/errors/validation_exception.dart';
 import 'package:workaxis/core/pagination/page_result.dart';
+import 'package:workaxis/core/storage/attachment_storage.dart';
 import 'package:workaxis/core/validation/contact_validators.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
@@ -35,10 +36,12 @@ class SqlConnectPlatformOrganizationsRepository
   SqlConnectPlatformOrganizationsRepository({
     required this._dataSource,
     required this._functions,
+    required this._attachments,
   });
 
   final PlatformOrganizationsRemoteDataSource _dataSource;
   final CallableFunctions _functions;
+  final AttachmentStorage _attachments;
   late final AccountCallables _accounts = AccountCallables(_functions);
   final Map<String, String> _pendingAdminRequestIds = {};
 
@@ -150,6 +153,20 @@ class SqlConnectPlatformOrganizationsRepository
       );
     }
     return _require(id);
+  });
+
+  @override
+  Future<CustomerOrganization> updateOrganizationLogo(
+    String organizationId,
+    String localPath,
+  ) => _guard(() async {
+    final current = await _require(organizationId);
+    final reference = await _attachments.upload(
+      localPath: localPath,
+      organizationId: organizationId,
+      kind: AttachmentKind.organizationLogo,
+    );
+    return updateOrganization(current.copyWith(logoUrl: reference));
   });
 
   @override

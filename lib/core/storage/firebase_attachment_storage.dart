@@ -16,9 +16,6 @@ class FirebaseAttachmentStorage implements AttachmentStorage {
   /// Bucket name without the `gs://` prefix.
   final String bucket;
 
-  /// Mirrors the limit in `storage.rules`.
-  static const int maxBytes = 5 * 1024 * 1024;
-
   final FirebaseStorage? _injected;
 
   // Resolved lazily so mocks and tests never touch the Firebase singleton.
@@ -34,9 +31,9 @@ class FirebaseAttachmentStorage implements AttachmentStorage {
     // XFile reads both file paths (Android) and blob URLs (web).
     final file = XFile(localPath);
     final bytes = await file.readAsBytes();
-    if (bytes.length > maxBytes) {
+    if (bytes.length > kind.maxBytes) {
       throw ValidationException(
-        'The photo is too large. Choose one under 5 MB.',
+        'The image is too large. Choose one under ${kind.maxMegabytes} MB.',
       );
     }
     final isPng =

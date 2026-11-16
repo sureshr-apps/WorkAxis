@@ -23,6 +23,18 @@ function run(db: FakeDb, actor: Actor, op: string, vars: Record<string, unknown>
 const denies = (p: Promise<unknown>) =>
   assert.rejects(p, (e: { code?: string }) => e.code === "permission-denied");
 
+describe("GetPlatformStats", () => {
+  it("counts Platform Administrators only, never the Platform Owner", async () => {
+    const db = new FakeDb().when("organization_member", [{ _count: 2 }]);
+    const res = (await run(db, platform, "GetPlatformStats")) as { platformAdminCount: unknown };
+    const memberQuery = db.calls.find((c) => c.sql.includes("organization_member"));
+    assert.ok(memberQuery, "expected a count over organization_member");
+    assert.match(memberQuery.sql, /role = 'platformAdmin'/);
+    assert.doesNotMatch(memberQuery.sql, /platformOwner/);
+    assert.deepEqual(res.platformAdminCount, [{ _count: 2 }]);
+  });
+});
+
 describe("dispatch", () => {
   it("rejects unknown and malformed operations", async () => {
     const db = new FakeDb();

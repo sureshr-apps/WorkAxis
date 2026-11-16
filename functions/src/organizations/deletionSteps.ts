@@ -56,7 +56,8 @@ export function isAuthUserNotFound(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === "auth/user-not-found";
 }
 
-async function deleteMemberIdentity(member: MemberRecord): Promise<void> {
+/** Removes a member's login aliases, profile and Auth user. Idempotent. */
+export async function deleteMemberIdentity(member: MemberRecord): Promise<void> {
   // Alias doc ids are normalized; synthetic login emails are never aliases.
   const email = member.email?.endsWith(".invalid") ? undefined : member.email;
   const { aliasKeys } = normalizeIdentity({

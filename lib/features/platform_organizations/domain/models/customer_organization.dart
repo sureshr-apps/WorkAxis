@@ -16,6 +16,9 @@ class CustomerOrganization {
   final String? contactEmail;
   final String? contactPhone;
   final String? address;
+
+  /// Storage reference of the organization logo (see AttachmentStorage).
+  final String? logoUrl;
   final String? taxIdentification;
   final List<OrganizationAdminUser> admins;
 
@@ -34,6 +37,7 @@ class CustomerOrganization {
     this.contactPhone,
     this.address,
     this.taxIdentification,
+    this.logoUrl,
     this.admins = const [],
   });
 
@@ -64,6 +68,7 @@ class CustomerOrganization {
     String? contactName,
     String? contactEmail,
     String? contactPhone,
+    String? logoUrl,
     String? address,
     String? taxIdentification,
     List<OrganizationAdminUser>? admins,
@@ -81,6 +86,7 @@ class CustomerOrganization {
       contactName: contactName ?? this.contactName,
       contactEmail: contactEmail ?? this.contactEmail,
       contactPhone: contactPhone ?? this.contactPhone,
+      logoUrl: logoUrl ?? this.logoUrl,
       address: address ?? this.address,
       taxIdentification: taxIdentification ?? this.taxIdentification,
       admins: admins ?? this.admins,

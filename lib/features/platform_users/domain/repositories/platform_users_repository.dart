@@ -39,6 +39,10 @@ abstract interface class PlatformUsersRepository {
     AccountStatus status,
   );
 
+  /// Permanently removes the administrator's sign-in identity and profile.
+  /// Platform Owner only; the Platform Owner cannot delete their own account.
+  Future<void> deleteAdministrator(String id);
+
   Future<void> resetAdministratorPassword({
     required String id,
     required String newPassword,

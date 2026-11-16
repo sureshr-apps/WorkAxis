@@ -58,6 +58,35 @@ SqlConnectPlatformUsersRepository _repo(FakeIdentityServer server) =>
     );
 
 void main() {
+  group('SqlConnectPlatformUsersRepository deletion', () {
+    test(
+      'deletes through the platform administrator callable by sign-in uid',
+      () async {
+        final server = _seededServer();
+        final repo = _repo(server);
+
+        await repo.deleteAdministrator('pa-david-warner');
+
+        expect(server.callsTo('deletePlatformAdministrator').single.payload, {
+          'targetUid': 'pa-david-warner',
+        });
+        expect(await repo.getAdministratorById('pa-david-warner'), isNull);
+      },
+    );
+
+    test('a failed delete is reported and the administrator remains', () async {
+      final server = _seededServer()
+        ..failNextCallWith = const NetworkException();
+      final repo = _repo(server);
+
+      await expectLater(
+        repo.deleteAdministrator('pa-david-warner'),
+        throwsA(isA<AppException>()),
+      );
+      expect(await repo.getAdministratorById('pa-david-warner'), isNotNull);
+    });
+  });
+
   runPlatformUsersContract('mock', MockPlatformUsersRepository.new);
   runPlatformUsersContract(
     'SQL Connect with fakes',

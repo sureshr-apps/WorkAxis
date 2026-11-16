@@ -84,8 +84,8 @@ class PlatformAdministratorProfileFields extends StatelessWidget {
                 width: fieldWidth,
                 child: AppTextField(
                   controller: phoneController,
-                  label: 'Phone number',
-                  hintText: 'Optional, e.g. +91 98765 43210',
+                  label: 'Phone number *',
+                  hintText: 'e.g. +91 98765 43210',
                   errorText: phoneError,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.done,

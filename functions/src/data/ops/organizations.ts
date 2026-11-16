@@ -116,10 +116,11 @@ export const organizationsOps: OperationRegistry = {
       db,
       `SELECT status, count(*)::int AS "_count" FROM organization GROUP BY status ORDER BY status`,
     );
+    // Platform Administrators only: the Platform Owner is not counted.
     const platformAdminCount = await countRows(
       db,
       `SELECT count(*)::int AS "_count" FROM organization_member
-        WHERE role IN ('platformOwner', 'platformAdmin')`,
+        WHERE role = 'platformAdmin'`,
     );
     return { organizationsByStatus, platformAdminCount };
   },

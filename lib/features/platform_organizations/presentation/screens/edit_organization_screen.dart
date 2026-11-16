@@ -147,6 +147,7 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   Future<void> _handleSubmit(CustomerOrganization original) async {
     final errors = _form.validate(
       missingNameMessage: 'Organization name is required and cannot be empty.',
+      requiresContactDetails: true,
     );
     setState(() {
       _errors = errors;
@@ -243,22 +244,21 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                     OrganizationProfileFields(
                       form: _form,
                       nameError: _errors.name,
+                      addressError: _errors.address,
+                      requiresContactDetails: true,
                       onNameChanged: (value) {
                         if (_errors.name != null && value.trim().isNotEmpty) {
-                          setState(
-                            () => _errors = OrganizationFormErrors(
-                              email: _errors.email,
-                              phone: _errors.phone,
-                            ),
-                          );
+                          setState(() => _errors = _errors.withoutName());
                         }
                       },
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     OrganizationContactFields(
                       form: _form,
+                      contactNameError: _errors.contactName,
                       emailError: _errors.email,
                       phoneError: _errors.phone,
+                      requiresContactDetails: true,
                     ),
                     const SizedBox(height: AppSpacing.xl),
                     OrganizationFormFooter(

@@ -24,7 +24,7 @@ Future<void> _pump(WidgetTester tester, {VoidCallback? onDelete}) async {
         body: SingleChildScrollView(
           child: OrganizationOverviewTab(
             organization: _org(),
-            onUpload: (_) {},
+            onUpload: () {},
             onDelete: onDelete,
           ),
         ),

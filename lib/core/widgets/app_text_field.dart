@@ -17,6 +17,7 @@ class AppTextField extends StatelessWidget {
     this.keyboardType,
     this.textInputAction,
     this.prefixIcon,
+    this.prefixText,
     this.suffixIcon,
     this.onChanged,
     this.onSubmitted,
@@ -75,6 +76,10 @@ class AppTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final Widget? prefixIcon;
+
+  /// Text shown inside the field before the value. It lines up with the
+  /// typed text, unlike a [prefixIcon] widget.
+  final String? prefixText;
   final Widget? suffixIcon;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
@@ -158,6 +163,7 @@ class AppTextField extends StatelessWidget {
               helperText: helperText,
               counterText: counterText,
               prefixIcon: prefixIcon,
+              prefixText: prefixText,
               suffixIcon: _buildSuffix(),
             ),
           ),

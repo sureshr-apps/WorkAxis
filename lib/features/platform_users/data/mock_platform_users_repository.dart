@@ -69,6 +69,9 @@ class MockPlatformUsersRepository implements PlatformUsersRepository {
   ) async => _dataSource.updateStatus(id, status);
 
   @override
+  Future<void> deleteAdministrator(String id) async => _dataSource.delete(id);
+
+  @override
   Future<void> resetAdministratorPassword({
     required String id,
     required String newPassword,

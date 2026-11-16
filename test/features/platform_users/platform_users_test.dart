@@ -54,6 +54,7 @@ void main() {
 
       final created = await controller.createAdministrator(
         administrator: PlatformAdministrator(
+          phone: '+15550009',
           id: 'pending',
           fullName: 'Another User',
           username: 'owner',
@@ -88,6 +89,7 @@ void main() {
 
       final duplicatePlatformUsername = await controller.createAdministrator(
         administrator: PlatformAdministrator(
+          phone: '+15550009',
           id: 'pending-profile',
           fullName: 'Another User',
           username: 'DWARNER',
@@ -109,6 +111,7 @@ void main() {
       await controller.loadAdministrators();
       final created = await controller.createAdministrator(
         administrator: PlatformAdministrator(
+          phone: '+15550009',
           id: 'pending',
           fullName: 'Jordan Kim',
           username: 'jkim',

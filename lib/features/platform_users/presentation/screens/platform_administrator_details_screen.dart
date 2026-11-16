@@ -142,6 +142,7 @@ class _PlatformAdministratorDetailsScreenState
                   administrator: administrator,
                   isUpdating: controller.isSaving,
                   onStatusChange: _changeStatus,
+                  onDelete: _deleteAdministrator,
                   onResetPassword: (administrator) => context.push(
                     AppRoutes.platformUserResetPasswordPath(administrator.id),
                   ),
@@ -163,6 +164,32 @@ class _PlatformAdministratorDetailsScreenState
   void _toast(String message) =>
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
+
+  Future<void> _deleteAdministrator(PlatformAdministrator administrator) async {
+    final controller = context.read<PlatformUsersController>();
+    final confirmed = await confirmAdministratorDelete(
+      context,
+      administrator: administrator,
+    );
+    if (!confirmed || !mounted) return;
+    controller.clearActionError();
+    // Captured before leaving this screen: the messenger belongs to the app,
+    // so the confirmation still shows after the route changes.
+    final messenger = ScaffoldMessenger.of(context);
+    final deleted = await controller.deleteAdministrator(administrator.id);
+    if (!mounted) return;
+    if (!deleted) {
+      _toast(
+        controller.actionErrorMessage ??
+            'The administrator could not be deleted. Try again.',
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('${administrator.fullName} deleted.')),
+    );
+    context.go(AppRoutes.platformUsers);
+  }
 
   Future<void> _changeStatus(
     PlatformAdministrator administrator,
@@ -194,12 +221,14 @@ class _StatusPanel extends StatelessWidget {
     required this.administrator,
     required this.isUpdating,
     required this.onStatusChange,
+    required this.onDelete,
     required this.onResetPassword,
   });
 
   final PlatformAdministrator administrator;
   final bool isUpdating;
   final void Function(PlatformAdministrator, AccountStatus) onStatusChange;
+  final ValueChanged<PlatformAdministrator> onDelete;
   final ValueChanged<PlatformAdministrator> onResetPassword;
 
   @override
@@ -234,7 +263,18 @@ class _StatusPanel extends StatelessWidget {
     final statusInfo = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        StatusChip.fromStatus(isActive ? 'Active' : 'Suspended'),
+        Row(
+          children: [
+            StatusChip.fromStatus(isActive ? 'Active' : 'Suspended'),
+            const SizedBox(width: AppSpacing.sm),
+            AppButton.outlined(
+              text: 'Delete',
+              iconData: Icons.delete_outline,
+              isFullWidth: false,
+              onPressed: isUpdating ? null : () => onDelete(administrator),
+            ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           isActive

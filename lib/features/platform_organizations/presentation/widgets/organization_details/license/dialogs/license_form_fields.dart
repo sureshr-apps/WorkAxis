@@ -198,10 +198,7 @@ class LicenseMoneyField extends StatelessWidget {
     enabled: enabled,
     keyboardType: TextInputType.number,
     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-    prefixIcon: const Padding(
-      padding: EdgeInsets.only(left: AppSpacing.md),
-      child: Text('₹', style: TextStyle(fontWeight: FontWeight.w600)),
-    ),
+    prefixText: '₹ ',
   );
 }
 
