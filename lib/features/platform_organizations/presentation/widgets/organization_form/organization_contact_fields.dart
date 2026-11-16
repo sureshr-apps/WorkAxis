@@ -13,11 +13,17 @@ class OrganizationContactFields extends StatelessWidget {
     required this.form,
     required this.emailError,
     required this.phoneError,
+    this.contactNameError,
+    this.isNewOrganization = false,
   });
 
   final OrganizationFormState form;
   final String? emailError;
   final String? phoneError;
+  final String? contactNameError;
+
+  /// Marks the contact person and phone as required on the add form.
+  final bool isNewOrganization;
 
   @override
   Widget build(BuildContext context) {
@@ -33,9 +39,12 @@ class OrganizationContactFields extends StatelessWidget {
           final fields = [
             AppTextField(
               controller: form.contactName,
-              label: 'Contact Person Name',
+              label: isNewOrganization
+                  ? 'Contact Person Name *'
+                  : 'Contact Person Name',
               hintText: 'e.g. Marcus Sterling',
               helperText: 'Regional Director or Ops Lead',
+              errorText: contactNameError,
             ),
             AppTextField(
               controller: form.contactEmail,
@@ -46,7 +55,9 @@ class OrganizationContactFields extends StatelessWidget {
             ),
             AppTextField(
               controller: form.contactPhone,
-              label: 'Contact Phone Number',
+              label: isNewOrganization
+                  ? 'Contact Phone Number *'
+                  : 'Contact Phone Number',
               hintText: '+91 98765 43210',
               helperText: 'Include the country code',
               errorText: phoneError,

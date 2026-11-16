@@ -143,10 +143,9 @@ class _RecentOrganizationsListState extends State<RecentOrganizationsList> {
             ),
             child: Align(
               alignment: Alignment.centerRight,
-              child: AppButton.outlined(
+              child: AppButton.link(
                 text: 'View All',
                 iconData: Icons.arrow_forward,
-                isFullWidth: false,
                 onPressed:
                     widget.onViewAll ??
                     () => context.go(AppRoutes.platformOrganizations),

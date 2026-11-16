@@ -12,6 +12,9 @@ enum AppButtonVariant {
 
   /// Confirms an irreversible or access-removing action (suspend, revoke).
   destructive,
+
+  /// Text-only navigation control ("View all"); no fill or border.
+  link,
 }
 
 /// Canonical, responsive Material 3 Button template.
@@ -122,6 +125,23 @@ class AppButton extends StatelessWidget {
     icon: icon,
     iconData: iconData,
     isFullWidth: isFullWidth,
+  );
+
+  /// Text link styled as a button (e.g. "View all"): primary text, no container.
+  factory AppButton.link({
+    Key? key,
+    required String text,
+    required VoidCallback? onPressed,
+    Widget? icon,
+    IconData? iconData,
+  }) => AppButton(
+    key: key,
+    text: text,
+    onPressed: onPressed,
+    variant: AppButtonVariant.link,
+    icon: icon,
+    iconData: iconData,
+    isFullWidth: false,
   );
 
   /// Adaptive button template: automatically full-width on smartphone (< 600dp)
@@ -243,6 +263,18 @@ class AppButton extends StatelessWidget {
           ),
           child: childContent,
         );
+      case AppButtonVariant.link:
+        button = TextButton(
+          onPressed: effectiveOnPressed,
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            disabledForegroundColor: isLoading ? AppColors.primary : null,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            minimumSize: minSize,
+            shape: shape,
+          ),
+          child: childContent,
+        );
     }
 
     // Width policy is applied at layout time by a render object that also
@@ -263,6 +295,7 @@ class AppButton extends StatelessWidget {
       case AppButtonVariant.secondaryTonal:
         return AppColors.onPrimaryContainer;
       case AppButtonVariant.outlined:
+      case AppButtonVariant.link:
         return AppColors.primary;
       case AppButtonVariant.destructive:
         return AppColors.onPrimary;

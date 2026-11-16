@@ -29,6 +29,10 @@ class OrganizationsListScreen extends StatefulWidget {
       _OrganizationsListScreenState();
 }
 
+/// Space below the list for the circular add button: 56dp button, 16dp edge
+/// margin and a little breathing room.
+const double _floatingButtonClearance = 96;
+
 class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
   late final TextEditingController _searchController;
 
@@ -99,6 +103,13 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.surface,
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Add Organization',
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.onPrimary,
+        onPressed: () => context.push(AppRoutes.platformOrganizationsAdd),
+        child: const Icon(Icons.add),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: controller.loadOrganizations,
@@ -116,13 +127,6 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
                             'Manage customer organizations and their '
                             'operational status across all deployed branch hubs.',
                         eyebrow: 'Platform Catalog',
-                        action: AppButton.primary(
-                          text: 'Add Organization',
-                          iconData: Icons.add,
-                          isFullWidth: false,
-                          onPressed: () =>
-                              context.push(AppRoutes.platformOrganizationsAdd),
-                        ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       _KpiMetrics(controller: controller),
@@ -149,7 +153,10 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
                 ),
               ),
               ..._buildContent(controller),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
+              // Keeps the last row scrollable above the floating add button.
+              const SliverToBoxAdapter(
+                child: SizedBox(height: _floatingButtonClearance),
+              ),
             ],
           ),
         ),
