@@ -288,6 +288,34 @@ void main() {
   });
 
   testWidgets(
+    'Delete on a card asks first and removes the administrator from the list',
+    (tester) async {
+      await controller.loadAdministrators();
+      final target = controller.administrators.first;
+      final before = controller.administrators.length;
+      await pump(
+        tester,
+        const PlatformUsersListScreen(),
+        size: const Size(390, 844),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Delete').first);
+      await tester.tap(find.text('Delete').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Delete administrator?'), findsOneWidget);
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Delete administrator'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('${target.fullName} deleted.'), findsOneWidget);
+      expect(controller.administrators.length, before - 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'delete asks first, removes the administrator and returns to the list',
     (tester) async {
       await controller.loadAdministrators();
@@ -385,6 +413,7 @@ void main() {
       expect(find.text('Edit'), findsWidgets);
       expect(find.text('Reset Password'), findsWidgets);
       expect(find.text('Suspend'), findsWidgets);
+      expect(find.text('Delete'), findsWidgets);
       expect(find.byIcon(Icons.more_vert), findsNothing);
       expect(tester.takeException(), isNull);
     },

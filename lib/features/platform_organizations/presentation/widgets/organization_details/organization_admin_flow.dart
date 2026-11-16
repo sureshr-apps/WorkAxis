@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
+import 'package:workaxis/features/platform_organizations/domain/organization_admin_rules.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_dialog_frame.dart';
@@ -36,6 +37,7 @@ class OrganizationAdminFlow {
       administrator,
       OrganizationAdminStatus.suspended,
     ),
+    OrganizationAdminAction.delete => delete(context, administrator),
     OrganizationAdminAction.restore => changeStatus(
       context,
       administrator,
@@ -70,6 +72,68 @@ class OrganizationAdminFlow {
     ),
   );
 
+  Future<void> delete(
+    BuildContext context,
+    OrganizationAdminUser administrator,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    controller.clearActionError();
+    if (controller.isLastActiveAdministrator(administrator.id)) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(OrganizationAdminRules.lastActiveAdminMessage),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+      return;
+    }
+    final confirmed = await _confirmDelete(context, administrator);
+    if (!confirmed) return;
+    final ok = await controller.deleteAdministrator(
+      organizationId,
+      administrator.id,
+    );
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? '${administrator.name} deleted.'
+              : _failure('The administrator could not be deleted.'),
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _confirmDelete(
+    BuildContext context,
+    OrganizationAdminUser administrator,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => PlatformDialogFrame(
+        title: 'Delete administrator?',
+        body: Text(
+          '${administrator.name} will be removed from this organization and '
+          'can no longer sign in. This cannot be undone.',
+        ),
+        actions: [
+          AppButton.outlined(
+            text: 'Cancel',
+            isFullWidth: false,
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+          ),
+          AppButton(
+            variant: AppButtonVariant.destructive,
+            text: 'Delete administrator',
+            isFullWidth: false,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   Future<void> _open(BuildContext context, String location) async {
     await context.push<void>(location);
   }
@@ -81,6 +145,18 @@ class OrganizationAdminFlow {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     controller.clearActionError();
+    // Explain the refusal before asking for confirmation, so the user is not
+    // asked to confirm a change that cannot happen.
+    if (next == OrganizationAdminStatus.suspended &&
+        controller.isLastActiveAdministrator(administrator.id)) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(OrganizationAdminRules.lastActiveAdminMessage),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+      return;
+    }
     final confirmed = await _confirm(context, administrator, next);
     if (!confirmed) return;
     final ok = await controller.setAdministratorStatus(

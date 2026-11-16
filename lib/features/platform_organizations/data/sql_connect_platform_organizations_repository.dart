@@ -261,6 +261,18 @@ class SqlConnectPlatformOrganizationsRepository
     return _require(organizationId);
   });
 
+  @override
+  Future<CustomerOrganization> deleteOrganizationAdmin(
+    String organizationId,
+    String adminId,
+  ) => _guard(() async {
+    final org = await _require(organizationId);
+    final admin = _admin(org, adminId);
+    OrganizationAdminRules.checkDeletion(org.admins, adminId);
+    await _accounts.deleteOrganizationAdmin(targetUid: _uid(admin));
+    return _require(organizationId);
+  });
+
   OrganizationAdminUser _admin(CustomerOrganization org, String adminId) {
     for (final admin in org.admins) {
       if (admin.id == adminId) return admin;

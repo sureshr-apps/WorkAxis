@@ -73,6 +73,7 @@ Errors are `HttpsError` codes; internal details are never returned:
 | `resetUserPassword` | `{targetUid, newPassword}` | `{uid}` | see matrix |
 | `setUserStatus` | `{targetUid, status: 'active'\|'suspended'}` | `{uid, status}` | see matrix |
 | `deletePlatformAdministrator` | `{targetUid}` | `{uid, deleted}` | Platform Owner only; not self; platform administrators only |
+| `deleteOrganizationAdmin` | `{targetUid}` | `{uid, deleted}` | Platform staff only; organization administrators only; refused for the organization's only active administrator |
 | `setOrganizationStatus` | `{organizationId, status}` | `{organizationId, status, membersUpdated, membersFailed}` | platform roles |
 | `resolveLoginIdentifier` | `{identifier}` | `{email}` | unauthenticated |
 | `recordAttendancePunch` | `{kind: 'checkIn'\|'checkOut'\|'breakStart'\|'breakEnd', branchId, latitude, longitude, accuracyMeters}` | `{entryId, kind, recordedAt, workDate, distanceMeters}` | Employee |

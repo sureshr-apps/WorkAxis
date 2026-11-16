@@ -364,6 +364,20 @@ class MockPlatformOrganizationsDataSource {
     );
   }
 
+  CustomerOrganization removeAdmin(String organizationId, String adminId) {
+    final index = _indexOf(organizationId);
+    final org = _organizations[index];
+    if (!org.admins.any((a) => a.id == adminId)) {
+      throw ValidationException('Administrator not found.');
+    }
+    return _organizations[index] = org.copyWith(
+      admins: [
+        for (final a in org.admins)
+          if (a.id != adminId) a,
+      ],
+    );
+  }
+
   int _indexOf(String organizationId) {
     final index = _organizations.indexWhere((o) => o.id == organizationId);
     if (index == -1) throw ValidationException('Organization not found.');

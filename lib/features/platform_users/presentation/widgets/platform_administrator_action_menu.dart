@@ -4,7 +4,14 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 
-enum PlatformAdministratorAction { view, edit, resetPassword, suspend, restore }
+enum PlatformAdministratorAction {
+  view,
+  edit,
+  resetPassword,
+  suspend,
+  restore,
+  delete,
+}
 
 class PlatformAdministratorActionMenu extends StatelessWidget {
   const PlatformAdministratorActionMenu({

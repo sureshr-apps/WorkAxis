@@ -85,6 +85,12 @@ class PlatformAdministratorCard extends StatelessWidget {
               color: AppColors.kpiPositive,
               onPressed: () => onAction(PlatformAdministratorAction.restore),
             ),
+          AccountCardAction(
+            label: 'Delete',
+            icon: Icons.delete_outline,
+            color: AppColors.statusUrgentText,
+            onPressed: () => onAction(PlatformAdministratorAction.delete),
+          ),
         ],
       ),
       onTap: onTap,
