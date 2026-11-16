@@ -225,7 +225,7 @@ class _StatusPanel extends StatelessWidget {
                 : () => onStatusChange(administrator, AccountStatus.active),
           );
     final resetButton = AppButton.outlined(
-      text: 'Reset password',
+      text: 'Reset',
       iconData: Icons.key_outlined,
       isFullWidth: isCompact,
       onPressed: isUpdating ? null : () => onResetPassword(administrator),
@@ -255,9 +255,13 @@ class _StatusPanel extends StatelessWidget {
               children: [
                 statusInfo,
                 const SizedBox(height: AppSpacing.md),
-                resetButton,
-                const SizedBox(height: AppSpacing.sm),
-                actionButton,
+                Row(
+                  children: [
+                    Expanded(child: resetButton),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(child: actionButton),
+                  ],
+                ),
               ],
             )
           : Row(

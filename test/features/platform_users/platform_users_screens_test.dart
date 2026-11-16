@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/data/mock_platform_users_repository.dart';
 import 'package:workaxis/features/platform_users/domain/administrator_activity_label.dart';
@@ -155,15 +156,29 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final reset = tester.getRect(
-      find.widgetWithText(OutlinedButton, 'Reset password'),
-    );
+    final reset = tester.getRect(find.widgetWithText(OutlinedButton, 'Reset'));
     final suspend = tester.getRect(
       find.widgetWithText(OutlinedButton, 'Suspend'),
     );
-    // Stacked, so each label gets the full content width and is not cut off.
-    expect(reset.bottom, lessThanOrEqualTo(suspend.top));
-    expect(reset.width, closeTo(suspend.width, 1));
+    // One row: both buttons share the top edge on a phone.
+    expect(reset.top, closeTo(suspend.top, 1));
+    expect(reset.right, lessThan(suspend.left));
+
+    // The label must not be cut off with an ellipsis.
+    final resetLabel = tester.getSize(
+      find.descendant(
+        of: find.widgetWithText(OutlinedButton, 'Reset'),
+        matching: find.text('Reset'),
+      ),
+    );
+    final naturalWidth = (TextPainter(
+      text: TextSpan(
+        text: 'Reset',
+        style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w600),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout()).width;
+    expect(resetLabel.width, greaterThanOrEqualTo(naturalWidth - 0.5));
     expect(tester.takeException(), isNull);
   });
 
