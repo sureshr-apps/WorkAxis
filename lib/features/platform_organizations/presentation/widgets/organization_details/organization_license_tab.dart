@@ -11,23 +11,26 @@ import 'package:workaxis/features/platform_organizations/presentation/widgets/or
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_history_panel.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_plan_panel.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_summary_card.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/organization_license_flow.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/organization_license_action.dart';
 
 /// License tab of the organization details: loading, error and empty states,
 /// then the summary, plan entitlements and history.
 ///
-/// Status is shown as the server derived it. [now] only supplies the business
-/// date for the contextual term line and the default form dates.
+/// Status is shown as the server derived it. Each license change is reported
+/// through [onAction]; the screen opens its page. [now] only supplies the
+/// business date for the contextual term line.
 class OrganizationLicenseTab extends StatelessWidget {
   const OrganizationLicenseTab({
     super.key,
     required this.organization,
     required this.controller,
+    required this.onAction,
     this.now = systemNow,
   });
 
   final CustomerOrganization organization;
   final OrganizationLicenseController controller;
+  final ValueChanged<OrganizationLicenseAction> onAction;
   final Now now;
 
   @override
@@ -50,15 +53,10 @@ class OrganizationLicenseTab extends StatelessWidget {
     if (error != null) {
       return ErrorState(message: error, onRetry: () => controller.load(id));
     }
-    final flow = OrganizationLicenseFlow(
-      controller: controller,
-      organizationName: organization.name,
-      now: now,
-    );
     final license = controller.licenseFor(id);
     if (license == null) {
       return OrganizationLicenseEmptyState(
-        onAssignLicense: () => flow.assign(context),
+        onAssignLicense: () => onAction(OrganizationLicenseAction.assign),
       );
     }
     final today = CalendarDate.of(BusinessTime.today(now));
@@ -73,9 +71,10 @@ class OrganizationLicenseTab extends StatelessWidget {
           license: license,
           today: today,
           canChangePlan: canChangePlan,
-          onChangePlan: () => flow.changePlan(context, license),
-          onModifyTerms: () => flow.modifyCommercialTerms(context, license),
-          onRenew: () => flow.renew(context, license),
+          onChangePlan: () => onAction(OrganizationLicenseAction.changePlan),
+          onModifyTerms: () =>
+              onAction(OrganizationLicenseAction.commercialTerms),
+          onRenew: () => onAction(OrganizationLicenseAction.renew),
         ),
         const SizedBox(height: AppSpacing.md),
         LicensePlanPanel(plan: license.plan),

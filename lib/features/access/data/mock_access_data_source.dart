@@ -130,6 +130,8 @@ class MockAccessDataSource {
 
   void saveBranch(BranchSummary branch) => _branches[branch.id] = branch;
 
+  void removeBranch(String id) => _branches.remove(id);
+
   /// Access profile (role and organization) of a known user, if any.
   AccessUserSummary? getUserProfile(String userId) => _users[userId];
 

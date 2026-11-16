@@ -5,13 +5,34 @@ import 'package:workaxis/features/platform_organizations/domain/models/customer_
 
 /// Per-field validation messages for the organization form.
 class OrganizationFormErrors {
-  const OrganizationFormErrors({this.name, this.email, this.phone});
+  const OrganizationFormErrors({
+    this.name,
+    this.address,
+    this.contactName,
+    this.email,
+    this.phone,
+  });
 
   final String? name;
+  final String? address;
+  final String? contactName;
   final String? email;
   final String? phone;
 
-  bool get hasErrors => name != null || email != null || phone != null;
+  bool get hasErrors =>
+      name != null ||
+      address != null ||
+      contactName != null ||
+      email != null ||
+      phone != null;
+
+  /// The same errors without the name error (cleared once the user types).
+  OrganizationFormErrors withoutName() => OrganizationFormErrors(
+    address: address,
+    contactName: contactName,
+    email: email,
+    phone: phone,
+  );
 }
 
 /// Text controllers plus validation and mapping for the add and edit
@@ -61,14 +82,33 @@ class OrganizationFormState {
     contactPhone.text = org.contactPhone ?? '';
   }
 
-  /// Validates the fields. Email and phone are optional and only checked when
-  /// the user entered a value.
-  OrganizationFormErrors validate({required String missingNameMessage}) {
+  /// Validates the fields. Email and tax id are optional and only checked when
+  /// the user entered a value. When [isNewOrganization] is true, the
+  /// headquarters address, contact person and contact phone are also required.
+  OrganizationFormErrors validate({
+    required String missingNameMessage,
+    bool isNewOrganization = false,
+  }) {
     return OrganizationFormErrors(
       name: name.text.trim().isEmpty ? missingNameMessage : null,
+      address: isNewOrganization && address.text.trim().isEmpty
+          ? 'Enter the headquarters address.'
+          : null,
+      contactName: isNewOrganization && contactName.text.trim().isEmpty
+          ? 'Enter the contact person name.'
+          : null,
       email: ContactValidators.optionalEmail(contactEmail.text),
-      phone: ContactValidators.optionalPhone(contactPhone.text),
+      phone: isNewOrganization
+          ? _requiredPhoneError()
+          : ContactValidators.optionalPhone(contactPhone.text),
     );
+  }
+
+  String? _requiredPhoneError() {
+    if (contactPhone.text.trim().isEmpty) {
+      return 'Enter the contact phone number.';
+    }
+    return ContactValidators.optionalPhone(contactPhone.text);
   }
 
   CreateOrganizationRequest toCreateRequest() => CreateOrganizationRequest(

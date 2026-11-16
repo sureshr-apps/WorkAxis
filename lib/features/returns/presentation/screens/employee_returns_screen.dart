@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/responsive/responsive_sliver_page.dart';
@@ -10,11 +12,9 @@ import 'package:workaxis/core/widgets/kpi/responsive_kpi_section.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/presentation/controllers/returns_controller.dart';
-import 'package:workaxis/features/returns/presentation/screens/widgets/return_details_dialog.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_filter_bar.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_sliver_body.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_table.dart';
-import 'package:workaxis/features/returns/presentation/screens/widgets/submit_return_dialog.dart';
 
 /// Employee self-service returns: submit a request and track its status.
 class EmployeeReturnsScreen extends StatefulWidget {
@@ -48,54 +48,10 @@ class _EmployeeReturnsScreenState extends State<EmployeeReturnsScreen> {
     await context.read<ReturnsController>().loadReturns(access: access);
   }
 
-  void _openSubmitDialog() {
-    final access = context.read<AccessController>().accessContext;
-    if (access == null) return;
-    final controller = context.read<ReturnsController>();
-    controller.clearActionError();
+  void _openSubmit() => context.push(AppRoutes.employeeReturnAddPath);
 
-    showDialog<bool>(
-      context: context,
-      builder: (_) => SubmitReturnDialog(
-        availableBranches: access.activeAssignedBranches,
-        initialBranchId: access.activeAssignedBranches.isNotEmpty
-            ? access.activeAssignedBranches.first.id
-            : null,
-        onSubmitBatch: (batch) async {
-          final saved = await controller.submitReturnBatch(
-            access: access,
-            branchId: batch.branchId,
-            input: batch,
-          );
-          if (!saved) {
-            return controller.actionErrorMessage ??
-                'The return request could not be submitted.';
-          }
-          if (mounted) {
-            final count = batch.items.length;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  count == 1
-                      ? 'Return request submitted for manager review.'
-                      : '$count return items submitted for manager review.',
-                ),
-                backgroundColor: AppColors.statusActive,
-              ),
-            );
-          }
-          return null;
-        },
-      ),
-    );
-  }
-
-  void _showDetails(ReturnItem item) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => ReturnDetailsDialog(item: item),
-    );
-  }
+  void _openDetails(ReturnItem item) =>
+      context.push(AppRoutes.employeeReturnDetailsPath(item.id));
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +72,7 @@ class _EmployeeReturnsScreenState extends State<EmployeeReturnsScreen> {
                 action: AppButton.responsive(
                   text: 'Submit Return',
                   iconData: Icons.add,
-                  onPressed: _openSubmitDialog,
+                  onPressed: _openSubmit,
                 ),
               ),
             ),
@@ -166,7 +122,7 @@ class _EmployeeReturnsScreenState extends State<EmployeeReturnsScreen> {
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
             SliverReturnsBody(
               controller: controller,
-              onOpen: _showDetails,
+              onOpen: _openDetails,
               onRetry: _loadData,
               emptyTitle: 'No return requests yet',
               emptyMessage:
@@ -179,7 +135,7 @@ class _EmployeeReturnsScreenState extends State<EmployeeReturnsScreen> {
                 ReturnsTableColumn.status(),
                 ReturnsTableColumn.action(
                   canReview: false,
-                  onOpen: _showDetails,
+                  onOpen: _openDetails,
                 ),
               ],
             ),

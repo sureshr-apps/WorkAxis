@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
@@ -11,7 +13,8 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/data/mock_organization_members_repository.dart';
 import 'package:workaxis/features/employees/presentation/controllers/organization_members_controller.dart';
 import 'package:workaxis/features/employees/presentation/screens/employee_directory_screen.dart';
-import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_editor_dialog.dart';
+import 'package:workaxis/features/employees/presentation/screens/organization_member_editor_screen.dart';
+import 'package:workaxis/features/employees/presentation/screens/organization_member_form_route.dart';
 
 void main() {
   group('EmployeeDirectoryScreen Widget Tests', () {
@@ -55,7 +58,7 @@ void main() {
       membersController.dispose();
     });
 
-    testWidgets('renders member cards with view and edit actions', (
+    testWidgets('renders member cards with a details chevron and edit icon', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -72,9 +75,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Employee Directory'), findsOneWidget);
-      expect(find.text('View details'), findsWidgets);
+      expect(find.text('View details'), findsNothing);
+      expect(find.byIcon(Icons.chevron_right_rounded), findsWidgets);
       // Organization Admin may manage every non-platform account.
-      expect(find.text('Edit'), findsWidgets);
+      expect(find.byIcon(Icons.edit_outlined), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 
@@ -159,6 +163,26 @@ void main() {
     testWidgets(
       'newly created branch appears in member editor without re-login',
       (tester) async {
+        final router = GoRouter(
+          initialLocation: AppRoutes.orgAdminEmployees,
+          routes: [
+            GoRoute(
+              path: AppRoutes.orgAdminEmployees,
+              builder: (context, state) => const EmployeeDirectoryScreen(),
+              routes: [
+                GoRoute(
+                  path: 'add',
+                  builder: (context, state) =>
+                      const OrganizationMemberFormRoute(
+                        listRoute: AppRoutes.orgAdminEmployees,
+                        listLabel: 'Employee Directory',
+                      ),
+                ),
+              ],
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
         await tester.pumpWidget(
           MultiProvider(
             providers: [
@@ -166,7 +190,7 @@ void main() {
               ChangeNotifierProvider.value(value: branchController),
               ChangeNotifierProvider.value(value: membersController),
             ],
-            child: const MaterialApp(home: EmployeeDirectoryScreen()),
+            child: MaterialApp.router(routerConfig: router),
           ),
         );
         await tester.pumpAndSettle();
@@ -186,10 +210,10 @@ void main() {
         await tester.tap(find.text('Add Member'));
         await tester.pumpAndSettle();
 
-        expect(find.byType(OrganizationMemberEditorDialog), findsOneWidget);
+        expect(find.byType(OrganizationMemberEditorScreen), findsOneWidget);
         await tester.dragUntilVisible(
           find.text('Westside Supercentre'),
-          find.byType(ListView).last,
+          find.byType(Scrollable).first,
           const Offset(0, -200),
         );
         expect(find.text('Westside Supercentre'), findsOneWidget);

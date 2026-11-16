@@ -308,7 +308,7 @@ class _PlatformUsersListScreenState extends State<PlatformUsersListScreen> {
       case PlatformAdministratorAction.edit:
         context.push(AppRoutes.platformUserEditPath(administrator.id));
       case PlatformAdministratorAction.resetPassword:
-        _resetPassword(administrator);
+        context.push(AppRoutes.platformUserResetPasswordPath(administrator.id));
       case PlatformAdministratorAction.suspend:
         _changeStatus(administrator, AccountStatus.suspended);
       case PlatformAdministratorAction.restore:
@@ -335,26 +335,6 @@ class _PlatformUsersListScreenState extends State<PlatformUsersListScreen> {
       message: nextStatus == AccountStatus.suspended
           ? '${administrator.fullName} access suspended.'
           : '${administrator.fullName} access restored.',
-      controller: controller,
-    );
-  }
-
-  Future<void> _resetPassword(PlatformAdministrator administrator) async {
-    final controller = context.read<PlatformUsersController>();
-    final password = await promptAdministratorPasswordReset(
-      context,
-      administrator: administrator,
-    );
-    if (password == null || !mounted) return;
-    controller.clearActionError();
-    final ok = await controller.resetPassword(
-      id: administrator.id,
-      newPassword: password,
-    );
-    if (!mounted) return;
-    _showResult(
-      success: ok,
-      message: 'Password reset for ${administrator.fullName}.',
       controller: controller,
     );
   }

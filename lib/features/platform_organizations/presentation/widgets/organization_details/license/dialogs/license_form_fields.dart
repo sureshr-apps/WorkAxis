@@ -205,32 +205,6 @@ class LicenseMoneyField extends StatelessWidget {
   );
 }
 
-/// Inline message for a failed save. Announced to screen readers.
-class LicenseFormError extends StatelessWidget {
-  const LicenseFormError({super.key, required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    liveRegion: true,
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.statusUrgentContainer,
-        borderRadius: AppSpacing.roundedXs,
-      ),
-      child: Text(
-        message,
-        style: AppTypography.bodySmall.copyWith(
-          color: AppColors.statusUrgentText,
-        ),
-      ),
-    ),
-  );
-}
-
 /// Label/value line used in the dialogs' comparison blocks.
 class LicenseTermRow extends StatelessWidget {
   const LicenseTermRow({super.key, required this.label, required this.value});

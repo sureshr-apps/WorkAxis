@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
@@ -14,10 +17,12 @@ import 'package:workaxis/features/returns/data/mock_returns_repository.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/presentation/controllers/returns_controller.dart';
 import 'package:workaxis/features/returns/presentation/screens/employee_returns_screen.dart';
+import 'package:workaxis/features/returns/presentation/screens/return_details_route.dart';
+import 'package:workaxis/features/returns/presentation/screens/return_details_screen.dart';
 import 'package:workaxis/features/returns/presentation/screens/returns_operations_screen.dart';
+import 'package:workaxis/features/returns/presentation/screens/submit_return_route.dart';
+import 'package:workaxis/features/returns/presentation/screens/submit_return_screen.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/return_card_item.dart';
-import 'package:workaxis/features/returns/presentation/screens/widgets/return_details_dialog.dart';
-import 'package:workaxis/features/returns/presentation/screens/widgets/submit_return_dialog.dart';
 
 import '../../helpers/fixed_clock.dart';
 
@@ -49,6 +54,51 @@ class _WriteFailingReturnsRepository extends MockReturnsRepository {
   }) => Future.error(StateError('backend down'));
 }
 
+/// The returns routes for one list, as the app nests them: the list, then the
+/// record page and the details page under it.
+GoRouter _returnsRouter({
+  required String listRoute,
+  required String listLabel,
+  required Widget list,
+}) {
+  return GoRouter(
+    initialLocation: listRoute,
+    routes: [
+      GoRoute(
+        path: listRoute,
+        builder: (context, state) => list,
+        routes: [
+          GoRoute(
+            path: 'add',
+            builder: (context, state) =>
+                SubmitReturnRoute(listRoute: listRoute, listLabel: listLabel),
+          ),
+          GoRoute(
+            path: ':id',
+            builder: (context, state) => ReturnDetailsRoute(
+              returnId: state.pathParameters['id'] ?? '',
+              listRoute: listRoute,
+              listLabel: listLabel,
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+GoRouter _employeeRouter() => _returnsRouter(
+  listRoute: AppRoutes.employeeReturns,
+  listLabel: 'My Returns',
+  list: const EmployeeReturnsScreen(),
+);
+
+GoRouter _orgRouter() => _returnsRouter(
+  listRoute: AppRoutes.orgAdminReturns,
+  listLabel: 'Organization Returns',
+  list: const ReturnsOperationsScreen(),
+);
+
 void main() {
   late AccessController accessController;
   late BranchContextController branchController;
@@ -76,7 +126,7 @@ void main() {
   Future<void> pump(
     WidgetTester tester, {
     required UserRole role,
-    required Widget home,
+    required GoRouter router,
     double width = 1200,
     double height = 900,
   }) async {
@@ -86,6 +136,7 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
+    addTearDown(router.dispose);
     await accessController.resolveAccess(
       AppUser(
         id: role == UserRole.employee ? 'user-emp-01' : 'user-oa-01',
@@ -111,73 +162,26 @@ void main() {
             value: returnsController,
           ),
         ],
-        child: MaterialApp(theme: AppTheme.light, home: home),
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
   }
 
-  testWidgets('search field is seeded from the controller query', (
-    tester,
-  ) async {
-    returnsController.setSearchQuery('apples');
-    await pump(
-      tester,
-      role: UserRole.employee,
-      home: const EmployeeReturnsScreen(),
-      width: 390,
-      height: 844,
+  /// Taps the breadcrumb back link of the page currently shown.
+  Future<void> tapBreadcrumb(WidgetTester tester) async {
+    await tester.tap(
+      find.descendant(
+        of: find.byType(PageBreadcrumb),
+        matching: find.byType(InkWell),
+      ),
     );
-
-    expect(find.text('apples'), findsOneWidget);
-  });
-
-  testWidgets('failed submit keeps the dialog open and shows the error', (
-    tester,
-  ) async {
-    await pump(
-      tester,
-      role: UserRole.employee,
-      home: const EmployeeReturnsScreen(),
-    );
-
-    await tester.tap(find.text('Submit Return'));
     await tester.pumpAndSettle();
-    expect(find.byType(SubmitReturnDialog), findsOneWidget);
-    expect(find.textContaining('OCR'), findsNothing);
-    expect(find.textContaining('bill_scan'), findsNothing);
+  }
 
-    final fields = find.descendant(
-      of: find.byType(SubmitReturnDialog),
-      matching: find.byType(TextField),
-    );
-    await tester.enterText(fields.at(0), 'Fuji Apples');
-    await tester.enterText(fields.at(2), 'INV-1');
-    final submitBtn = find.descendant(
-      of: find.byType(SubmitReturnDialog),
-      matching: find.text('Submit Return'),
-    );
-    await tester.ensureVisible(submitBtn);
-    await tester.pumpAndSettle();
-    await tester.tap(submitBtn);
-    await tester.pumpAndSettle();
-
-    expect(find.byType(SubmitReturnDialog), findsOneWidget);
-    expect(find.byType(ErrorBanner), findsOneWidget);
-  });
-
-  testWidgets('failed review keeps the dialog open and shows the error', (
-    tester,
-  ) async {
-    await pump(
-      tester,
-      role: UserRole.orgAdmin,
-      home: const ReturnsOperationsScreen(),
-      width: 390,
-      height: 844,
-    );
-
+  /// Scrolls to the card of the first pending return and opens it.
+  Future<void> openPendingReturn(WidgetTester tester) async {
     final pending = returnsController.items.firstWhere(
       (i) => i.status == ReturnStatus.pending,
     );
@@ -191,7 +195,104 @@ void main() {
     );
     await tester.tap(card);
     await tester.pumpAndSettle();
-    expect(find.byType(ReturnDetailsDialog), findsOneWidget);
+  }
+
+  testWidgets('search field is seeded from the controller query', (
+    tester,
+  ) async {
+    returnsController.setSearchQuery('apples');
+    await pump(
+      tester,
+      role: UserRole.employee,
+      router: _employeeRouter(),
+      width: 390,
+      height: 844,
+    );
+
+    expect(find.text('apples'), findsOneWidget);
+  });
+
+  testWidgets(
+    'submit opens the record page and the breadcrumb returns to the list',
+    (tester) async {
+      await pump(tester, role: UserRole.employee, router: _employeeRouter());
+
+      await tester.tap(find.text('Submit Return'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SubmitReturnScreen), findsOneWidget);
+
+      await tapBreadcrumb(tester);
+
+      expect(find.byType(SubmitReturnScreen), findsNothing);
+      expect(find.byType(EmployeeReturnsScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets('failed submit keeps the record page open and shows the error', (
+    tester,
+  ) async {
+    await pump(tester, role: UserRole.employee, router: _employeeRouter());
+
+    await tester.tap(find.text('Submit Return'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SubmitReturnScreen), findsOneWidget);
+    expect(find.textContaining('OCR'), findsNothing);
+    expect(find.textContaining('bill_scan'), findsNothing);
+
+    final fields = find.descendant(
+      of: find.byType(SubmitReturnScreen),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(fields.at(0), 'Fuji Apples');
+    await tester.enterText(fields.at(2), 'INV-1');
+    final submitBtn = find.descendant(
+      of: find.byType(SubmitReturnScreen),
+      matching: find.text('Submit Return'),
+    );
+    await tester.ensureVisible(submitBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(submitBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SubmitReturnScreen), findsOneWidget);
+    expect(find.byType(ErrorBanner), findsOneWidget);
+  });
+
+  testWidgets(
+    'a return opens its details page and the breadcrumb returns to the list',
+    (tester) async {
+      await pump(
+        tester,
+        role: UserRole.orgAdmin,
+        router: _orgRouter(),
+        width: 390,
+        height: 844,
+      );
+
+      await openPendingReturn(tester);
+      expect(find.byType(ReturnDetailsScreen), findsOneWidget);
+      expect(find.text('Organization Returns'), findsWidgets);
+
+      await tapBreadcrumb(tester);
+
+      expect(find.byType(ReturnDetailsScreen), findsNothing);
+      expect(find.byType(ReturnsOperationsScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets('failed review keeps the details page open and shows the error', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      role: UserRole.orgAdmin,
+      router: _orgRouter(),
+      width: 390,
+      height: 844,
+    );
+
+    await openPendingReturn(tester);
+    expect(find.byType(ReturnDetailsScreen), findsOneWidget);
     expect(find.textContaining('OCR'), findsNothing);
     expect(find.textContaining('1.2 MB'), findsNothing);
 
@@ -200,9 +301,46 @@ void main() {
     await tester.tap(find.text('Approve Return'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(ReturnDetailsDialog), findsOneWidget);
+    expect(find.byType(ReturnDetailsScreen), findsOneWidget);
     expect(find.byType(ErrorBanner), findsOneWidget);
   });
+
+  testWidgets(
+    'an approved return closes the details page, refreshes the list and confirms',
+    (tester) async {
+      returnsController.dispose();
+      returnsController = ReturnsController(
+        repository: MockReturnsRepository(now: fixedNow, delay: Duration.zero),
+      );
+      await pump(
+        tester,
+        role: UserRole.orgAdmin,
+        router: _orgRouter(),
+        width: 390,
+        height: 844,
+      );
+      final pending = returnsController.items.firstWhere(
+        (i) => i.status == ReturnStatus.pending,
+      );
+
+      await openPendingReturn(tester);
+      await tester.ensureVisible(find.text('Approve Return'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Approve Return'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ReturnDetailsScreen), findsNothing);
+      expect(find.byType(ReturnsOperationsScreen), findsOneWidget);
+      expect(
+        find.text('Return request #${pending.id} approved.'),
+        findsOneWidget,
+      );
+      expect(
+        returnsController.items.firstWhere((i) => i.id == pending.id).status,
+        ReturnStatus.approved,
+      );
+    },
+  );
 
   for (final size in const [Size(390, 844), Size(768, 1024), Size(1280, 800)]) {
     testWidgets('employee returns render without overflow at ${size.width}', (
@@ -211,7 +349,7 @@ void main() {
       await pump(
         tester,
         role: UserRole.employee,
-        home: const EmployeeReturnsScreen(),
+        router: _employeeRouter(),
         width: size.width,
         height: size.height,
       );

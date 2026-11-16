@@ -9,6 +9,13 @@ abstract interface class BranchManagementRepository {
     required UserAccessContext access,
     required BranchRecord branch,
   });
+
+  /// Deletes a branch with no employees, returns or attendance. Refused
+  /// otherwise; suspend the branch instead.
+  Future<void> deleteBranch({
+    required UserAccessContext access,
+    required String branchId,
+  });
   Future<KioskPairingToken> createKioskPairingToken({
     required UserAccessContext access,
     required String branchId,

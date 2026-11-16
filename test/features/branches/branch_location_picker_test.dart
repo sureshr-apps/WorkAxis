@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
-import 'package:workaxis/features/branches/presentation/screens/widgets/branch_editor_dialog.dart';
+import 'package:workaxis/features/branches/presentation/screens/branch_editor_screen.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_location_picker.dart';
 
 import '../../helpers/fallback_maps.dart';
@@ -50,7 +50,7 @@ void main() {
     );
 
     testWidgets(
-      'picking location on map updates BranchEditorDialog coordinates',
+      'picking location on map updates BranchEditorScreen coordinates',
       (tester) async {
         tester.view.physicalSize = const Size(1000, 900);
         tester.view.devicePixelRatio = 1.0;
@@ -64,10 +64,13 @@ void main() {
             builder: fallbackMapsBuilder,
             theme: AppTheme.light,
             home: Scaffold(
-              body: BranchEditorDialog(
+              body: BranchEditorScreen(
                 organizationId: 'org-test',
                 managerOptions: const [],
                 isSaving: false,
+                onClose: () {},
+                onSaved: () {},
+                backLabel: 'Branch Management',
                 onSave: (record) async => record,
               ),
             ),
@@ -76,7 +79,7 @@ void main() {
 
         await tester.pumpAndSettle();
 
-        // Find the interactive picker button inside BranchEditorDialog
+        // Find the interactive picker button inside BranchEditorScreen
         final pickerBtn = find.byKey(const Key('test_select_location_btn'));
         expect(pickerBtn, findsOneWidget);
 

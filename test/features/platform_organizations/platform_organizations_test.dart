@@ -9,10 +9,13 @@ import 'package:workaxis/features/platform_organizations/presentation/controller
 import 'package:workaxis/features/platform_organizations/presentation/screens/add_organization_screen.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/edit_organization_screen.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organization_details_screen.dart';
+import 'package:workaxis/features/platform_organizations/presentation/screens/organization_license_route.dart';
+import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/pages/assign_license_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organizations_list_screen.dart';
 
 void main() {
@@ -190,7 +193,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Organizations'), findsOneWidget);
-        expect(find.text('Add Organization'), findsOneWidget);
+        expect(find.byTooltip('Add Organization'), findsOneWidget);
         expect(find.text('Acme Corporation'), findsOneWidget);
         expect(find.text('Apex Logistics & Freight'), findsOneWidget);
         expect(find.text('ORGANIZATION'), findsOneWidget);
@@ -275,7 +278,7 @@ void main() {
     );
 
     testWidgets(
-      'renders empty state without duplicate Add Organization action button when no organizations exist',
+      'renders empty state without a duplicate Add Organization button when no organizations exist',
       (tester) async {
         final mockSource = MockPlatformOrganizationsDataSource();
         for (final org in List.of(mockSource.getOrganizations())) {
@@ -295,8 +298,8 @@ void main() {
           find.text('No customer organizations registered'),
           findsOneWidget,
         );
-        // Only the header action has Add Organization, not the empty state card
-        expect(find.text('Add Organization'), findsOneWidget);
+        // Only the floating add button has the label, not the empty state card
+        expect(find.byTooltip('Add Organization'), findsOneWidget);
       },
     );
   });
@@ -320,6 +323,37 @@ void main() {
             child: OrganizationDetailsScreen(organizationId: orgId),
           ),
         ),
+      );
+    }
+
+    /// Like [buildDetailsTestWidget], but routed, so license actions can open
+    /// their pages.
+    Widget buildDetailsRouterWidget({
+      required PlatformOrganizationsController controller,
+      required String orgId,
+    }) {
+      final router = GoRouter(
+        initialLocation: AppRoutes.platformOrganizationDetailsPath(orgId),
+        routes: [
+          GoRoute(
+            path: AppRoutes.platformOrganizationDetails,
+            builder: (context, state) => OrganizationDetailsScreen(
+              organizationId: state.pathParameters['id'] ?? '',
+            ),
+          ),
+          GoRoute(
+            path: '/platform/organizations/:id/license/:action',
+            builder: (context, state) => OrganizationLicenseRoute(
+              organizationId: state.pathParameters['id'] ?? '',
+              action: state.pathParameters['action'] ?? '',
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      return ChangeNotifierProvider<PlatformOrganizationsController>.value(
+        value: controller,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
       );
     }
 
@@ -424,7 +458,10 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       await tester.pumpWidget(
-        buildDetailsTestWidget(controller: controller, orgId: 'org-crestline'),
+        buildDetailsRouterWidget(
+          controller: controller,
+          orgId: 'org-crestline',
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -438,7 +475,7 @@ void main() {
 
       await tester.tap(find.text('Assign License'));
       await tester.pumpAndSettle();
-      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.byType(AssignLicensePage), findsOneWidget);
       expect(find.text('License plan'), findsOneWidget);
     });
 
@@ -724,7 +761,14 @@ void main() {
         find.text('Organization name is required to initialize workspace.'),
         findsOneWidget,
       );
+      expect(find.text('Enter the headquarters address.'), findsOneWidget);
+      expect(find.text('Enter the contact person name.'), findsOneWidget);
+      expect(find.text('Enter the contact phone number.'), findsOneWidget);
+      expect(find.text('Headquarters Address *'), findsOneWidget);
+      expect(find.text('Contact Person Name *'), findsOneWidget);
+      expect(find.text('Contact Phone Number *'), findsOneWidget);
       expect(find.text('Tax Identification (Optional)'), findsOneWidget);
+      expect(find.text('Contact Email'), findsOneWidget);
       expect(find.text('Organization Code *'), findsNothing);
     });
 
@@ -820,13 +864,29 @@ void main() {
         await tester.pumpAndSettle();
 
         // Enter the user-supplied organization details, excluding its code.
+        Finder fieldLabelled(String label) => find.descendant(
+          of: find.widgetWithText(AppTextField, label),
+          matching: find.byType(TextField),
+        );
         await tester.enterText(
-          find.byType(TextField).at(0),
+          fieldLabelled('Organization Name *'),
           'Starlight Express Logistics',
         );
         await tester.enterText(
-          find.byType(TextField).at(1),
+          fieldLabelled('Tax Identification (Optional)'),
           'US-EIN-98-7654321',
+        );
+        await tester.enterText(
+          fieldLabelled('Headquarters Address *'),
+          '1 Main Street, Chicago',
+        );
+        await tester.enterText(
+          fieldLabelled('Contact Person Name *'),
+          'Zed Zenith',
+        );
+        await tester.enterText(
+          fieldLabelled('Contact Phone Number *'),
+          '+91 98765 43210',
         );
         await tester.pumpAndSettle();
 
@@ -842,6 +902,9 @@ void main() {
         expect(createdOrg?.id, 'org-generated-001');
         expect(createdOrg?.code, 'ORG-001');
         expect(createdOrg?.taxIdentification, 'US-EIN-98-7654321');
+        expect(createdOrg?.address, '1 Main Street, Chicago');
+        expect(createdOrg?.contactName, 'Zed Zenith');
+        expect(createdOrg?.contactPhone, '+91 98765 43210');
 
         // Verify navigation to details screen
         expect(find.text('Details for org-generated-001'), findsOneWidget);

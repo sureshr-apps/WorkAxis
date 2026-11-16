@@ -4,9 +4,9 @@ import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/widgets/app_date_picker_field.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
-import 'package:workaxis/features/returns/presentation/screens/widgets/return_details_dialog.dart';
+import 'package:workaxis/features/returns/presentation/screens/return_details_screen.dart';
+import 'package:workaxis/features/returns/presentation/screens/submit_return_screen.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/return_image_picker.dart';
-import 'package:workaxis/features/returns/presentation/screens/widgets/submit_return_dialog.dart';
 
 void main() {
   group('Return Reason Enum Tests', () {
@@ -30,7 +30,7 @@ void main() {
     });
   });
 
-  group('SubmitReturnDialog Enhanced Fields Tests', () {
+  group('SubmitReturnScreen Enhanced Fields Tests', () {
     const branches = [
       BranchSummary(
         id: 'br-01',
@@ -58,20 +58,22 @@ void main() {
           tester.view.resetDevicePixelRatio();
         });
 
-        CreateReturnInput? submittedInput;
+        CreateReturnBatchInput? submittedBatch;
 
         await tester.pumpWidget(
           MaterialApp(
             theme: AppTheme.light,
-            home: Scaffold(
-              body: SubmitReturnDialog(
-                availableBranches: branches,
-                initialBranchId: 'br-01',
-                onSubmit: (input) async {
-                  submittedInput = input;
-                  return null;
-                },
-              ),
+            home: SubmitReturnScreen(
+              eyebrow: 'Branch Operations',
+              backLabel: 'Branch Returns',
+              availableBranches: branches,
+              initialBranchId: 'br-01',
+              onSubmitBatch: (batch) async {
+                submittedBatch = batch;
+                return null;
+              },
+              onClose: () {},
+              onSaved: () {},
             ),
           ),
         );
@@ -126,14 +128,15 @@ void main() {
         await tester.tap(find.text('Submit Return'));
         await tester.pumpAndSettle();
 
-        expect(submittedInput, isNotNull);
-        expect(submittedInput!.productTitle, 'Alphonso Mangoes 5kg');
-        expect(submittedInput!.quantity, 10.5);
-        expect(submittedInput!.unit, 'kg');
-        expect(submittedInput!.reason, ReturnReason.rotten);
-        expect(submittedInput!.billNumber, 'BILL-7721');
-        expect(submittedInput!.invoiceNumber, 'INV-9901');
-        expect(submittedInput!.branchId, 'br-01');
+        expect(submittedBatch, isNotNull);
+        final item = submittedBatch!.items.single;
+        expect(item.productTitle, 'Alphonso Mangoes 5kg');
+        expect(item.quantity, 10.5);
+        expect(item.unit, 'kg');
+        expect(item.reason, ReturnReason.rotten);
+        expect(submittedBatch!.billNumber, 'BILL-7721');
+        expect(submittedBatch!.invoiceNumber, 'INV-9901');
+        expect(submittedBatch!.branchId, 'br-01');
       },
     );
 
@@ -152,15 +155,17 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             theme: AppTheme.light,
-            home: Scaffold(
-              body: SubmitReturnDialog(
-                availableBranches: branches,
-                initialBranchId: 'br-01',
-                onSubmitBatch: (batch) async {
-                  submittedBatch = batch;
-                  return null;
-                },
-              ),
+            home: SubmitReturnScreen(
+              eyebrow: 'Branch Operations',
+              backLabel: 'Branch Returns',
+              availableBranches: branches,
+              initialBranchId: 'br-01',
+              onSubmitBatch: (batch) async {
+                submittedBatch = batch;
+                return null;
+              },
+              onClose: () {},
+              onSaved: () {},
             ),
           ),
         );
@@ -240,7 +245,7 @@ void main() {
     );
   });
 
-  group('ReturnDetailsDialog Image & Details Tests', () {
+  group('ReturnDetailsScreen Image & Details Tests', () {
     final testItem = ReturnItem(
       id: 'RET-881',
       organizationId: 'org-1',
@@ -266,7 +271,12 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             theme: AppTheme.light,
-            home: Scaffold(body: ReturnDetailsDialog(item: testItem)),
+            home: ReturnDetailsScreen(
+              item: testItem,
+              eyebrow: 'Self Service Operations',
+              backLabel: 'My Returns',
+              onClose: () {},
+            ),
           ),
         );
         await tester.pumpAndSettle();
@@ -283,6 +293,7 @@ void main() {
         );
         expect(find.text('Proof Photo Verified'), findsOneWidget);
         expect(find.text('View Full'), findsOneWidget);
+        expect(find.text('My Returns'), findsOneWidget);
       },
     );
   });

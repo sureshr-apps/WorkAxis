@@ -137,7 +137,9 @@ class _PlatformAdministratorDetailsScreenState
                   administrator: administrator,
                   isUpdating: controller.isSaving,
                   onStatusChange: _changeStatus,
-                  onResetPassword: _resetPassword,
+                  onResetPassword: (administrator) => context.push(
+                    AppRoutes.platformUserResetPasswordPath(administrator.id),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _ProfilePanel(administrator: administrator),
@@ -177,27 +179,6 @@ class _PlatformAdministratorDetailsScreenState
           : nextStatus == AccountStatus.suspended
           ? '${administrator.fullName} access suspended.'
           : '${administrator.fullName} access restored.',
-    );
-  }
-
-  Future<void> _resetPassword(PlatformAdministrator administrator) async {
-    final controller = context.read<PlatformUsersController>();
-    final password = await promptAdministratorPasswordReset(
-      context,
-      administrator: administrator,
-    );
-    if (password == null || !mounted) return;
-    controller.clearActionError();
-    final ok = await controller.resetPassword(
-      id: administrator.id,
-      newPassword: password,
-    );
-    if (!mounted) return;
-    _toast(
-      ok
-          ? 'Password reset for ${administrator.fullName}.'
-          : controller.actionErrorMessage ??
-                'The password could not be reset. Try again.',
     );
   }
 }

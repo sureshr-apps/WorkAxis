@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_license_requests.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_license_rules.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/dialogs/license_dialog_frame.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/dialogs/license_form_fields.dart';
 import 'package:workaxis/features/plans/domain/models/license_plan.dart';
+import 'package:workaxis/shared/widgets/form_page_shell.dart';
 
 /// Assigns the first license of an organization. Only active plans can be
 /// chosen. Defaults: start today (business date), expiry one year later.
-class AssignLicenseDialog extends StatefulWidget {
-  const AssignLicenseDialog({
+/// Reports through [onClose] and [onSaved]; the route shows the outcome.
+class AssignLicensePage extends StatefulWidget {
+  const AssignLicensePage({
     super.key,
     required this.organizationName,
     required this.activePlans,
     required this.today,
     required this.onSubmit,
+    required this.onClose,
+    required this.onSaved,
   });
 
   final String organizationName;
@@ -25,12 +28,14 @@ class AssignLicenseDialog extends StatefulWidget {
   /// Business date that the default term starts on.
   final DateTime today;
   final LicenseSubmit<AssignLicenseRequest> onSubmit;
+  final VoidCallback onClose;
+  final VoidCallback onSaved;
 
   @override
-  State<AssignLicenseDialog> createState() => _AssignLicenseDialogState();
+  State<AssignLicensePage> createState() => _AssignLicensePageState();
 }
 
-class _AssignLicenseDialogState extends State<AssignLicenseDialog> {
+class _AssignLicensePageState extends State<AssignLicensePage> {
   late final List<LicensePlan> _plans =
       OrganizationLicenseRules.assignablePlans(widget.activePlans);
   late String? _planId = _plans.isEmpty ? null : _plans.first.id;
@@ -99,7 +104,8 @@ class _AssignLicenseDialogState extends State<AssignLicenseDialog> {
     );
     if (!mounted) return;
     if (failure == null) {
-      Navigator.of(context).pop(true);
+      setState(() => _isSaving = false);
+      widget.onSaved();
       return;
     }
     setState(() {
@@ -111,16 +117,19 @@ class _AssignLicenseDialogState extends State<AssignLicenseDialog> {
   @override
   Widget build(BuildContext context) {
     final selectedPlan = _plans.where((plan) => plan.id == _planId).firstOrNull;
-    return LicenseDialogFrame(
+    return FormPageShell(
+      backLabel: widget.organizationName,
+      currentLabel: 'Assign license',
+      eyebrow: 'Platform catalog',
       title: 'Assign License',
       submitLabel: 'Assign License',
-      isSaving: _isSaving,
-      submitError: _submitError,
-      submitEnabled: _plans.isNotEmpty,
+      onClose: widget.onClose,
       onSubmit: _submit,
+      submitEnabled: _plans.isNotEmpty,
+      isBusy: _isSaving,
+      errorMessage: _submitError,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             'Provision a license agreement for ${widget.organizationName}.',

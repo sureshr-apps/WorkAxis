@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -18,9 +20,8 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 import 'package:workaxis/features/employees/domain/policies/organization_member_policy.dart';
 import 'package:workaxis/features/employees/presentation/controllers/organization_members_controller.dart';
-import 'package:workaxis/features/employees/presentation/screens/widgets/member_details_dialog.dart';
+import 'package:workaxis/features/employees/presentation/member_branch_names.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_card.dart';
-import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_editor_dialog.dart';
 
 class EmployeeDirectoryScreen extends StatefulWidget {
   const EmployeeDirectoryScreen({super.key});
@@ -141,10 +142,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                     iconData: Icons.person_add_alt_1,
                                     onPressed: (access == null || needsBranch)
                                         ? null
-                                        : () => _openEditor(
-                                            access,
-                                            branchId: branchId,
-                                          ),
+                                        : () => _openEditor(access),
                                   )
                                 : null,
                           ),
@@ -262,7 +260,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                 crossAxisCount: columns,
                 mainAxisSpacing: AppSpacing.md,
                 crossAxisSpacing: AppSpacing.md,
-                mainAxisExtent: 212 * (scale < 1 ? 1 : scale),
+                mainAxisExtent: 232 * (scale < 1 ? 1 : scale),
               ),
               itemCount: members.length,
               itemBuilder: (context, index) =>
@@ -288,11 +286,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         OrganizationMemberPolicy.canManage(access, member, branchId);
     return OrganizationMemberCard(
       member: member,
-      branchNames: _branchNames(member, access),
-      onView: () => _showDetails(member, access, branchId),
-      onEdit: canEdit
-          ? () => _openEditor(access, branchId: branchId, member: member)
-          : null,
+      branchNames: memberBranchNames(member, access),
+      onOpen: () => _openDetails(member, access),
+      onEdit: canEdit ? () => _openEditor(access, member: member) : null,
     );
   }
 
@@ -318,68 +314,31 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     );
   }
 
-  List<String> _branchNames(
-    OrganizationMember member,
-    UserAccessContext? access,
-  ) =>
-      access?.assignedBranches
-          .where((branch) => member.branchIds.contains(branch.id))
-          .map((branch) => branch.name)
-          .toList(growable: false) ??
-      const [];
+  /// Add and edit are routed pages; the directory reloads when it is shown again.
+  void _openEditor(UserAccessContext access, {OrganizationMember? member}) =>
+      context.push(
+        member == null ? _addPath(access) : _editPath(access, member.id),
+      );
 
-  Future<void> _openEditor(
-    UserAccessContext access, {
-    required String? branchId,
-    OrganizationMember? member,
-  }) async {
-    await context.read<AccessController>().refreshAccess();
-    if (!mounted) return;
-    final freshAccess =
-        context.read<AccessController>().accessContext ?? access;
-    final controller = context.read<OrganizationMembersController>();
-    controller.clearActionError();
-    final saved = await showDialog<bool>(
-      context: context,
-      // A long form: a stray tap outside must not discard what was typed.
-      barrierDismissible: false,
-      builder: (context) => OrganizationMemberEditorDialog(
-        access: freshAccess,
-        activeBranchId: branchId,
-        member: member,
-        isSaving: controller.isSaving,
-        saveErrorMessage: () => controller.actionErrorMessage,
-        onSave: (draft, password) => controller.saveMember(
-          access: freshAccess,
-          member: draft,
-          initialPassword: password,
-          activeBranchId: branchId,
-        ),
-      ),
-    );
-    if (saved == true && mounted) await _load();
-  }
+  String _addPath(UserAccessContext access) =>
+      access.user.role == UserRole.branchManager
+      ? AppRoutes.branchManagerEmployeeAddPath
+      : AppRoutes.orgAdminEmployeeAddPath;
 
-  Future<void> _showDetails(
-    OrganizationMember member,
-    UserAccessContext? access,
-    String? branchId,
-  ) async {
+  String _editPath(UserAccessContext access, String memberId) =>
+      access.user.role == UserRole.branchManager
+      ? AppRoutes.branchManagerEmployeeEditPath(memberId)
+      : AppRoutes.orgAdminEmployeeEditPath(memberId);
+
+  void _openDetails(OrganizationMember member, UserAccessContext? access) {
     if (access == null) return;
-    final scopedMember = await context
-        .read<OrganizationMembersController>()
-        .getMember(
-          access: access,
-          memberId: member.id,
-          activeBranchId: branchId,
-        );
-    if (scopedMember == null || !mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => MemberDetailsDialog(
-        member: scopedMember,
-        branchNames: _branchNames(scopedMember, access),
-      ),
-    );
+    context.push(_detailsPath(access, member.id));
   }
+
+  /// Branch managers get the branch-scoped details route, so the back link
+  /// returns them to their branch employee list.
+  String _detailsPath(UserAccessContext access, String memberId) =>
+      access.user.role == UserRole.branchManager
+      ? AppRoutes.branchManagerEmployeeDetailsPath(memberId)
+      : AppRoutes.orgAdminEmployeeDetailsPath(memberId);
 }

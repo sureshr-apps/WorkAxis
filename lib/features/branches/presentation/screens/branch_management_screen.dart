@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
@@ -15,8 +17,6 @@ import 'package:workaxis/features/access/presentation/controllers/access_control
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 import 'package:workaxis/features/branches/presentation/controllers/branch_management_controller.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_card.dart';
-import 'package:workaxis/features/branches/presentation/screens/widgets/branch_details_dialog.dart';
-import 'package:workaxis/features/branches/presentation/screens/widgets/branch_editor_dialog.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_summary_strip.dart';
 
 class BranchManagementScreen extends StatefulWidget {
@@ -27,8 +27,6 @@ class BranchManagementScreen extends StatefulWidget {
 }
 
 class _BranchManagementScreenState extends State<BranchManagementScreen> {
-  static const double _cardExtent = 252;
-
   late final TextEditingController _searchController;
 
   @override
@@ -84,9 +82,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                     action: AppButton.responsive(
                       text: 'Add Branch',
                       iconData: Icons.add,
-                      onPressed: access == null
-                          ? null
-                          : () => _openEditor(access),
+                      onPressed: access == null ? null : () => _openEditor(),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -141,20 +137,24 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                           text: 'Add Branch',
                           iconData: Icons.add,
                           isFullWidth: false,
-                          onPressed: () => _openEditor(access),
+                          onPressed: () => _openEditor(),
                         )
                       : null,
                 ),
               )
             else
-              _BranchGrid(
+              _BranchList(
                 branches: branches,
-                cardExtent:
-                    _cardExtent * MediaQuery.textScalerOf(context).scale(1),
-                onView: (branch) => _openDetails(branch, access),
+                onOpen: _openDetails,
                 onEdit: access == null
                     ? null
-                    : (branch) => _openEditor(access, branch: branch),
+                    : (branch) => _openEditor(branch: branch),
+                onToggleActive: access == null
+                    ? null
+                    : (branch) => _toggleActive(access, branch),
+                onDelete: access == null
+                    ? null
+                    : (branch) => _confirmDelete(access, branch),
               ),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
           ],
@@ -163,81 +163,112 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     );
   }
 
-  Future<void> _openEditor(
-    UserAccessContext access, {
-    BranchRecord? branch,
-  }) async {
-    final organizationId = access.organization?.id;
-    if (organizationId == null) return;
+  void _toast(String message) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+
+  /// Add and edit are routed pages; the list reloads when it is shown again.
+  void _openEditor({BranchRecord? branch}) => context.push(
+    branch == null
+        ? AppRoutes.orgAdminBranchAddPath
+        : AppRoutes.orgAdminBranchEditPath(branch.id),
+  );
+
+  /// Suspends an active branch or reactivates a suspended one, by saving the
+  /// branch with its flag flipped.
+  Future<void> _toggleActive(
+    UserAccessContext access,
+    BranchRecord branch,
+  ) async {
     final controller = context.read<BranchManagementController>()
       ..clearActionError();
-    await controller.loadManagerOptions(access);
-    final editable = branch == null
-        ? null
-        : await controller.getBranch(access, branch.id);
-    if (!mounted || (branch != null && editable == null)) return;
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (context) => BranchEditorDialog(
-        branch: editable,
-        organizationId: organizationId,
-        managerOptions: controller.managerOptions,
-        isSaving: controller.isSaving,
-        readActionError: () => controller.actionErrorMessage,
-        onSave: (record) =>
-            controller.saveBranch(access: access, branch: record),
+    final current = await controller.getBranch(access, branch.id);
+    if (!mounted || current == null) return;
+    final suspending = current.isActive;
+    final updated = await controller.saveBranch(
+      access: access,
+      branch: current.copyWith(
+        summary: current.summary.copyWith(isActive: !suspending),
       ),
     );
-    if (saved == true && mounted) {
+    if (!mounted) return;
+    _toast(
+      updated == null
+          ? controller.actionErrorMessage ??
+                'The branch could not be updated. Try again.'
+          : suspending
+          ? '${branch.name} suspended.'
+          : '${branch.name} reactivated.',
+    );
+  }
+
+  Future<void> _confirmDelete(
+    UserAccessContext access,
+    BranchRecord branch,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${branch.name}?'),
+        content: const Text(
+          'The branch is removed for good. A branch with employees, returns '
+          'or attendance cannot be deleted; suspend it instead.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.statusUrgentText,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final controller = context.read<BranchManagementController>()
+      ..clearActionError();
+    final deleted = await controller.deleteBranch(
+      access: access,
+      branchId: branch.id,
+    );
+    if (!mounted) return;
+    if (deleted) {
       await context.read<AccessController>().refreshAccess();
       if (!mounted) return;
-      final freshAccess =
-          context.read<AccessController>().accessContext ?? access;
-      await controller.loadBranches(freshAccess);
+      _toast('${branch.name} deleted.');
+    } else {
+      _toast(
+        controller.actionErrorMessage ??
+            'The branch could not be deleted. Try again.',
+      );
     }
   }
 
-  Future<void> _openDetails(
-    BranchRecord branch,
-    UserAccessContext? access,
-  ) async {
-    if (access == null) return;
-    final controller = context.read<BranchManagementController>()
-      ..clearActionError();
-    final details = await controller.getBranch(access, branch.id);
-    await controller.loadManagerOptions(access);
-    if (!mounted || details == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => BranchDetailsDialog(
-        branch: details,
-        managerNames: controller.managerOptions
-            .where((option) => details.managerIds.contains(option.id))
-            .map((option) => option.name)
-            .toList(growable: false),
-        onGenerateToken: () =>
-            controller.createPairingToken(access: access, branchId: branch.id),
-        onCompletePairing: () =>
-            controller.completePairing(access: access, branchId: branch.id),
-        readActionError: () => controller.actionErrorMessage,
-      ),
-    );
-    if (mounted) await controller.loadBranches(access);
-  }
+  void _openDetails(BranchRecord branch) =>
+      context.push(AppRoutes.orgAdminBranchDetailsPath(branch.id));
 }
 
-class _BranchGrid extends StatelessWidget {
-  const _BranchGrid({
+/// Branch cards in one or more columns, sized to their content like the plan
+/// cards. Rows are built lazily.
+class _BranchList extends StatelessWidget {
+  const _BranchList({
     required this.branches,
-    required this.cardExtent,
-    required this.onView,
+    required this.onOpen,
     required this.onEdit,
+    required this.onToggleActive,
+    required this.onDelete,
   });
 
   final List<BranchRecord> branches;
-  final double cardExtent;
-  final void Function(BranchRecord branch) onView;
+  final void Function(BranchRecord branch) onOpen;
   final void Function(BranchRecord branch)? onEdit;
+  final void Function(BranchRecord branch)? onToggleActive;
+  final void Function(BranchRecord branch)? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -249,20 +280,43 @@ class _BranchGrid extends StatelessWidget {
             : width < AppBreakpoints.wideContent
             ? 2
             : 3;
-        return SliverGrid.builder(
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            mainAxisSpacing: AppSpacing.md,
-            crossAxisSpacing: AppSpacing.md,
-            mainAxisExtent: cardExtent,
-          ),
-          itemCount: branches.length,
-          itemBuilder: (context, index) {
-            final branch = branches[index];
-            return BranchCard(
-              branch: branch,
-              onView: () => onView(branch),
-              onEdit: onEdit == null ? null : () => onEdit!(branch),
+        final rowCount = (branches.length / columns).ceil();
+        return SliverList.separated(
+          itemCount: rowCount,
+          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+          itemBuilder: (context, row) {
+            Widget cardAt(int index) {
+              final branch = branches[index];
+              return BranchCard(
+                branch: branch,
+                onOpen: () => onOpen(branch),
+                onEdit: onEdit == null ? null : () => onEdit!(branch),
+                onToggleActive: onToggleActive == null
+                    ? null
+                    : () => onToggleActive!(branch),
+                onDelete: onDelete == null ? null : () => onDelete!(branch),
+              );
+            }
+
+            if (columns == 1) return cardAt(row);
+
+            final cells = <Widget>[];
+            for (var col = 0; col < columns; col++) {
+              final index = row * columns + col;
+              if (col > 0) cells.add(const SizedBox(width: AppSpacing.md));
+              cells.add(
+                Expanded(
+                  child: index < branches.length
+                      ? cardAt(index)
+                      : const SizedBox.shrink(),
+                ),
+              );
+            }
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: cells,
+              ),
             );
           },
         );

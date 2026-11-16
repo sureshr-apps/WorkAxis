@@ -76,6 +76,15 @@ class SqlConnectBranchManagementRepository
   });
 
   @override
+  Future<void> deleteBranch({
+    required UserAccessContext access,
+    required String branchId,
+  }) => _guard(() async {
+    BranchManagementPolicy.requireOrgAdminOrganization(access);
+    await _functions.call('deleteBranch', {'id': branchId});
+  });
+
+  @override
   Future<BranchRecord> saveBranch({
     required UserAccessContext access,
     required BranchRecord branch,

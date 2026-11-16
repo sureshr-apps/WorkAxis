@@ -5,34 +5,38 @@ import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_license.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_license_requests.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_license_rules.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/dialogs/license_dialog_frame.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/dialogs/license_form_fields.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_formatters.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_shared_widgets.dart';
 import 'package:workaxis/features/plans/domain/models/license_plan.dart';
+import 'package:workaxis/shared/widgets/form_page_shell.dart';
 
 /// Starts a new term after the current expiry. Defaults: start the day after
 /// the current expiry, end one year later. Plans may keep the current level or
 /// move up, never down.
-class RenewLicenseDialog extends StatefulWidget {
-  const RenewLicenseDialog({
+class RenewLicensePage extends StatefulWidget {
+  const RenewLicensePage({
     super.key,
     required this.organizationName,
     required this.license,
     required this.activePlans,
     required this.onSubmit,
+    required this.onClose,
+    required this.onSaved,
   });
 
   final String organizationName;
   final OrganizationLicense license;
   final List<LicensePlan> activePlans;
   final LicenseSubmit<RenewLicenseRequest> onSubmit;
+  final VoidCallback onClose;
+  final VoidCallback onSaved;
 
   @override
-  State<RenewLicenseDialog> createState() => _RenewLicenseDialogState();
+  State<RenewLicensePage> createState() => _RenewLicensePageState();
 }
 
-class _RenewLicenseDialogState extends State<RenewLicenseDialog> {
+class _RenewLicensePageState extends State<RenewLicensePage> {
   late final List<LicensePlan> _plans = OrganizationLicenseRules.renewalPlans(
     widget.activePlans,
     widget.license.plan.level,
@@ -124,7 +128,8 @@ class _RenewLicenseDialogState extends State<RenewLicenseDialog> {
     );
     if (!mounted) return;
     if (failure == null) {
-      Navigator.of(context).pop(true);
+      setState(() => _isSaving = false);
+      widget.onSaved();
       return;
     }
     setState(() {
@@ -141,16 +146,19 @@ class _RenewLicenseDialogState extends State<RenewLicenseDialog> {
       license,
       _startDate,
     );
-    return LicenseDialogFrame(
+    return FormPageShell(
+      backLabel: widget.organizationName,
+      currentLabel: 'Renew license',
+      eyebrow: 'Platform catalog',
       title: 'Renew License Agreement',
       submitLabel: 'Confirm Renewal',
-      isSaving: _isSaving,
-      submitError: _submitError,
-      submitEnabled: _plans.isNotEmpty,
+      onClose: widget.onClose,
       onSubmit: _submit,
+      submitEnabled: _plans.isNotEmpty,
+      isBusy: _isSaving,
+      errorMessage: _submitError,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             'Provision a new period for ${widget.organizationName}.',

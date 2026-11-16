@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/organization_admin_dialog.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/organization_admin_password_dialog.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_dialog_frame.dart';
 
-/// Runs the dialogs for one administrator action and reports the outcome.
+/// Routes one administrator action to its page or confirmation.
 ///
-/// All account changes go through [PlatformOrganizationsController]; this
-/// class only sequences dialogs and snackbars.
+/// Add, edit and password reset open their own pages, which save through the
+/// route loaders. Suspend and restore confirm in a dialog, then change the
+/// status through [PlatformOrganizationsController].
 class OrganizationAdminFlow {
   OrganizationAdminFlow({
     required this.controller,
@@ -42,88 +43,35 @@ class OrganizationAdminFlow {
     ),
   };
 
-  Future<void> add(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    controller.clearActionError();
-    final saved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => OrganizationAdminDialog(
-        onSubmit: (draft) async {
-          final ok = await controller.createAdministrator(
-            organizationId,
-            draft,
-          );
-          return ok ? null : _failure('The administrator could not be added.');
-        },
-      ),
-    );
-    if (saved == true) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Administrator added.')),
-      );
-    }
-  }
+  Future<void> add(BuildContext context) => _open(
+    context,
+    AppRoutes.platformOrganizationAdminAddPath(organizationId),
+  );
 
   Future<void> edit(
     BuildContext context,
     OrganizationAdminUser administrator,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    controller.clearActionError();
-    final saved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => OrganizationAdminDialog(
-        existingAdministrator: administrator,
-        onSubmit: (draft) async {
-          final ok = await controller.updateAdministrator(
-            organizationId,
-            administrator.copyWith(
-              name: draft.name,
-              email: draft.email,
-              phone: draft.phone,
-            ),
-          );
-          return ok
-              ? null
-              : _failure('The administrator could not be updated.');
-        },
-      ),
-    );
-    if (saved == true) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Administrator details updated.')),
-      );
-    }
-  }
+  ) => _open(
+    context,
+    AppRoutes.platformOrganizationAdminEditPath(
+      organizationId,
+      administrator.id,
+    ),
+  );
 
   Future<void> resetPassword(
     BuildContext context,
     OrganizationAdminUser administrator,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    controller.clearActionError();
-    final saved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => OrganizationAdminPasswordDialog(
-        administrator: administrator,
-        onSubmit: (password) async {
-          final ok = await controller.resetAdministratorPassword(
-            organizationId,
-            administrator.id,
-            password,
-          );
-          return ok ? null : _failure('The password could not be reset.');
-        },
-      ),
-    );
-    if (saved == true) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Password reset for ${administrator.name}.')),
-      );
-    }
+  ) => _open(
+    context,
+    AppRoutes.platformOrganizationAdminPasswordPath(
+      organizationId,
+      administrator.id,
+    ),
+  );
+
+  Future<void> _open(BuildContext context, String location) async {
+    await context.push<void>(location);
   }
 
   Future<void> changeStatus(

@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:workaxis/core/widgets/attachment_image.dart';
 import 'package:intl/intl.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/validation/login_email.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/attachment_image.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 
-/// Read-only account details; full-screen on phones, dialog elsewhere.
-class MemberDetailsDialog extends StatelessWidget {
-  const MemberDetailsDialog({
+/// Read-only profile of one organization account, shown on the employee details
+/// page. Holds the sections only; the page supplies the navigation and header.
+class MemberDetailsView extends StatelessWidget {
+  const MemberDetailsView({
     super.key,
     required this.member,
     required this.branchNames,
@@ -23,41 +22,13 @@ class MemberDetailsDialog extends StatelessWidget {
 
   static final _dateFormat = DateFormat('dd MMM yyyy');
 
-  Widget _buildAvatar() {
-    final photoPath = member.profilePhotoUrl;
-    if (photoPath != null && photoPath.isNotEmpty) {
-      return CircleAvatar(
-        radius: 36,
-        backgroundColor: AppColors.primaryContainer,
-        child: ClipOval(
-          child: SizedBox.square(
-            dimension: 72,
-            child: AttachmentImage(reference: photoPath, iconSize: 28),
-          ),
-        ),
-      );
-    }
-    return CircleAvatar(
-      radius: 36,
-      backgroundColor: AppColors.primaryContainer,
-      child: Text(
-        member.initials,
-        style: AppTypography.headlineMedium.copyWith(
-          color: AppColors.primary,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final email = LoginEmail.displayable(member.email);
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Center(child: _buildAvatar()),
+        Center(child: _Avatar(member: member)),
         const SizedBox(height: AppSpacing.md),
         Center(
           child: Column(
@@ -174,51 +145,34 @@ class MemberDetailsDialog extends StatelessWidget {
         ),
       ],
     );
+  }
+}
 
-    if (context.isCompact) {
-      return Dialog.fullscreen(
-        child: Scaffold(
-          appBar: AppBar(title: const Text('Employee Details')),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: content,
-            ),
-          ),
-          bottomNavigationBar: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: AppButton.primary(
-                text: 'Close',
-                onPressed: () => Navigator.of(context).pop(),
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.member});
+
+  final OrganizationMember member;
+
+  @override
+  Widget build(BuildContext context) {
+    final photoPath = member.profilePhotoUrl;
+    return CircleAvatar(
+      radius: 36,
+      backgroundColor: AppColors.primaryContainer,
+      child: photoPath != null && photoPath.isNotEmpty
+          ? ClipOval(
+              child: SizedBox.square(
+                dimension: 72,
+                child: AttachmentImage(reference: photoPath, iconSize: 28),
+              ),
+            )
+          : Text(
+              member.initials,
+              style: AppTypography.headlineMedium.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ),
-        ),
-      );
-    }
-
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                content,
-                const SizedBox(height: AppSpacing.lg),
-                AppButton.outlined(
-                  text: 'Close',
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

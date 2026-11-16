@@ -14,24 +14,36 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:workaxis/features/authentication/presentation/screens/sign_in_screen.dart';
 import 'package:workaxis/features/branch_dashboard/presentation/screens/branch_home_screen.dart';
+import 'package:workaxis/features/branches/presentation/screens/branch_details_screen.dart';
+import 'package:workaxis/features/branches/presentation/screens/branch_editor_route.dart';
 import 'package:workaxis/features/branches/presentation/screens/branch_management_screen.dart';
+import 'package:workaxis/features/employees/presentation/screens/employee_details_screen.dart';
 import 'package:workaxis/features/employees/presentation/screens/employee_directory_screen.dart';
+import 'package:workaxis/features/employees/presentation/screens/organization_member_form_route.dart';
+import 'package:workaxis/features/attendance/presentation/screens/attendance_details_route.dart';
 import 'package:workaxis/features/attendance/presentation/screens/attendance_operations_screen.dart';
+import 'package:workaxis/features/attendance/presentation/screens/group_attendance_route.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/employee_home_screen.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/screens/organization_home_screen.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/screens/platform_home_screen.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/add_organization_screen.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/edit_organization_screen.dart';
+import 'package:workaxis/features/platform_organizations/presentation/screens/organization_admin_form_route.dart';
+import 'package:workaxis/features/platform_organizations/presentation/screens/organization_admin_password_route.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organization_details_screen.dart';
+import 'package:workaxis/features/platform_organizations/presentation/screens/organization_license_route.dart';
 import 'package:workaxis/features/platform_organizations/presentation/screens/organizations_list_screen.dart';
 import 'package:workaxis/features/plans/presentation/screens/license_plan_form_screen.dart';
 import 'package:workaxis/features/plans/presentation/screens/license_plans_screen.dart';
 import 'package:workaxis/features/platform_users/presentation/screens/platform_administrator_details_screen.dart';
+import 'package:workaxis/features/platform_users/presentation/screens/reset_administrator_password_route.dart';
 import 'package:workaxis/features/platform_users/presentation/screens/platform_administrator_form_screen.dart';
 import 'package:workaxis/features/platform_users/presentation/screens/platform_users_list_screen.dart';
 import 'package:workaxis/features/profile/presentation/screens/employee_profile_screen.dart';
 import 'package:workaxis/features/reports/presentation/screens/operational_reports_screen.dart';
 import 'package:workaxis/features/returns/presentation/screens/employee_returns_screen.dart';
+import 'package:workaxis/features/returns/presentation/screens/return_details_route.dart';
+import 'package:workaxis/features/returns/presentation/screens/submit_return_route.dart';
 import 'package:workaxis/features/returns/presentation/screens/returns_operations_screen.dart';
 import 'package:workaxis/features/settings/presentation/screens/organization_settings_screen.dart';
 import 'package:workaxis/features/settings/presentation/screens/platform_settings_screen.dart';
@@ -123,6 +135,33 @@ GoRouter createAppRouter({
                       return EditOrganizationScreen(organizationId: id);
                     },
                   ),
+                  GoRoute(
+                    path: 'administrators/add',
+                    builder: (context, state) => OrganizationAdminFormRoute(
+                      organizationId: state.pathParameters['id'] ?? '',
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'administrators/:adminId/edit',
+                    builder: (context, state) => OrganizationAdminFormRoute(
+                      organizationId: state.pathParameters['id'] ?? '',
+                      administratorId: state.pathParameters['adminId'] ?? '',
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'administrators/:adminId/password',
+                    builder: (context, state) => OrganizationAdminPasswordRoute(
+                      organizationId: state.pathParameters['id'] ?? '',
+                      administratorId: state.pathParameters['adminId'] ?? '',
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'license/:action',
+                    builder: (context, state) => OrganizationLicenseRoute(
+                      organizationId: state.pathParameters['id'] ?? '',
+                      action: state.pathParameters['action'] ?? '',
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -168,6 +207,13 @@ GoRouter createAppRouter({
                           administratorId: state.pathParameters['id'] ?? '',
                         ),
                   ),
+                  GoRoute(
+                    path: 'reset-password',
+                    builder: (context, state) =>
+                        ResetAdministratorPasswordRoute(
+                          administratorId: state.pathParameters['id'] ?? '',
+                        ),
+                  ),
                 ],
               ),
             ],
@@ -200,18 +246,92 @@ GoRouter createAppRouter({
           GoRoute(
             path: AppRoutes.orgAdminBranches,
             builder: (context, state) => const BranchManagementScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (context, state) => const BranchEditorRoute(),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => BranchDetailsScreen(
+                  branchId: state.pathParameters['id'] ?? '',
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    builder: (context, state) => BranchEditorRoute(
+                      branchId: state.pathParameters['id'] ?? '',
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.orgAdminEmployees,
             builder: (context, state) => const EmployeeDirectoryScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (context, state) => const OrganizationMemberFormRoute(
+                  listRoute: AppRoutes.orgAdminEmployees,
+                  listLabel: 'Employee Directory',
+                ),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => EmployeeDetailsScreen(
+                  memberId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.orgAdminEmployees,
+                  listLabel: 'Employee Directory',
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    builder: (context, state) => OrganizationMemberFormRoute(
+                      memberId: state.pathParameters['id'] ?? '',
+                      listRoute: AppRoutes.orgAdminEmployees,
+                      listLabel: 'Employee Directory',
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.orgAdminAttendance,
             builder: (context, state) => const AttendanceOperationsScreen(),
+            routes: [
+              GoRoute(
+                path: 'group',
+                builder: (context, state) => const GroupAttendanceRoute(
+                  listRoute: AppRoutes.orgAdminAttendance,
+                  listLabel: 'Organization Attendance',
+                ),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => AttendanceDetailsRoute(
+                  entryId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.orgAdminAttendance,
+                  listLabel: 'Organization Attendance',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.orgAdminReturns,
             builder: (context, state) => const ReturnsOperationsScreen(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => ReturnDetailsRoute(
+                  returnId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.orgAdminReturns,
+                  listLabel: 'Organization Returns',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.orgAdminReports,
@@ -245,14 +365,75 @@ GoRouter createAppRouter({
           GoRoute(
             path: AppRoutes.branchManagerEmployees,
             builder: (context, state) => const EmployeeDirectoryScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (context, state) => const OrganizationMemberFormRoute(
+                  listRoute: AppRoutes.branchManagerEmployees,
+                  listLabel: 'Branch Employees',
+                ),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => EmployeeDetailsScreen(
+                  memberId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.branchManagerEmployees,
+                  listLabel: 'Branch Employees',
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    builder: (context, state) => OrganizationMemberFormRoute(
+                      memberId: state.pathParameters['id'] ?? '',
+                      listRoute: AppRoutes.branchManagerEmployees,
+                      listLabel: 'Branch Employees',
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.branchManagerAttendance,
             builder: (context, state) => const AttendanceOperationsScreen(),
+            routes: [
+              GoRoute(
+                path: 'group',
+                builder: (context, state) => const GroupAttendanceRoute(
+                  listRoute: AppRoutes.branchManagerAttendance,
+                  listLabel: 'Branch Attendance',
+                ),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => AttendanceDetailsRoute(
+                  entryId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.branchManagerAttendance,
+                  listLabel: 'Branch Attendance',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.branchManagerReturns,
             builder: (context, state) => const ReturnsOperationsScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (context, state) => const SubmitReturnRoute(
+                  listRoute: AppRoutes.branchManagerReturns,
+                  listLabel: 'Branch Returns',
+                ),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => ReturnDetailsRoute(
+                  returnId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.branchManagerReturns,
+                  listLabel: 'Branch Returns',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.branchManagerReports,
@@ -282,10 +463,37 @@ GoRouter createAppRouter({
           GoRoute(
             path: AppRoutes.employeeAttendance,
             builder: (context, state) => const AttendanceOperationsScreen(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => AttendanceDetailsRoute(
+                  entryId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.employeeAttendance,
+                  listLabel: 'My Attendance',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.employeeReturns,
             builder: (context, state) => const EmployeeReturnsScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (context, state) => const SubmitReturnRoute(
+                  listRoute: AppRoutes.employeeReturns,
+                  listLabel: 'My Returns',
+                ),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => ReturnDetailsRoute(
+                  returnId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.employeeReturns,
+                  listLabel: 'My Returns',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.employeeProfile,

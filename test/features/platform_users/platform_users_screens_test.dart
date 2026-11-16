@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/data/mock_platform_users_repository.dart';
 import 'package:workaxis/features/platform_users/domain/administrator_activity_label.dart';
@@ -9,6 +11,7 @@ import 'package:workaxis/features/platform_users/presentation/controllers/platfo
 import 'package:workaxis/features/platform_users/presentation/screens/platform_administrator_details_screen.dart';
 import 'package:workaxis/features/platform_users/presentation/screens/platform_administrator_form_screen.dart';
 import 'package:workaxis/features/platform_users/presentation/screens/platform_users_list_screen.dart';
+import 'package:workaxis/features/platform_users/presentation/screens/reset_administrator_password_route.dart';
 
 /// Repository whose status and password changes always fail.
 class _FailingMutationsRepository extends MockPlatformUsersRepository {
@@ -166,20 +169,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('reset password validates, calls the controller and confirms', (
+  testWidgets('reset password validates, calls the controller and returns', (
     tester,
   ) async {
     await controller.loadAdministrators();
     final administrator = controller.administrators.first;
-
-    await pump(
-      tester,
-      PlatformAdministratorDetailsScreen(administratorId: administrator.id),
+    final router = GoRouter(
+      initialLocation: AppRoutes.platformUserResetPasswordPath(
+        administrator.id,
+      ),
+      routes: [
+        GoRoute(
+          path: AppRoutes.platformUsers,
+          builder: (context, state) =>
+              const Scaffold(body: Text('Platform users list')),
+        ),
+        GoRoute(
+          path: '/platform/users/:id/reset-password',
+          builder: (context, state) => ResetAdministratorPasswordRoute(
+            administratorId: state.pathParameters['id'] ?? '',
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    tester.view.physicalSize = const Size(1280, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<PlatformUsersController>.value(
+        value: controller,
+        child: MaterialApp.router(routerConfig: router),
+      ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Reset password'));
-    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Reset password'));
     await tester.pumpAndSettle();
     expect(find.text('Password must be 8-128 characters.'), findsOneWidget);
@@ -194,6 +219,7 @@ void main() {
       find.text('Password reset for ${administrator.fullName}.'),
       findsOneWidget,
     );
+    expect(find.text('Platform users list'), findsOneWidget);
   });
 
   testWidgets('details never flash a previously selected administrator', (

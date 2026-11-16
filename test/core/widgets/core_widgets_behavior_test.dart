@@ -52,9 +52,22 @@ void main() {
           AppButtonVariant.secondaryTonal => AppColors.onPrimaryContainer,
           AppButtonVariant.outlined => AppColors.primary,
           AppButtonVariant.destructive => AppColors.onPrimary,
+          AppButtonVariant.link => AppColors.primary,
         });
       });
     }
+
+    testWidgets('link variant renders as a text button, not a bordered one', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(AppButton.link(text: 'View All', onPressed: () {})),
+      );
+
+      expect(find.byType(TextButton), findsOneWidget);
+      expect(find.byType(OutlinedButton), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
+    });
 
     testWidgets('loading primary button keeps its filled colors', (
       tester,

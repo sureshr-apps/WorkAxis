@@ -6,33 +6,37 @@ import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_license.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_license_requests.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_license_rules.dart';
-import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/dialogs/license_dialog_frame.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/dialogs/license_form_fields.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_formatters.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/license/license_shared_widgets.dart';
 import 'package:workaxis/features/plans/domain/models/license_plan.dart';
+import 'package:workaxis/shared/widgets/form_page_shell.dart';
 
 /// Moves the license to a higher-level active plan. Only plans with a strictly
 /// higher level are offered; the term dates are preserved.
-class ChangePlanDialog extends StatefulWidget {
-  const ChangePlanDialog({
+class ChangePlanPage extends StatefulWidget {
+  const ChangePlanPage({
     super.key,
     required this.organizationName,
     required this.license,
     required this.activePlans,
     required this.onSubmit,
+    required this.onClose,
+    required this.onSaved,
   });
 
   final String organizationName;
   final OrganizationLicense license;
   final List<LicensePlan> activePlans;
   final LicenseSubmit<ChangeLicensePlanRequest> onSubmit;
+  final VoidCallback onClose;
+  final VoidCallback onSaved;
 
   @override
-  State<ChangePlanDialog> createState() => _ChangePlanDialogState();
+  State<ChangePlanPage> createState() => _ChangePlanPageState();
 }
 
-class _ChangePlanDialogState extends State<ChangePlanDialog> {
+class _ChangePlanPageState extends State<ChangePlanPage> {
   late final List<LicensePlan> _targets =
       OrganizationLicenseRules.changeTargets(
         widget.activePlans,
@@ -99,7 +103,8 @@ class _ChangePlanDialogState extends State<ChangePlanDialog> {
     );
     if (!mounted) return;
     if (failure == null) {
-      Navigator.of(context).pop(true);
+      setState(() => _isSaving = false);
+      widget.onSaved();
       return;
     }
     setState(() {
@@ -112,16 +117,19 @@ class _ChangePlanDialogState extends State<ChangePlanDialog> {
   Widget build(BuildContext context) {
     final current = widget.license.plan;
     final target = _targets.where((plan) => plan.id == _targetId).firstOrNull;
-    return LicenseDialogFrame(
+    return FormPageShell(
+      backLabel: widget.organizationName,
+      currentLabel: 'Change plan',
+      eyebrow: 'Platform catalog',
       title: 'Change License Plan',
       submitLabel: 'Confirm Plan Upgrade',
-      isSaving: _isSaving,
-      submitError: _submitError,
-      submitEnabled: _targets.isNotEmpty,
+      onClose: widget.onClose,
       onSubmit: _submit,
+      submitEnabled: _targets.isNotEmpty,
+      isBusy: _isSaving,
+      errorMessage: _submitError,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             'Upgrade the agreement tier for ${widget.organizationName}.',

@@ -17,4 +17,5 @@ export { recordGroupAttendance } from "./handlers/recordGroupAttendance";
 export { reconcileIdentitySync } from "./accounts/identitySync";
 
 export { saveBranch } from "./handlers/saveBranch";
+export { deleteBranch } from "./handlers/deleteBranch";
 export { dataOp } from "./handlers/dataOp";

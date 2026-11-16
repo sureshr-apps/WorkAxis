@@ -3,9 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workaxis/app/app.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
-import 'package:workaxis/features/attendance/presentation/screens/widgets/group_attendance_dialog.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
+import 'package:workaxis/features/attendance/presentation/screens/group_attendance_screen.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/presentation/controllers/employee_home_controller.dart';
+import 'package:workaxis/features/returns/presentation/screens/employee_returns_screen.dart';
+import 'package:workaxis/features/returns/presentation/screens/submit_return_screen.dart';
 import 'package:provider/provider.dart';
 
 import '../helpers/test_backend.dart';
@@ -33,7 +36,7 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(find.text('Group Check-In'));
           await tester.pumpAndSettle();
-          expect(find.byType(GroupAttendanceDialog), findsOneWidget);
+          expect(find.byType(GroupAttendanceScreen), findsOneWidget);
           expect(tester.takeException(), isNull);
           await tester.tap(find.text('Cancel'));
           await tester.pumpAndSettle();
@@ -54,4 +57,41 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'employee records a return on its page and the breadcrumb returns to the list',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repos = buildTestBackend();
+      addTearDown(mockAuthOf(repos).dispose);
+      await tester.pumpWidget(WorkAxisApp(repositories: repos));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(0), 'employee');
+      await tester.enterText(find.byType(TextField).at(1), 'Password123!');
+      await tester.tap(find.text('Sign In'));
+      await tester.pumpAndSettle();
+      GoRouter.of(tester.element(find.byType(Scaffold).first))
+          .go(AppRoutes.employeeReturns);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Submit Return'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SubmitReturnScreen), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(PageBreadcrumb),
+          matching: find.byType(InkWell),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SubmitReturnScreen), findsNothing);
+      expect(find.byType(EmployeeReturnsScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

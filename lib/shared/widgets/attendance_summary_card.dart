@@ -4,6 +4,7 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attendance_summary.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/organization_dashboard_summary.dart';
 import 'package:workaxis/shared/widgets/attendance_metric_tile.dart';
@@ -31,20 +32,39 @@ class AttendanceSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Header(onViewDetails: onViewDetails),
+          const _Header(),
           const SizedBox(height: AppSpacing.lg),
-          _DistributionBar(attendance: attendance),
-          const SizedBox(height: AppSpacing.xs + 2),
-          Text(
-            'Attendance rate: ${attendance.attendancePercentage}% of '
-            '${attendance.distributionTotal} scheduled',
-            style: AppTypography.labelMono.copyWith(
-              fontWeight: FontWeight.w500,
-              color: AppColors.secondary,
-            ),
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  'Attendance rate: ${attendance.attendancePercentage}% of '
+                  '${attendance.distributionTotal} scheduled',
+                  style: AppTypography.labelMono.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.secondary,
+                  ),
+                ),
+              ),
+              if (attendance.totalScheduled > 0) ...[
+                const SizedBox(width: AppSpacing.sm),
+                _LevelChip(level: attendance.level),
+              ],
+            ],
           ),
+          const SizedBox(height: AppSpacing.sm),
+          _DistributionBar(attendance: attendance),
           const SizedBox(height: AppSpacing.lg),
           _MetricTiles(attendance: attendance),
+          if (onViewDetails != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            AppButton.outlined(
+              text: 'View full roster',
+              iconData: Icons.arrow_forward,
+              isFullWidth: true,
+              onPressed: onViewDetails,
+            ),
+          ],
           if (branchSnapshots.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
             Text(
@@ -83,44 +103,24 @@ class AttendanceSummaryCard extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({this.onViewDetails});
-
-  final VoidCallback? onViewDetails;
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Today's Attendance",
-              style: AppTypography.titleLarge.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppColors.onSurface,
-              ),
-            ),
-            Text(
-              'Roster distribution for today',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.secondary,
-              ),
-            ),
-          ],
-        ),
-        if (onViewDetails != null)
-          AppButton.outlined(
-            text: 'View full roster',
-            iconData: Icons.arrow_forward,
-            isFullWidth: false,
-            onPressed: onViewDetails,
+        Text(
+          "Today's Attendance",
+          style: AppTypography.titleLarge.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.onSurface,
           ),
+        ),
+        Text(
+          'Roster distribution for today',
+          style: AppTypography.bodySmall.copyWith(color: AppColors.secondary),
+        ),
       ],
     );
   }
@@ -133,17 +133,21 @@ class _DistributionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    int flex(double share) => (share * 1000).round();
+    final total = attendance.barTotal;
+    int flex(int count) => total == 0 ? 0 : (count * 1000 / total).round();
+    final onLeave = attendance.onLeave ?? 0;
     final segments = <(int, Color)>[
-      (flex(attendance.presentShare), AppColors.statusActive),
-      (flex(attendance.lateShare), AppColors.statusPending),
-      (flex(attendance.absentShare), AppColors.error),
+      (flex(attendance.present), AppColors.statusActive),
+      (flex(attendance.late), AppColors.statusPending),
+      (flex(attendance.absent), AppColors.error),
+      (flex(onLeave), AppColors.outline),
     ].where((segment) => segment.$1 > 0).toList();
 
     return Semantics(
       label:
           'Attendance distribution: ${attendance.present} present, '
-          '${attendance.late} late, ${attendance.absent} absent',
+          '${attendance.late} late, ${attendance.absent} absent, '
+          '$onLeave on leave',
       child: ClipRRect(
         borderRadius: AppSpacing.roundedPill,
         child: SizedBox(
@@ -164,6 +168,24 @@ class _DistributionBar extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Level chip beside the attendance rate: green for high, amber for medium and
+/// red for low, matching the status colours used elsewhere.
+class _LevelChip extends StatelessWidget {
+  const _LevelChip({required this.level});
+
+  final AttendanceLevel level;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = switch (level) {
+      AttendanceLevel.high => StatusType.active,
+      AttendanceLevel.medium => StatusType.pending,
+      AttendanceLevel.low => StatusType.urgent,
+    };
+    return StatusChip(label: level.label, type: type, width: null);
   }
 }
 

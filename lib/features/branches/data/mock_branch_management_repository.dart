@@ -58,6 +58,26 @@ class MockBranchManagementRepository implements BranchManagementRepository {
   }
 
   @override
+  Future<void> deleteBranch({
+    required UserAccessContext access,
+    required String branchId,
+  }) async {
+    final organizationId = _organizationIdForAdmin(access);
+    final existing = accessDataSource.getBranch(branchId);
+    if (existing == null || existing.organizationId != organizationId) {
+      throw const NotFoundException('Branch not found in caller organization');
+    }
+    if (existing.activeEmployeeCount > 0) {
+      throw DatabaseException(
+        'Branch $branchId has employees',
+        userMessage: branchHasHistoryMessage,
+      );
+    }
+    accessDataSource.removeBranch(branchId);
+    _settings.remove(branchId);
+  }
+
+  @override
   Future<BranchRecord> saveBranch({
     required UserAccessContext access,
     required BranchRecord branch,

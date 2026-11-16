@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attendance_summary.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attention_item.dart';
@@ -138,5 +139,53 @@ void main() {
     );
     expect(on.isOnTarget, isTrue);
     expect(off.isOnTarget, isFalse);
+  });
+
+  testWidgets('the level chip sits beside the rate line', (tester) async {
+    await pump(
+      tester,
+      const AttendanceSummaryCard(attendance: attendance),
+      const Size(1280, 800),
+    );
+    expect(find.text('High'), findsOneWidget);
+  });
+
+  testWidgets('no level chip without a scheduled roster', (tester) async {
+    await pump(
+      tester,
+      const AttendanceSummaryCard(
+        attendance: AttendanceSummary(
+          present: 0,
+          late: 0,
+          absent: 0,
+          totalScheduled: 0,
+        ),
+      ),
+      const Size(1280, 800),
+    );
+    expect(find.text('Low'), findsNothing);
+    expect(find.text('High'), findsNothing);
+  });
+
+  testWidgets('approved leave is drawn as a grey bar segment', (tester) async {
+    await pump(
+      tester,
+      const AttendanceSummaryCard(
+        attendance: AttendanceSummary(
+          present: 8,
+          late: 1,
+          absent: 1,
+          onLeave: 2,
+          totalScheduled: 10,
+        ),
+      ),
+      const Size(1280, 800),
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is ColoredBox && widget.color == AppColors.outline,
+      ),
+      findsOneWidget,
+    );
   });
 }

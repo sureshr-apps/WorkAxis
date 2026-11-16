@@ -14,7 +14,7 @@ import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart
 import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
 import 'package:workaxis/features/attendance/presentation/controllers/attendance_controller.dart';
 import 'package:workaxis/features/attendance/presentation/screens/attendance_operations_screen.dart';
-import 'package:workaxis/features/attendance/presentation/screens/widgets/group_attendance_dialog.dart';
+import 'package:workaxis/features/attendance/presentation/screens/group_attendance_screen.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
@@ -22,6 +22,7 @@ import 'package:workaxis/features/employees/data/mock_organization_members_repos
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 
+import '../../helpers/attendance_router.dart';
 import '../../helpers/fixed_clock.dart';
 
 void main() {
@@ -181,6 +182,9 @@ void main() {
         }
       }
 
+      final router = buildAttendanceRouter(role);
+      addTearDown(router.dispose);
+
       await tester.pumpWidget(
         MultiProvider(
           providers: [
@@ -197,9 +201,9 @@ void main() {
               value: membersRepository,
             ),
           ],
-          child: MaterialApp(
+          child: MaterialApp.router(
             theme: AppTheme.light,
-            home: const AttendanceOperationsScreen(),
+            routerConfig: router,
           ),
         ),
       );
@@ -220,7 +224,7 @@ void main() {
     });
 
     testWidgets(
-      'opens GroupAttendanceDialog and records batch check-in end to end',
+      'opens the group check-in page and records batch check-in end to end',
       (tester) async {
         await pumpOperationsScreen(
           tester,
@@ -250,8 +254,8 @@ void main() {
         await tester.tap(find.text('Group Check-In'));
         await tester.pumpAndSettle();
 
-        // Verify dialog opened
-        expect(find.byType(GroupAttendanceDialog), findsOneWidget);
+        // Verify the page opened
+        expect(find.byType(GroupAttendanceScreen), findsOneWidget);
         expect(find.text('Group Attendance Check-In'), findsOneWidget);
         expect(find.text('Personnel Roster'), findsOneWidget);
 
@@ -268,8 +272,9 @@ void main() {
         await tester.tap(confirmBtn);
         await tester.pumpAndSettle();
 
-        // Verify dialog dismissed and success snackbar shown
-        expect(find.byType(GroupAttendanceDialog), findsNothing);
+        // Verify the page returned to the list and the success snackbar shown
+        expect(find.byType(GroupAttendanceScreen), findsNothing);
+        expect(find.byType(AttendanceOperationsScreen), findsOneWidget);
         expect(
           find.text('Group attendance check-in recorded successfully.'),
           findsOneWidget,
