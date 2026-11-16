@@ -83,22 +83,22 @@ class OrganizationFormState {
   }
 
   /// Validates the fields. Email and tax id are optional and only checked when
-  /// the user entered a value. When [isNewOrganization] is true, the
+  /// the user entered a value. When [requiresContactDetails] is true, the
   /// headquarters address, contact person and contact phone are also required.
   OrganizationFormErrors validate({
     required String missingNameMessage,
-    bool isNewOrganization = false,
+    bool requiresContactDetails = false,
   }) {
     return OrganizationFormErrors(
       name: name.text.trim().isEmpty ? missingNameMessage : null,
-      address: isNewOrganization && address.text.trim().isEmpty
+      address: requiresContactDetails && address.text.trim().isEmpty
           ? 'Enter the headquarters address.'
           : null,
-      contactName: isNewOrganization && contactName.text.trim().isEmpty
+      contactName: requiresContactDetails && contactName.text.trim().isEmpty
           ? 'Enter the contact person name.'
           : null,
       email: ContactValidators.optionalEmail(contactEmail.text),
-      phone: isNewOrganization
+      phone: requiresContactDetails
           ? _requiredPhoneError()
           : ContactValidators.optionalPhone(contactPhone.text),
     );

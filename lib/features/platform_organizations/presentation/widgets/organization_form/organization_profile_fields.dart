@@ -15,7 +15,7 @@ class OrganizationProfileFields extends StatelessWidget {
     required this.nameError,
     required this.onNameChanged,
     this.addressError,
-    this.isNewOrganization = false,
+    this.requiresContactDetails = false,
   });
 
   static const int descriptionMaxLength = 300;
@@ -27,7 +27,7 @@ class OrganizationProfileFields extends StatelessWidget {
   final String? addressError;
 
   /// Marks the headquarters address as required on the add form.
-  final bool isNewOrganization;
+  final bool requiresContactDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +82,7 @@ class OrganizationProfileFields extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           AppTextField(
             controller: form.address,
-            label: isNewOrganization
+            label: requiresContactDetails
                 ? 'Headquarters Address *'
                 : 'Headquarters Address',
             hintText: 'e.g. 742 Evergreen Logistics Blvd, Chicago, IL 60611',

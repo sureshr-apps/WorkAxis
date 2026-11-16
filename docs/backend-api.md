@@ -72,6 +72,7 @@ Errors are `HttpsError` codes; internal details are never returned:
 | `updateUserAccount` | `{targetUid, fullName?, email?, phone? (null clears), role?, branchIds?}` | `{uid}` | see matrix |
 | `resetUserPassword` | `{targetUid, newPassword}` | `{uid}` | see matrix |
 | `setUserStatus` | `{targetUid, status: 'active'\|'suspended'}` | `{uid, status}` | see matrix |
+| `deletePlatformAdministrator` | `{targetUid}` | `{uid, deleted}` | Platform Owner only; not self; platform administrators only |
 | `setOrganizationStatus` | `{organizationId, status}` | `{organizationId, status, membersUpdated, membersFailed}` | platform roles |
 | `resolveLoginIdentifier` | `{identifier}` | `{email}` | unauthenticated |
 | `recordAttendancePunch` | `{kind: 'checkIn'\|'checkOut'\|'breakStart'\|'breakEnd', branchId, latitude, longitude, accuracyMeters}` | `{entryId, kind, recordedAt, workDate, distanceMeters}` | Employee |

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  assertCanDeletePlatformAdministrator,
   assertCanManage,
   assertCanManageBranch,
   assertCanProvision,
@@ -128,5 +129,24 @@ describe("assertCanManageBranch", () => {
     forbidden(() => assertCanManageBranch(orgAdmin, { id: "b1", organizationId: "o2" }));
     forbidden(() => assertCanManageBranch(padmin, { id: "b1", organizationId: "o1" }));
     forbidden(() => assertCanManageBranch(emp, { id: "b1", organizationId: "o1" }));
+  });
+});
+
+describe("assertCanDeletePlatformAdministrator", () => {
+  it("lets only the Platform Owner delete a Platform Administrator", () => {
+    allowed(() => assertCanDeletePlatformAdministrator(owner, t("platformAdmin", undefined, [], "other")));
+    for (const a of [padmin, orgAdmin, bm, emp]) {
+      forbidden(() => assertCanDeletePlatformAdministrator(a, t("platformAdmin", undefined, [], "other")));
+    }
+  });
+
+  it("never deletes the Platform Owner or a customer account", () => {
+    forbidden(() => assertCanDeletePlatformAdministrator(owner, t("platformOwner", undefined, [], "other")));
+    forbidden(() => assertCanDeletePlatformAdministrator(owner, t("orgAdmin", "o1", [], "other")));
+    forbidden(() => assertCanDeletePlatformAdministrator(owner, t("employee", "o1", ["b1"], "other")));
+  });
+
+  it("refuses to delete the owner's own account", () => {
+    forbidden(() => assertCanDeletePlatformAdministrator(owner, t("platformAdmin", undefined, [], "owner")));
   });
 });

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
@@ -156,7 +157,7 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
       case OrganizationDetailsTab.overview:
         return OrganizationOverviewTab(
           organization: organization,
-          onUpload: _showUnavailable,
+          onUpload: () => _pickLogo(organization, controller),
           onDelete: controller.isActionLoading
               ? null
               : () => _confirmDelete(organization, controller),
@@ -198,9 +199,28 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
     );
   }
 
-  void _showUnavailable(String action) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('$action is not available yet.')));
+  Future<void> _pickLogo(
+    CustomerOrganization organization,
+    PlatformOrganizationsController controller,
+  ) async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+    );
+    if (picked == null || !mounted) return;
+    final updated = await controller.uploadLogo(organization.id, picked.path);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          updated == null
+              ? controller.actionErrorMessage ??
+                    'The logo could not be uploaded. Please try again.'
+              : 'Organization logo updated.',
+        ),
+      ),
+    );
   }
 
   void _confirmSuspend(

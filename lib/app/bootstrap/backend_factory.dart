@@ -138,6 +138,7 @@ class BackendFactory {
               gateway: data,
             ),
             functions: callables,
+            attachments: attachmentStorage,
           );
       return BackendRepositories(
         authRepository: FirebaseAuthRepository(

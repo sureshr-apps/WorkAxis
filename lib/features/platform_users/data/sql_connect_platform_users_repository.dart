@@ -113,6 +113,12 @@ class SqlConnectPlatformUsersRepository implements PlatformUsersRepository {
   });
 
   @override
+  Future<void> deleteAdministrator(String id) => _guard(() async {
+    final existing = await _require(id);
+    await _accounts.deletePlatformAdministrator(targetUid: _uid(existing));
+  });
+
+  @override
   Future<void> resetAdministratorPassword({
     required String id,
     required String newPassword,

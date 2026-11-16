@@ -57,7 +57,7 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
     final errors = _form.validate(
       missingNameMessage:
           'Organization name is required to initialize workspace.',
-      isNewOrganization: true,
+      requiresContactDetails: true,
     );
     setState(() {
       _errors = errors;
@@ -137,7 +137,7 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
                     form: _form,
                     nameError: _errors.name,
                     addressError: _errors.address,
-                    isNewOrganization: true,
+                    requiresContactDetails: true,
                     onNameChanged: (value) {
                       if (_errors.name != null && value.trim().isNotEmpty) {
                         setState(() => _errors = _errors.withoutName());
@@ -150,7 +150,7 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
                     contactNameError: _errors.contactName,
                     emailError: _errors.email,
                     phoneError: _errors.phone,
-                    isNewOrganization: true,
+                    requiresContactDetails: true,
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   OrganizationFormFooter(

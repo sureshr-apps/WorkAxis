@@ -21,10 +21,21 @@ service firebase.storage {
       return request.resource.size < 5 * 1024 * 1024 &&
         request.resource.contentType.matches('image/(jpeg|png)');
     }
+    function platformStaff() {
+      return active() && request.auth.token.role in ['platformOwner', 'platformAdmin'];
+    }
 
     match /organizations/{orgId}/profile-photos/{file} {
       allow read: if inOrg(orgId);
       allow create: if isOrgManager(orgId) && validImage();
+    }
+
+    // Organization logos: uploaded by platform staff, read by the platform and
+    // members of that organization. Uploads are immutable (fresh UUID names).
+    match /organizations/{orgId}/logo/{file} {
+      allow read: if platformStaff() || inOrg(orgId);
+      allow create: if platformStaff() && request.resource.size < 2 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/(jpeg|png)');
     }
 
     // Identity documents: organization managers only.

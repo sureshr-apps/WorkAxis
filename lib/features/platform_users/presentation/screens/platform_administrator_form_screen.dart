@@ -108,7 +108,7 @@ class _PlatformAdministratorFormScreenState
           ? null
           : ContactValidators.username(_usernameController.text);
       _emailError = ContactValidators.optionalEmail(_emailController.text);
-      _phoneError = ContactValidators.optionalPhone(_phoneController.text);
+      _phoneError = ContactValidators.requiredPhone(_phoneController.text);
       _passwordError = widget.isEditing
           ? null
           : ContactValidators.password(password);

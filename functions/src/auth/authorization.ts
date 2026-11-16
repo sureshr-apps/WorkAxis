@@ -107,6 +107,23 @@ function canReach(actor: Actor, target: Target): boolean {
   }
 }
 
+/**
+ * Deleting a Platform Administrator is a Platform Owner decision. The owner
+ * cannot delete their own account, and this rule covers only platform
+ * administrators (customer accounts are removed through their own flows).
+ */
+export function assertCanDeletePlatformAdministrator(actor: Actor, target: Target): void {
+  if (actor.role !== "platformOwner") {
+    throw denied("Only the Platform Owner can delete Platform Administrators.");
+  }
+  if (target.role !== "platformAdmin") {
+    throw denied("Only Platform Administrator accounts can be deleted here.");
+  }
+  if (target.uid !== undefined && target.uid === actor.uid) {
+    throw denied("You cannot delete your own account.");
+  }
+}
+
 /** May the actor manage kiosks / pairing for this branch? */
 export function assertCanManageBranch(
   actor: Actor,

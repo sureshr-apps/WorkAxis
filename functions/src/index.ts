@@ -10,6 +10,7 @@ export { resolveLoginIdentifier } from "./handlers/resolveLoginIdentifier";
 export { setOrganizationStatus } from "./handlers/setOrganizationStatus";
 export { deleteOrganization } from "./handlers/deleteOrganization";
 export { setUserStatus } from "./handlers/setUserStatus";
+export { deletePlatformAdministrator } from "./handlers/deletePlatformAdministrator";
 export { updateUserAccount } from "./handlers/updateUserAccount";
 
 export { recordGroupAttendance } from "./handlers/recordGroupAttendance";

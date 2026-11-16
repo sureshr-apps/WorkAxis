@@ -90,6 +90,14 @@ class MockPlatformUsersDataSource {
     return saved;
   }
 
+  void delete(String id) {
+    final index = _administrators.indexWhere((item) => item.id == id);
+    if (index == -1) {
+      throw ValidationException('Administrator not found.');
+    }
+    _administrators.removeAt(index);
+  }
+
   PlatformAdministrator updateStatus(String id, AccountStatus status) {
     final index = _administrators.indexWhere((item) => item.id == id);
     if (index == -1) {

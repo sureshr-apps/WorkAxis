@@ -18,7 +18,7 @@ class OrganizationOverviewTab extends StatelessWidget {
   });
 
   final CustomerOrganization organization;
-  final ValueChanged<String> onUpload;
+  final VoidCallback onUpload;
 
   /// Null hides the delete action (e.g. while another action is running).
   final VoidCallback? onDelete;
@@ -391,7 +391,7 @@ class _OrganizationMetrics extends StatelessWidget {
 class _BrandingCard extends StatelessWidget {
   const _BrandingCard({required this.onUpload});
 
-  final ValueChanged<String> onUpload;
+  final VoidCallback onUpload;
 
   @override
   Widget build(BuildContext context) {
@@ -405,7 +405,7 @@ class _BrandingCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _LogoUploadCard(onUpload: () => onUpload('Organization Logo')),
+                _LogoUploadCard(onUpload: onUpload),
                 const SizedBox(height: AppSpacing.md),
                 const _PrinterNote(),
               ],
@@ -475,7 +475,7 @@ class _LogoUploadCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'SVG, PNG, or WebP',
+          'PNG or JPG',
           style: AppTypography.bodySmall.copyWith(
             fontWeight: FontWeight.w600,
             color: AppColors.onSurface,

@@ -20,6 +20,23 @@ class _CountingStorage implements AttachmentStorage {
 }
 
 void main() {
+  group('AttachmentKind limits', () {
+    test('organization logos are stored under logo and capped at 2 MB', () {
+      expect(AttachmentKind.organizationLogo.folder, 'logo');
+      expect(AttachmentKind.organizationLogo.maxBytes, 2 * 1024 * 1024);
+    });
+
+    test('other attachments keep the 5 MB limit', () {
+      for (final kind in [
+        AttachmentKind.profilePhoto,
+        AttachmentKind.aadhaarDocument,
+        AttachmentKind.returnBill,
+      ]) {
+        expect(kind.maxBytes, 5 * 1024 * 1024, reason: kind.name);
+      }
+    });
+  });
+
   group('AttachmentReference', () {
     test('only fresh local paths need uploading', () {
       expect(AttachmentReference.needsUpload(null), isFalse);

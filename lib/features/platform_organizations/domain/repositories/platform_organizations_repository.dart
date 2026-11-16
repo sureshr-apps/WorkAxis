@@ -59,6 +59,12 @@ abstract interface class PlatformOrganizationsRepository
   /// Permanently deletes an organization and removes it from the platform.
   Future<void> deleteOrganization(String id);
 
+  /// Uploads [localPath] as the organization's logo and saves the reference.
+  Future<CustomerOrganization> updateOrganizationLogo(
+    String organizationId,
+    String localPath,
+  );
+
   /// Creates an Organization Admin account in [organizationId] through the
   /// account callables; returns the organization with its refreshed admins.
   /// Email and phone are optional; the initial password is required.
