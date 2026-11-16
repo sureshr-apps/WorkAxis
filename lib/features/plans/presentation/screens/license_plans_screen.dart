@@ -28,6 +28,10 @@ class LicensePlansScreen extends StatefulWidget {
   State<LicensePlansScreen> createState() => _LicensePlansScreenState();
 }
 
+/// Space below the list for the circular add button: 56dp button, 16dp edge
+/// margin and a little breathing room.
+const double _floatingButtonClearance = 96;
+
 class _LicensePlansScreenState extends State<LicensePlansScreen> {
   late final TextEditingController _searchController;
 
@@ -127,6 +131,13 @@ class _LicensePlansScreenState extends State<LicensePlansScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.surface,
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Add Plan',
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.onPrimary,
+        onPressed: () => context.push(AppRoutes.platformPlansAdd),
+        child: const Icon(Icons.add),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: controller.loadPlans,
@@ -143,13 +154,6 @@ class _LicensePlansScreenState extends State<LicensePlansScreen> {
                         title: 'Plans & Licensing',
                         subtitle:
                             'Define usage limits available to organizations.',
-                        action: AppButton.primary(
-                          text: 'Add Plan',
-                          iconData: Icons.add,
-                          isFullWidth: false,
-                          onPressed: () =>
-                              context.push(AppRoutes.platformPlansAdd),
-                        ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       LicensePlansKpiSection(
@@ -182,7 +186,10 @@ class _LicensePlansScreenState extends State<LicensePlansScreen> {
                 ),
               ),
               ..._buildContent(controller),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
+              // Keeps the last row scrollable above the floating add button.
+              const SliverToBoxAdapter(
+                child: SizedBox(height: _floatingButtonClearance),
+              ),
             ],
           ),
         ),
@@ -268,12 +275,7 @@ class _LicensePlansScreenState extends State<LicensePlansScreen> {
                   isFullWidth: false,
                   onPressed: () => _resetFilters(controller),
                 )
-              : AppButton.primary(
-                  text: 'Add Plan',
-                  iconData: Icons.add,
-                  isFullWidth: false,
-                  onPressed: () => context.push(AppRoutes.platformPlansAdd),
-                ),
+              : null,
         ),
       ),
     );

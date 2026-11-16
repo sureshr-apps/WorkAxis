@@ -20,6 +20,10 @@ import 'package:workaxis/features/platform_users/presentation/controllers/platfo
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_dialogs.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_users_panel.dart';
 
+/// Space below the content for the circular edit button: 56dp button, 16dp
+/// edge margin and a little breathing room.
+const double _floatingButtonClearance = 96;
+
 class PlatformAdministratorDetailsScreen extends StatefulWidget {
   const PlatformAdministratorDetailsScreen({
     super.key,
@@ -101,6 +105,14 @@ class _PlatformAdministratorDetailsScreenState
 
     return Scaffold(
       backgroundColor: AppColors.surface,
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Edit Administrator',
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.onPrimary,
+        onPressed: () =>
+            context.push(AppRoutes.platformUserEditPath(administrator.id)),
+        child: const Icon(Icons.edit_outlined),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           child: ResponsivePageContent(
@@ -113,17 +125,10 @@ class _PlatformAdministratorDetailsScreenState
                   onBack: () => context.go(AppRoutes.platformUsers),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                AppPageHeader(
+                const AppPageHeader(
                   eyebrow: 'Platform Access',
                   title: 'Administrator details',
                   subtitle: 'Profile and sign-in access for this account.',
-                  action: AppButton.responsive(
-                    text: 'Edit Administrator',
-                    iconData: Icons.edit_outlined,
-                    onPressed: () => context.push(
-                      AppRoutes.platformUserEditPath(administrator.id),
-                    ),
-                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 if (controller.actionErrorMessage != null) ...[
@@ -145,7 +150,8 @@ class _PlatformAdministratorDetailsScreenState
                 _ProfilePanel(administrator: administrator),
                 const SizedBox(height: AppSpacing.md),
                 _AccountPanel(administrator: administrator),
-                const SizedBox(height: AppSpacing.xxl),
+                // Keeps the last panel scrollable above the floating edit button.
+                const SizedBox(height: _floatingButtonClearance),
               ],
             ),
           ),
@@ -203,7 +209,7 @@ class _StatusPanel extends StatelessWidget {
 
     final actionButton = isActive
         ? AppButton.outlined(
-            text: 'Suspend access',
+            text: 'Suspend',
             iconData: Icons.block_outlined,
             isFullWidth: isCompact,
             onPressed: isUpdating
@@ -211,7 +217,7 @@ class _StatusPanel extends StatelessWidget {
                 : () => onStatusChange(administrator, AccountStatus.suspended),
           )
         : AppButton.secondary(
-            text: 'Restore access',
+            text: 'Restore',
             iconData: Icons.check_circle_outline,
             isFullWidth: isCompact,
             onPressed: isUpdating
@@ -249,13 +255,9 @@ class _StatusPanel extends StatelessWidget {
               children: [
                 statusInfo,
                 const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    Expanded(child: resetButton),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: actionButton),
-                  ],
-                ),
+                resetButton,
+                const SizedBox(height: AppSpacing.sm),
+                actionButton,
               ],
             )
           : Row(
