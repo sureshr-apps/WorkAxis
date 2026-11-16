@@ -149,10 +149,10 @@ void main() {
       expect(controller.findPlan('plan-basic'), isNotNull);
     });
 
-    testWidgets('Add Plan opens the add route', (tester) async {
+    testWidgets('Add Plan floating button opens the add route', (tester) async {
       await _pump(tester, size: const Size(390, 900));
 
-      await tester.tap(find.text('Add Plan').first);
+      await tester.tap(find.byTooltip('Add Plan'));
       await tester.pumpAndSettle();
 
       expect(find.text('Add route'), findsOneWidget);

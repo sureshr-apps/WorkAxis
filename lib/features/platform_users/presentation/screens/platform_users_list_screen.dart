@@ -36,6 +36,10 @@ class PlatformUsersListScreen extends StatefulWidget {
       _PlatformUsersListScreenState();
 }
 
+/// Space below the list for the circular add button: 56dp button, 16dp edge
+/// margin and a little breathing room.
+const double _floatingButtonClearance = 96;
+
 class _PlatformUsersListScreenState extends State<PlatformUsersListScreen> {
   late final TextEditingController _searchController;
   bool _requested = false;
@@ -68,6 +72,13 @@ class _PlatformUsersListScreenState extends State<PlatformUsersListScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.surface,
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Add Platform Administrator',
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.onPrimary,
+        onPressed: () => context.push(AppRoutes.platformUsersAdd),
+        child: const Icon(Icons.add),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: controller.loadAdministrators,
@@ -78,7 +89,10 @@ class _PlatformUsersListScreenState extends State<PlatformUsersListScreen> {
                 sliver: SliverToBoxAdapter(child: _buildTop(controller)),
               ),
               ..._buildResultSlivers(controller),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
+              // Keeps the last row scrollable above the floating add button.
+              const SliverToBoxAdapter(
+                child: SizedBox(height: _floatingButtonClearance),
+              ),
             ],
           ),
         ),
@@ -97,11 +111,6 @@ class _PlatformUsersListScreenState extends State<PlatformUsersListScreen> {
               eyebrow: 'Platform Access',
               title: 'Platform Users',
               subtitle: 'Manage administrator access to WorkAxis across the India platform fleet.',
-              action: AppButton.responsive(
-                text: 'Add Platform Administrator',
-                iconData: Icons.add,
-                onPressed: () => context.push(AppRoutes.platformUsersAdd),
-              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             _buildKpiMetrics(controller),

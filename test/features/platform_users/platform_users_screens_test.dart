@@ -130,7 +130,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Suspend access'));
+    await tester.tap(find.text('Suspend'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Suspend access').last);
     await tester.pumpAndSettle();
@@ -140,13 +140,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('on a phone, reset password and suspend access share one row', (
+  testWidgets('on a phone, reset password and suspend stack full width', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
     await controller.loadAdministrators();
     final administrator = controller.administrators.firstWhere(
       (a) => a.status == AccountStatus.active,
@@ -155,6 +151,7 @@ void main() {
     await pump(
       tester,
       PlatformAdministratorDetailsScreen(administratorId: administrator.id),
+      size: const Size(390, 844),
     );
     await tester.pumpAndSettle();
 
@@ -162,10 +159,11 @@ void main() {
       find.widgetWithText(OutlinedButton, 'Reset password'),
     );
     final suspend = tester.getRect(
-      find.widgetWithText(OutlinedButton, 'Suspend access'),
+      find.widgetWithText(OutlinedButton, 'Suspend'),
     );
-    expect(reset.top, closeTo(suspend.top, 1));
-    expect(reset.right, lessThan(suspend.left));
+    // Stacked, so each label gets the full content width and is not cut off.
+    expect(reset.bottom, lessThanOrEqualTo(suspend.top));
+    expect(reset.width, closeTo(suspend.width, 1));
     expect(tester.takeException(), isNull);
   });
 

@@ -288,7 +288,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Add Platform Administrator'));
+    await tester.tap(find.byTooltip('Add Platform Administrator'));
     await tester.pumpAndSettle();
     expect(find.text('Add Platform Administrator'), findsWidgets);
 
@@ -307,7 +307,7 @@ void main() {
     expect(find.text('Jordan Kim'), findsWidgets);
     expect(find.text('j.kim@workaxis.example'), findsOneWidget);
 
-    await tester.tap(find.text('Edit Administrator'));
+    await tester.tap(find.byTooltip('Edit Administrator'));
     await tester.pumpAndSettle();
     expect(find.text('Edit Platform Administrator'), findsWidgets);
     await tester.enterText(find.byType(TextField).at(0), 'Jordan K. Kim');
@@ -316,14 +316,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Jordan K. Kim'), findsWidgets);
 
-    await tester.tap(find.text('Suspend access'));
+    await tester.tap(find.text('Suspend'));
     await tester.pumpAndSettle();
     expect(find.text('Suspend access?'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Suspend access').last);
     await tester.pumpAndSettle();
     expect(find.text('Suspended'), findsOneWidget);
 
-    await tester.tap(find.text('Restore access'));
+    await tester.tap(find.text('Restore'));
     await tester.pumpAndSettle();
     expect(find.text('Restore access?'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Restore access').last);
