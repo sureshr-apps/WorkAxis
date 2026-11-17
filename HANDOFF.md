@@ -193,17 +193,27 @@ The following files have uncommitted changes in the repository (`git status -s`)
     flutter emulators --launch OnePlus_Pad_3
     flutter emulators --launch Pixel_10_API_34
     ```
-  - **Important Note on Machine DNS (Cloudflare WARP)**:
-    This Windows host runs Cloudflare WARP (`127.0.2.2`). By default, QEMU tries to forward guest DNS to `127.0.2.2`, which is unreachable from inside the emulator's virtual NAT bridge.
-    - **Fix inside Android**: Private DNS is enabled in Android settings (`dns.google`), which routes DNS-over-TLS directly through port 853 and bypasses host loopback DNS:
-      ```powershell
-      adb shell settings put global private_dns_mode hostname
-      adb shell settings put global private_dns_specifier dns.google
-      ```
-    - **Alternative direct launch flag**: If ever cold-booting without snapshots or wiped:
-      ```powershell
-      & "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd Pixel_10_API_34 -dns-server 8.8.8.8,1.1.1.1
-      ```
+  - **Important Note on Machine Network & Cloudflare WARP**:
+    This Windows host runs corporate Cloudflare WARP Zero Trust (`o9solutions`). This impacts Android emulators in two distinct ways:
+    1. **DNS Resolution**: WARP binds host DNS to local loopbacks (`127.0.2.2`). QEMU's virtual NAT bridge cannot reach host loopbacks, breaking DNS resolution by default.
+       - **Fix**: Android Private DNS is enabled in the guest settings (`dns.google`), routing DNS-over-TLS directly through port 853 and bypassing host loopback DNS:
+         ```powershell
+         adb shell settings put global private_dns_mode hostname
+         adb shell settings put global private_dns_specifier dns.google
+         ```
+       - **Alternative launch flag**: If ever wiping data or cold-booting without snapshots:
+         ```powershell
+         & "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd OnePlus_Pad_3 -dns-server 8.8.8.8,1.1.1.1
+         ```
+    2. **TLS Inspection (HTTPS Interception)**: When WARP is connected in `WarpWithDnsOverHttps` mode, Cloudflare Gateway intercepts outbound HTTPS traffic and signs it using its internal Root CA (`Gateway CA - Cloudflare Managed G4`). The stock Android emulator does not have this corporate CA installed, so Flutter/Android fails SSL handshakes with `CERTIFICATE_VERIFY_FAILED: self signed certificate in certificate chain`, surfacing as *"Network problem. Check your connection and try again."*
+       - **Solution**: Pause/disconnect Cloudflare WARP while testing apps on the emulator:
+         ```powershell
+         & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" disconnect
+         ```
+         (or pause it from the Windows taskbar Cloudflare tray icon). Once paused, traffic connects directly to Google/Firebase with native Google Trust Services TLS certificates. To re-enable when done:
+         ```powershell
+         & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" connect
+         ```
 
 
 ## 2026-11-15 - Data layer moved off Data Connect

@@ -184,6 +184,25 @@ class SqlConnectOrganizationMembersRepository
   }
 
   @override
+  Future<void> deleteMember({
+    required UserAccessContext access,
+    required OrganizationMember member,
+    String? activeBranchId,
+  }) async {
+    try {
+      final existing = await _loadExisting(access, member.id);
+      OrganizationMemberPolicy.assertCanDelete(
+        access: access,
+        existing: existing,
+        activeBranchId: activeBranchId,
+      );
+      await accounts.deleteOrganizationMember(targetUid: _requireUid(existing));
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
   Future<void> resetMemberPassword({
     required UserAccessContext access,
     required OrganizationMember member,

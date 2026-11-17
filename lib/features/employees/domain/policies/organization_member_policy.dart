@@ -300,6 +300,23 @@ class OrganizationMemberPolicy {
     );
   }
 
+  /// Validates a delete: the caller must manage the account and it must not be
+  /// the caller's own.
+  static void assertCanDelete({
+    required UserAccessContext access,
+    required OrganizationMember existing,
+    String? activeBranchId,
+  }) {
+    final orgId = requireOrganizationId(access);
+    if (existing.organizationId != orgId) {
+      throw ValidationException('This account is outside your organization.');
+    }
+    _assertCanManage(access, existing, activeBranchId);
+    if (_isSelf(access, existing)) {
+      throw ValidationException('You cannot delete your own account.');
+    }
+  }
+
   /// Validates a status change (suspend / restore) or password reset target.
   static void assertCanChangeCredentialsOrStatus({
     required UserAccessContext access,

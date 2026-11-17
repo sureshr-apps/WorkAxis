@@ -18,20 +18,26 @@ class OrganizationMemberCard extends StatelessWidget {
     required this.member,
     required this.branchNames,
     required this.onOpen,
-    required this.onEdit,
+    this.onEdit,
+    this.onResetPassword,
+    this.onToggleStatus,
+    this.onDelete,
   });
 
   final OrganizationMember member;
   final List<String> branchNames;
   final VoidCallback onOpen;
 
-  /// Null when the caller may not edit this account (the action is hidden).
+  /// Management actions. Each is null, and hidden, when the caller may not
+  /// perform it on this account.
   final VoidCallback? onEdit;
+  final VoidCallback? onResetPassword;
+  final VoidCallback? onToggleStatus;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final isActive = member.status == AccountStatus.active;
-    final editHandler = onEdit;
 
     return KeyedSubtree(
       key: Key('employee-card-${member.id}'),
@@ -55,22 +61,56 @@ class OrganizationMemberCard extends StatelessWidget {
                 'Branches: ${branchNames.isEmpty ? 'None' : branchNames.join(', ')}',
           ),
         ],
-        footer: editHandler == null
+        footer: _actions(isActive) == null
             ? null
-            : AccountCardActions(
-                actions: [
-                  AccountCardAction(
-                    label: 'Edit',
-                    icon: Icons.edit_outlined,
-                    color: AppColors.secondary,
-                    onPressed: editHandler,
-                  ),
-                ],
-              ),
+            : AccountCardActions(actions: _actions(isActive)!),
         onTap: onOpen,
         onTapLabel: 'View details for ${member.fullName}',
       ),
     );
+  }
+
+  /// The labelled actions, in the same order as the platform user cards, or
+  /// null when the caller may perform none of them.
+  List<AccountCardAction>? _actions(bool isActive) {
+    final actions = [
+      if (onEdit != null)
+        AccountCardAction(
+          label: 'Edit',
+          icon: Icons.edit_outlined,
+          color: AppColors.secondary,
+          onPressed: onEdit!,
+        ),
+      if (onResetPassword != null)
+        AccountCardAction(
+          label: 'Reset Password',
+          icon: Icons.key_outlined,
+          color: AppColors.secondary,
+          onPressed: onResetPassword!,
+        ),
+      if (onToggleStatus != null)
+        isActive
+            ? AccountCardAction(
+                label: 'Suspend',
+                icon: Icons.person_off_outlined,
+                color: AppColors.statusUrgentText,
+                onPressed: onToggleStatus!,
+              )
+            : AccountCardAction(
+                label: 'Restore',
+                icon: Icons.how_to_reg_outlined,
+                color: AppColors.kpiPositive,
+                onPressed: onToggleStatus!,
+              ),
+      if (onDelete != null)
+        AccountCardAction(
+          label: 'Delete',
+          icon: Icons.delete_outline,
+          color: AppColors.statusUrgentText,
+          onPressed: onDelete!,
+        ),
+    ];
+    return actions.isEmpty ? null : actions;
   }
 
   static String _codeOrNotSet(OrganizationMember member) {

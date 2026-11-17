@@ -273,6 +273,46 @@ class OrganizationMembersController extends ChangeNotifier
     }
   }
 
+  /// Permanently deletes [member]. Returns whether it succeeded; failures set
+  /// [actionErrorMessage].
+  Future<bool> deleteMember({
+    required UserAccessContext access,
+    required OrganizationMember member,
+    String? activeBranchId,
+  }) async {
+    final epoch = _scopeEpoch;
+    _isSaving = true;
+    _actionErrorMessage = null;
+    notifyListeners();
+    try {
+      await repository.deleteMember(
+        access: access,
+        member: member,
+        activeBranchId: activeBranchId,
+      );
+      if (!_isCurrentScope(epoch)) return false;
+      _members = [
+        for (final m in _members)
+          if (m.id != member.id) m,
+      ];
+      if (_total > 0) _total -= 1;
+      return true;
+    } catch (e, st) {
+      if (!_isCurrentScope(epoch)) return false;
+      _actionErrorMessage = userMessageFor(
+        e,
+        st,
+        fallback: 'The account could not be deleted. Try again.',
+      );
+      return false;
+    } finally {
+      if (_isCurrentScope(epoch)) {
+        _isSaving = false;
+        notifyListeners();
+      }
+    }
+  }
+
   /// Sets a new password for [member]. Returns whether it succeeded.
   Future<bool> resetMemberPassword({
     required UserAccessContext access,
