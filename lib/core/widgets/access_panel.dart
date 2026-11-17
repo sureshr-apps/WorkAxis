@@ -5,18 +5,22 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 
-/// Elevated white panel with a title, optional subtitle and content, shared
-/// by the administrator details and form screens.
-class PlatformUsersPanel extends StatelessWidget {
-  const PlatformUsersPanel({
+/// Elevated white panel with a title, optional subtitle and content. Used for
+/// the access sections of administrator and branch details pages.
+class AccessPanel extends StatelessWidget {
+  const AccessPanel({
     super.key,
     required this.title,
     required this.child,
     this.subtitle,
+    this.trailing,
   });
 
   final String title;
   final String? subtitle;
+
+  /// Shown at the top right, on the same row as the title.
+  final Widget? trailing;
   final Widget child;
 
   @override
@@ -34,11 +38,18 @@ class PlatformUsersPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: AppTypography.titleMedium.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              ?trailing,
+            ],
           ),
           if (subtitle != null) ...[
             const SizedBox(height: AppSpacing.xs),

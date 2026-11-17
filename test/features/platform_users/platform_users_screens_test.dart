@@ -349,7 +349,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Delete'));
+      await tester.tap(find.byTooltip('Delete administrator'));
       await tester.pumpAndSettle();
       expect(find.text('Delete administrator?'), findsOneWidget);
       await tester.tap(
@@ -383,7 +383,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Delete'));
+      await tester.tap(find.byTooltip('Delete administrator'));
       await tester.pumpAndSettle();
       await tester.tap(
         find.widgetWithText(FilledButton, 'Delete administrator'),

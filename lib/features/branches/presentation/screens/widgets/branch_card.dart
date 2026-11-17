@@ -3,14 +3,15 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/core/widgets/card_action_icon.dart';
+import 'package:workaxis/core/widgets/account_card/account_card_actions.dart';
 import 'package:workaxis/core/widgets/inset_metrics_box.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 
 /// One branch, laid out like a license plan card: name and status with a chevron
-/// on top, the employee and geofence figures in an inset box, and the branch
-/// code with the row actions in the footer. The whole card opens the branch.
+/// on top, the employee and geofence figures in an inset box, and the labelled
+/// Edit, Suspend or Restore, and Delete actions in the footer, the same actions
+/// as the platform user cards. The whole card opens the branch.
 class BranchCard extends StatelessWidget {
   const BranchCard({
     super.key,
@@ -139,45 +140,41 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = branch.isActive;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            'ID: ${branch.code}',
-            style: AppTypography.labelMono.copyWith(
-              fontSize: 11,
-              color: AppColors.textMuted,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+    final actions = <AccountCardAction>[
+      if (onEdit != null)
+        AccountCardAction(
+          tooltip: 'Edit ${branch.name}',
+          label: 'Edit',
+          icon: Icons.edit_outlined,
+          color: AppColors.secondary,
+          onPressed: onEdit!,
         ),
-        if (onEdit != null)
-          CardActionIcon(
-            tooltip: 'Edit ${branch.name}',
-            icon: Icons.edit_outlined,
-            color: AppColors.secondary,
-            onPressed: onEdit!,
-          ),
-        if (onToggleActive != null)
-          CardActionIcon(
-            tooltip: isActive
-                ? 'Suspend ${branch.name}'
-                : 'Reactivate ${branch.name}',
-            icon: isActive
-                ? Icons.pause_circle_outline
-                : Icons.play_circle_outline,
-            color: AppColors.secondary,
-            onPressed: onToggleActive!,
-          ),
-        if (onDelete != null)
-          CardActionIcon(
-            tooltip: 'Delete ${branch.name}',
-            icon: Icons.delete_outline,
-            color: AppColors.statusUrgentText,
-            onPressed: onDelete!,
-          ),
-      ],
-    );
+      if (onToggleActive != null)
+        isActive
+            ? AccountCardAction(
+                tooltip: 'Suspend ${branch.name}',
+                label: 'Suspend',
+                icon: Icons.person_off_outlined,
+                color: AppColors.statusUrgentText,
+                onPressed: onToggleActive!,
+              )
+            : AccountCardAction(
+                tooltip: 'Restore ${branch.name}',
+                label: 'Restore',
+                icon: Icons.how_to_reg_outlined,
+                color: AppColors.kpiPositive,
+                onPressed: onToggleActive!,
+              ),
+      if (onDelete != null)
+        AccountCardAction(
+          tooltip: 'Delete ${branch.name}',
+          label: 'Delete',
+          icon: Icons.delete_outline,
+          color: AppColors.statusUrgentText,
+          onPressed: onDelete!,
+        ),
+    ];
+    if (actions.isEmpty) return const SizedBox.shrink();
+    return AccountCardActions(actions: actions);
   }
 }

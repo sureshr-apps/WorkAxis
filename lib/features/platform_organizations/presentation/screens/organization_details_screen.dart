@@ -158,9 +158,6 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
         return OrganizationOverviewTab(
           organization: organization,
           onUpload: () => _pickLogo(organization, controller),
-          onDelete: controller.isActionLoading
-              ? null
-              : () => _confirmDelete(organization, controller),
         );
       case OrganizationDetailsTab.administrators:
         final flow = OrganizationAdminFlow(

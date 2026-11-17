@@ -4,7 +4,7 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
-import 'package:workaxis/features/platform_users/presentation/widgets/platform_users_panel.dart';
+import 'package:workaxis/core/widgets/access_panel.dart';
 
 class PlatformAdministratorProfileFields extends StatelessWidget {
   const PlatformAdministratorProfileFields({
@@ -34,7 +34,7 @@ class PlatformAdministratorProfileFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PlatformUsersPanel(
+    return AccessPanel(
       title: 'Administrator profile',
       subtitle: 'Contact details and sign-in aliases for this account.',
       child: LayoutBuilder(
@@ -115,7 +115,7 @@ class PlatformAdministratorCredentialsFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PlatformUsersPanel(
+    return AccessPanel(
       title: 'Sign-in credentials',
       subtitle: 'Set an initial password for the new account.',
       child: Column(

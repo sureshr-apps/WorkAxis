@@ -16,6 +16,7 @@ import 'package:workaxis/features/access/domain/models/user_access_context.dart'
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 import 'package:workaxis/features/branches/presentation/controllers/branch_management_controller.dart';
+import 'package:workaxis/features/branches/presentation/widgets/branch_delete_dialog.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_card.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_summary_strip.dart';
 
@@ -174,22 +175,18 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
         : AppRoutes.orgAdminBranchEditPath(branch.id),
   );
 
-  /// Suspends an active branch or reactivates a suspended one, by saving the
-  /// branch with its flag flipped.
+  /// Suspends an active branch or reactivates a suspended one.
   Future<void> _toggleActive(
     UserAccessContext access,
     BranchRecord branch,
   ) async {
     final controller = context.read<BranchManagementController>()
       ..clearActionError();
-    final current = await controller.getBranch(access, branch.id);
-    if (!mounted || current == null) return;
-    final suspending = current.isActive;
-    final updated = await controller.saveBranch(
+    final suspending = branch.isActive;
+    final updated = await controller.setBranchActive(
       access: access,
-      branch: current.copyWith(
-        summary: current.summary.copyWith(isActive: !suspending),
-      ),
+      branchId: branch.id,
+      isActive: !suspending,
     );
     if (!mounted) return;
     _toast(
@@ -206,30 +203,8 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     UserAccessContext access,
     BranchRecord branch,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete ${branch.name}?'),
-        content: const Text(
-          'The branch is removed for good. A branch with employees, returns '
-          'or attendance cannot be deleted; suspend it instead.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.statusUrgentText,
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+    final confirmed = await confirmBranchDelete(context, branch);
+    if (!confirmed || !mounted) return;
     final controller = context.read<BranchManagementController>()
       ..clearActionError();
     final deleted = await controller.deleteBranch(
