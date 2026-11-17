@@ -157,3 +157,20 @@ describe("employee creation requirements", () => {
     assertEmployeeCreationComplete("branchManager", {});
   });
 });
+
+describe("parseEmployeeExtras aadhaarNumber", () => {
+  it("accepts 12 digits and strips spaces", () => {
+    assert.equal(parseEmployeeExtras({ aadhaarNumber: "1234 5678 9012" }).aadhaarNumber, "123456789012");
+    assert.equal(parseEmployeeExtras({ aadhaarNumber: "123412341234" }).aadhaarNumber, "123412341234");
+  });
+
+  it("rejects anything that is not exactly 12 digits", () => {
+    for (const bad of ["12345678901", "1234567890123", "12345678901a", "ddddddddddddd"]) {
+      assert.throws(() => parseEmployeeExtras({ aadhaarNumber: bad }), { code: "invalid-argument" }, bad);
+    }
+  });
+
+  it("does not strip letters from a valid value", () => {
+    assert.throws(() => parseEmployeeExtras({ aadhaarNumber: "s23456789012" }), { code: "invalid-argument" });
+  });
+});
