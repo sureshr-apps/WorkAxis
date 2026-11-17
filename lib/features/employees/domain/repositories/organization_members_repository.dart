@@ -44,6 +44,14 @@ abstract interface class OrganizationMembersRepository {
     String? activeBranchId,
   });
 
+  /// Permanently removes an account the caller may manage. Refused while the
+  /// account has return or attendance records.
+  Future<void> deleteMember({
+    required UserAccessContext access,
+    required OrganizationMember member,
+    String? activeBranchId,
+  });
+
   /// Sets a new password for an account the caller may manage.
   Future<void> resetMemberPassword({
     required UserAccessContext access,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  assertCanDeleteMember,
   assertCanDeleteOrganizationAdmin,
   assertCanDeletePlatformAdministrator,
   assertOrganizationKeepsActiveAdmin,
@@ -199,6 +200,26 @@ describe("assertOrganizationKeepsActiveAdmin", () => {
         member("e1", "employee", "active"),
       ]),
     );
+  });
+});
+
+describe("assertCanDeleteMember", () => {
+  it("lets an Organization Admin delete employees and branch managers in their organization", () => {
+    allowed(() => assertCanDeleteMember(orgAdmin, t("employee", "o1", ["b1"], "other")));
+    allowed(() => assertCanDeleteMember(orgAdmin, t("branchManager", "o1", ["b1"], "other")));
+  });
+
+  it("lets a Branch Manager delete only employees in their own branches", () => {
+    allowed(() => assertCanDeleteMember(bm, t("employee", "o1", ["b1"], "other")));
+    forbidden(() => assertCanDeleteMember(bm, t("employee", "o1", ["b9"], "other")));
+    forbidden(() => assertCanDeleteMember(bm, t("branchManager", "o1", ["b1"], "other")));
+  });
+
+  it("refuses other roles, other organizations and the actor's own account", () => {
+    forbidden(() => assertCanDeleteMember(emp, t("employee", "o1", ["b1"], "other")));
+    forbidden(() => assertCanDeleteMember(orgAdmin, t("orgAdmin", "o1", [], "other")));
+    forbidden(() => assertCanDeleteMember(orgAdmin, t("employee", "o2", ["b1"], "other")));
+    forbidden(() => assertCanDeleteMember(orgAdmin, t("employee", "o1", ["b1"], "oa")));
   });
 });
 

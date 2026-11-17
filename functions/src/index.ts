@@ -12,6 +12,7 @@ export { deleteOrganization } from "./handlers/deleteOrganization";
 export { setUserStatus } from "./handlers/setUserStatus";
 export { deletePlatformAdministrator } from "./handlers/deletePlatformAdministrator";
 export { deleteOrganizationAdmin } from "./handlers/deleteOrganizationAdmin";
+export { deleteOrganizationMember } from "./handlers/deleteOrganizationMember";
 export { updateUserAccount } from "./handlers/updateUserAccount";
 
 export { recordGroupAttendance } from "./handlers/recordGroupAttendance";

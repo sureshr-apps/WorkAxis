@@ -162,6 +162,21 @@ export function assertOrganizationKeepsActiveAdmin(
   }
 }
 
+/**
+ * Employees and branch managers are deleted by the people who may manage them:
+ * an Organization Admin for their organization, or a Branch Manager for
+ * employees in their branches. Nobody deletes their own account here.
+ */
+export function assertCanDeleteMember(actor: Actor, target: Target): void {
+  if (target.role !== "employee" && target.role !== "branchManager") {
+    throw denied("Only employee and branch manager accounts can be deleted here.");
+  }
+  if (target.uid !== undefined && target.uid === actor.uid) {
+    throw denied("You cannot delete your own account.");
+  }
+  if (!canReach(actor, target)) throw denied();
+}
+
 /** May the actor manage kiosks / pairing for this branch? */
 export function assertCanManageBranch(
   actor: Actor,

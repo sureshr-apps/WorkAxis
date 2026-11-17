@@ -23,15 +23,21 @@ class AccountCardAction {
   final String? tooltip;
 }
 
-/// Evenly spaced, labelled actions for the footer of an account card.
+/// Labelled actions for the footer of an account card. Spread evenly by
+/// default; pass [alignment] to pack them to one side.
 class AccountCardActions extends StatelessWidget {
-  const AccountCardActions({super.key, required this.actions});
+  const AccountCardActions({
+    super.key,
+    required this.actions,
+    this.alignment = WrapAlignment.spaceEvenly,
+  });
 
   final List<AccountCardAction> actions;
+  final WrapAlignment alignment;
 
   @override
   Widget build(BuildContext context) => Wrap(
-    alignment: WrapAlignment.spaceEvenly,
+    alignment: alignment,
     runSpacing: AppSpacing.xs,
     children: [for (final action in actions) _LabelledAction(action: action)],
   );

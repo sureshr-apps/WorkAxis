@@ -175,6 +175,6 @@ class _Footer extends StatelessWidget {
         ),
     ];
     if (actions.isEmpty) return const SizedBox.shrink();
-    return AccountCardActions(actions: actions);
+    return AccountCardActions(actions: actions, alignment: WrapAlignment.end);
   }
 }

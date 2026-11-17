@@ -232,6 +232,21 @@ class MockOrganizationMembersRepository
     // The mock deliberately discards credentials.
   }
 
+  @override
+  Future<void> deleteMember({
+    required UserAccessContext access,
+    required OrganizationMember member,
+    String? activeBranchId,
+  }) async {
+    final existing = _requireExisting(access, member.id);
+    OrganizationMemberPolicy.assertCanDelete(
+      access: access,
+      existing: existing,
+      activeBranchId: activeBranchId,
+    );
+    _members.remove(existing.id);
+  }
+
   OrganizationMember _requireExisting(UserAccessContext access, String id) {
     final orgId = OrganizationMemberPolicy.requireOrganizationId(access);
     final existing = _members[id];

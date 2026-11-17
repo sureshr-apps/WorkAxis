@@ -45,6 +45,13 @@ class _RecordingMembersRepository implements OrganizationMembersRepository {
   }) => throw UnimplementedError();
 
   @override
+  Future<void> deleteMember({
+    required UserAccessContext access,
+    required OrganizationMember member,
+    String? activeBranchId,
+  }) => throw UnimplementedError();
+
+  @override
   Future<OrganizationMember?> getMember({
     required UserAccessContext access,
     required String memberId,

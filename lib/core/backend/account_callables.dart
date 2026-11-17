@@ -200,6 +200,11 @@ class AccountCallables {
     });
   }
 
+  /// Permanently deletes an employee or branch manager (`deleteOrganizationMember`).
+  Future<void> deleteOrganizationMember({required String targetUid}) async {
+    await _functions.call('deleteOrganizationMember', {'targetUid': targetUid});
+  }
+
   /// Permanently deletes an Organization Administrator (`deleteOrganizationAdmin`).
   Future<void> deleteOrganizationAdmin({required String targetUid}) async {
     await _functions.call('deleteOrganizationAdmin', {'targetUid': targetUid});
