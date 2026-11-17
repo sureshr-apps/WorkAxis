@@ -138,7 +138,7 @@ function neverNull(bag: Bag, key: string): void {
 export function parseEmployeeExtras(bag: Bag): EmployeeProfileExtras {
   for (const key of ["dailyWorkHours", "shiftHours", "employeeCode"]) neverNull(bag, key);
   const aadhaarNumber = clearable(bag, "aadhaarNumber", () => optString(bag, "aadhaarNumber", 1, 20));
-  if (typeof aadhaarNumber === "string" && !/^d{12}$/.test(aadhaarNumber.replace(/s+/g, ""))) {
+  if (typeof aadhaarNumber === "string" && !/^\d{12}$/.test(aadhaarNumber.replace(/\s+/g, ""))) {
     throw invalid("aadhaarNumber must be 12 digits.");
   }
   const joiningDate = clearable(bag, "joiningDate", () => optIsoDate(bag, "joiningDate"));
@@ -150,7 +150,7 @@ export function parseEmployeeExtras(bag: Bag): EmployeeProfileExtras {
     dailyWorkHours: optNumber(bag, "dailyWorkHours", 0.5, 24),
     shiftHours: optString(bag, "shiftHours", 1, 100),
     employeeCode: optEmployeeCode(bag),
-    aadhaarNumber: typeof aadhaarNumber === "string" ? aadhaarNumber.replace(/s+/g, "") : aadhaarNumber,
+    aadhaarNumber: typeof aadhaarNumber === "string" ? aadhaarNumber.replace(/\s+/g, "") : aadhaarNumber,
     aadhaarPhotoUrl: clearable(bag, "aadhaarPhotoUrl", () => optString(bag, "aadhaarPhotoUrl", 1, 1000)),
     dateOfBirth: clearable(bag, "dateOfBirth", () => optIsoDate(bag, "dateOfBirth")),
     gender: clearable(bag, "gender", () => optString(bag, "gender", 1, 20)),
