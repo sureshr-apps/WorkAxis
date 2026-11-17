@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
-import 'package:workaxis/app/theme/app_shadows.dart';
-import 'package:workaxis/app/theme/app_spacing.dart';
-import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/widgets/account_card/account_card.dart';
+import 'package:workaxis/core/widgets/account_card/account_card_actions.dart';
 import 'package:workaxis/core/widgets/attachment_image.dart';
-import 'package:workaxis/core/widgets/card_action_icon.dart';
-import 'package:workaxis/core/widgets/inset_metrics_box.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 
-/// One organization account in the directory, laid out like the branch card:
-/// name and status with a chevron on top, the code and branches in an inset
-/// box, and the username with the row action in the footer. The whole card
-/// opens the account's details.
+/// One organization account in the employee directory. Uses the shared
+/// [AccountCard] layout, the same as the platform administrator cards: the
+/// member's photo or initials, name and username, status, role and designation,
+/// employee code and branches, and an Edit action. Tapping the header and
+/// details opens the account.
 class OrganizationMemberCard extends StatelessWidget {
   const OrganizationMemberCard({
     super.key,
@@ -32,133 +30,59 @@ class OrganizationMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: AppSpacing.roundedMd,
-      child: Container(
-        key: Key('employee-card-${member.id}'),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
-          borderRadius: AppSpacing.roundedMd,
-          border: Border.all(color: AppColors.outlineSubtle),
-          boxShadow: AppShadows.card,
+    final isActive = member.status == AccountStatus.active;
+    final editHandler = onEdit;
+
+    return KeyedSubtree(
+      key: Key('employee-card-${member.id}'),
+      child: AccountCard(
+        avatar: _MemberAvatar(member: member),
+        name: member.fullName,
+        username: member.username,
+        statusChip: StatusChip(
+          label: isActive ? 'ACTIVE' : 'SUSPENDED',
+          type: isActive ? StatusType.active : StatusType.urgent,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _Header(member: member),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              _roleLine(member),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.onSurfaceVariant,
+        details: [
+          AccountCardDetail(icon: Icons.work_outline, value: _roleLine(member)),
+          AccountCardDetail(
+            icon: Icons.badge_outlined,
+            value: 'Employee code: ${_codeOrNotSet(member)}',
+          ),
+          AccountCardDetail(
+            icon: Icons.store_outlined,
+            value:
+                'Branches: ${branchNames.isEmpty ? 'None' : branchNames.join(', ')}',
+          ),
+        ],
+        footer: editHandler == null
+            ? null
+            : AccountCardActions(
+                actions: [
+                  AccountCardAction(
+                    label: 'Edit',
+                    icon: Icons.edit_outlined,
+                    color: AppColors.secondary,
+                    onPressed: editHandler,
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            InsetMetricsBox(
-              metrics: [
-                InsetMetric(
-                  icon: Icons.badge_outlined,
-                  label: 'Employee code',
-                  value: _hasCode(member) ? member.employeeCode! : 'Not set',
-                ),
-                InsetMetric(
-                  icon: Icons.store_outlined,
-                  label: 'Branches',
-                  value: branchNames.isEmpty ? 'None' : branchNames.join(', '),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            _Footer(member: member, onEdit: onEdit),
-          ],
-        ),
+        onTap: onOpen,
+        onTapLabel: 'View details for ${member.fullName}',
       ),
     );
   }
 
-  static bool _hasCode(OrganizationMember member) =>
-      member.employeeCode != null && member.employeeCode!.isNotEmpty;
+  static String _codeOrNotSet(OrganizationMember member) {
+    final code = member.employeeCode;
+    return code == null || code.isEmpty ? 'Not set' : code;
+  }
 
   static String _roleLine(OrganizationMember member) {
     final designation = member.designation;
     return designation != null && designation.isNotEmpty
         ? '$designation  ·  ${member.role.displayName}'
         : member.role.displayName;
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({required this.member});
-
-  final OrganizationMember member;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _MemberAvatar(member: member),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(
-            member.fullName,
-            style: AppTypography.titleMedium.copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.onSurface,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        StatusChip.fromStatus(
-          member.status == AccountStatus.active ? 'Active' : 'Suspended',
-          width: 96,
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        const Icon(
-          Icons.chevron_right_rounded,
-          size: 24,
-          color: AppColors.primary,
-        ),
-      ],
-    );
-  }
-}
-
-class _Footer extends StatelessWidget {
-  const _Footer({required this.member, required this.onEdit});
-
-  final OrganizationMember member;
-  final VoidCallback? onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            '@${member.username}',
-            style: AppTypography.labelMono.copyWith(
-              fontSize: 11,
-              color: AppColors.textMuted,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (onEdit != null)
-          CardActionIcon(
-            tooltip: 'Edit ${member.fullName}',
-            icon: Icons.edit_outlined,
-            color: AppColors.secondary,
-            onPressed: onEdit!,
-          ),
-      ],
-    );
   }
 }
 
@@ -172,18 +96,18 @@ class _MemberAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final photo = member.profilePhotoUrl;
     return CircleAvatar(
-      radius: 21,
+      radius: 22,
       backgroundColor: AppColors.primaryContainer,
       child: photo != null && photo.isNotEmpty
           ? ClipOval(
               child: SizedBox.square(
-                dimension: 42,
+                dimension: 44,
                 child: AttachmentImage(reference: photo, iconSize: 20),
               ),
             )
           : Text(
               member.initials,
-              style: AppTypography.labelLarge.copyWith(
+              style: const TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w700,
               ),

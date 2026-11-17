@@ -98,7 +98,8 @@ void main() {
       ),
     );
 
-    expect(find.byTooltip('Reactivate Downtown Flagship'), findsOneWidget);
+    expect(find.byTooltip('Restore Downtown Flagship'), findsOneWidget);
+    expect(find.text('Restore'), findsOneWidget);
     expect(find.text('Inactive'), findsOneWidget);
   });
 }

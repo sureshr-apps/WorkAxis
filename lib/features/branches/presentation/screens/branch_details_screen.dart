@@ -14,6 +14,8 @@ import 'package:workaxis/features/access/presentation/controllers/access_control
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 import 'package:workaxis/features/branches/presentation/controllers/branch_management_controller.dart';
 import 'package:workaxis/features/branches/presentation/screens/widgets/branch_details_view.dart';
+import 'package:workaxis/features/branches/presentation/widgets/branch_access_panel.dart';
+import 'package:workaxis/features/branches/presentation/widgets/branch_delete_dialog.dart';
 import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
 /// Full page for one branch, reached from Branch Management. Kiosk pairing
@@ -112,6 +114,16 @@ class _BranchDetailsScreenState extends State<BranchDetailsScreen> {
                       'Location, geofence and kiosk pairing for this branch.',
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                if (_access != null) ...[
+                  BranchAccessPanel(
+                    branch: branch,
+                    isUpdating: _isSaving,
+                    onEdit: () => _editBranch(branch),
+                    onToggleActive: () => _toggleActive(branch),
+                    onDelete: () => _deleteBranch(branch),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 DashboardSurfaceCard(
                   child: BranchDetailsView(
                     branch: branch,
@@ -136,6 +148,65 @@ class _BranchDetailsScreenState extends State<BranchDetailsScreen> {
       ),
     );
   }
+
+  Future<void> _editBranch(BranchRecord branch) async {
+    await context.push(AppRoutes.orgAdminBranchEditPath(branch.id));
+    if (mounted) await _load();
+  }
+
+  Future<void> _toggleActive(BranchRecord branch) async {
+    final access = _access;
+    if (access == null) return;
+    final controller = context.read<BranchManagementController>()
+      ..clearActionError();
+    final suspending = branch.isActive;
+    setState(() => _isSaving = true);
+    final updated = await controller.setBranchActive(
+      access: access,
+      branchId: branch.id,
+      isActive: !suspending,
+    );
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    _toast(
+      updated == null
+          ? controller.actionErrorMessage ??
+                'The branch could not be updated. Try again.'
+          : suspending
+          ? '${branch.name} suspended.'
+          : '${branch.name} reactivated.',
+    );
+    if (updated != null) await _load();
+  }
+
+  Future<void> _deleteBranch(BranchRecord branch) async {
+    final access = _access;
+    if (access == null) return;
+    final confirmed = await confirmBranchDelete(context, branch);
+    if (!confirmed || !mounted) return;
+    final controller = context.read<BranchManagementController>()
+      ..clearActionError();
+    final deleted = await controller.deleteBranch(
+      access: access,
+      branchId: branch.id,
+    );
+    if (!mounted) return;
+    if (!deleted) {
+      _toast(
+        controller.actionErrorMessage ??
+            'The branch could not be deleted. Try again.',
+      );
+      return;
+    }
+    await context.read<AccessController>().refreshAccess();
+    if (!mounted) return;
+    _toast('${branch.name} deleted.');
+    context.go(AppRoutes.orgAdminBranches);
+  }
+
+  void _toast(String message) => ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(message)));
 
   List<Widget> _kioskActions(BranchRecord branch) {
     final isCompact = context.isCompact;

@@ -22,22 +22,32 @@ class AccountCardDetail {
 class AccountCard extends StatelessWidget {
   const AccountCard({
     super.key,
-    required this.initials,
+    this.initials,
+    this.avatar,
     required this.name,
     required this.username,
     required this.statusChip,
     required this.details,
-    required this.footer,
+    this.footer,
     this.onTap,
     this.onTapLabel,
-  });
+  }) : assert(
+         initials != null || avatar != null,
+         'Give initials or an avatar.',
+       );
 
-  final String initials;
+  /// Initials for the default avatar. Ignored when [avatar] is given.
+  final String? initials;
+
+  /// Custom avatar, such as a member photo, in place of the initials.
+  final Widget? avatar;
   final String name;
   final String username;
   final Widget statusChip;
   final List<AccountCardDetail> details;
-  final Widget footer;
+
+  /// Actions along the foot of the card. Null leaves the footer out.
+  final Widget? footer;
 
   /// Opens the account (for example its details page). Null makes the card
   /// static.
@@ -55,7 +65,7 @@ class AccountCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _CardAvatar(initials: initials),
+              avatar ?? _CardAvatar(initials: initials!),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -119,18 +129,20 @@ class AccountCard extends StatelessWidget {
                 child: body,
               ),
             ),
-          const Divider(
-            height: 1,
-            thickness: 1,
-            color: AppColors.outlineSubtle,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
+          if (footer != null) ...[
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.outlineSubtle,
             ),
-            child: footer,
-          ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+              child: footer,
+            ),
+          ],
         ],
       ),
     );
@@ -178,6 +190,8 @@ class _DetailLine extends StatelessWidget {
       Expanded(
         child: Text(
           detail.value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: AppTypography.bodyMedium.copyWith(color: AppColors.onSurface),
         ),
       ),

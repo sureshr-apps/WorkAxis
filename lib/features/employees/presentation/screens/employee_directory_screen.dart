@@ -260,7 +260,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                 crossAxisCount: columns,
                 mainAxisSpacing: AppSpacing.md,
                 crossAxisSpacing: AppSpacing.md,
-                mainAxisExtent: 232 * (scale < 1 ? 1 : scale),
+                mainAxisExtent: 272 * (scale < 1 ? 1 : scale),
               ),
               itemCount: members.length,
               itemBuilder: (context, index) =>

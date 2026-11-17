@@ -14,14 +14,10 @@ class OrganizationOverviewTab extends StatelessWidget {
     super.key,
     required this.organization,
     required this.onUpload,
-    this.onDelete,
   });
 
   final CustomerOrganization organization;
   final VoidCallback onUpload;
-
-  /// Null hides the delete action (e.g. while another action is running).
-  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +35,6 @@ class OrganizationOverviewTab extends StatelessWidget {
                 child: _OrganizationProfileCard(
                   organization: organization,
                   compactRows: profileWidth < 500,
-                  onDelete: onDelete,
                 ),
               ),
               const SizedBox(width: AppSpacing.lg),
@@ -63,7 +58,6 @@ class OrganizationOverviewTab extends StatelessWidget {
             _OrganizationProfileCard(
               organization: organization,
               compactRows: profileWidth < 500,
-              onDelete: onDelete,
             ),
             const SizedBox(height: AppSpacing.md),
             _OrganizationMetrics(organization: organization),
@@ -80,12 +74,10 @@ class _OrganizationProfileCard extends StatelessWidget {
   const _OrganizationProfileCard({
     required this.organization,
     required this.compactRows,
-    this.onDelete,
   });
 
   final CustomerOrganization organization;
   final bool compactRows;
-  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -127,22 +119,6 @@ class _OrganizationProfileCard extends StatelessWidget {
                       ? StatusType.active
                       : StatusType.urgent,
                 ),
-                if (onDelete != null) ...[
-                  const SizedBox(width: AppSpacing.xs),
-                  IconButton(
-                    tooltip: 'Delete organization',
-                    onPressed: onDelete,
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      color: AppColors.statusUrgentText,
-                      size: 20,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: AppSpacing.minTouchTarget,
-                      minHeight: AppSpacing.minTouchTarget,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

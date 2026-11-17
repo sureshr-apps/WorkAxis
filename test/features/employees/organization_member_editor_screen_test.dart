@@ -221,9 +221,36 @@ void main() {
       ),
     );
 
-    expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
+    expect(find.text('Branches: Downtown'), findsOneWidget);
+    expect(find.text('Edit'), findsNothing);
     expect(find.byIcon(Icons.edit_outlined), findsNothing);
   });
+
+  testWidgets(
+    'member card shows Edit when allowed and opens the account on tap',
+    (tester) async {
+      var opened = 0;
+      var edited = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrganizationMemberCard(
+              member: _member,
+              branchNames: const ['Downtown'],
+              onOpen: () => opened++,
+              onEdit: () => edited++,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Edit'));
+      expect(edited, 1);
+      await tester.tap(find.text(_member.fullName));
+      expect(opened, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('branch manager role field is disabled and locked to Employee', (
     tester,

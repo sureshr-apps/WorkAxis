@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
+import 'package:workaxis/core/widgets/account_card/account_card.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
@@ -58,29 +59,30 @@ void main() {
       membersController.dispose();
     });
 
-    testWidgets('renders member cards with a details chevron and edit icon', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: accessController),
-            ChangeNotifierProvider.value(value: branchController),
-            ChangeNotifierProvider.value(value: membersController),
-          ],
-          child: const MaterialApp(home: EmployeeDirectoryScreen()),
-        ),
-      );
+    testWidgets(
+      'renders member cards in the shared account card with an edit action',
+      (tester) async {
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: accessController),
+              ChangeNotifierProvider.value(value: branchController),
+              ChangeNotifierProvider.value(value: membersController),
+            ],
+            child: const MaterialApp(home: EmployeeDirectoryScreen()),
+          ),
+        );
 
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
 
-      expect(find.text('Employee Directory'), findsOneWidget);
-      expect(find.text('View details'), findsNothing);
-      expect(find.byIcon(Icons.chevron_right_rounded), findsWidgets);
-      // Organization Admin may manage every non-platform account.
-      expect(find.byIcon(Icons.edit_outlined), findsWidgets);
-      expect(tester.takeException(), isNull);
-    });
+        expect(find.text('Employee Directory'), findsOneWidget);
+        expect(find.text('View details'), findsNothing);
+        expect(find.byType(AccountCard), findsWidgets);
+        // Organization Admin may manage every non-platform account.
+        expect(find.text('Edit'), findsWidgets);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('seeds the search field from the controller query', (
       tester,

@@ -171,6 +171,24 @@ class BranchManagementController extends ChangeNotifier
     }
   }
 
+  /// Suspends (false) or reactivates (true) a branch by saving it with its
+  /// active flag set. Returns the saved branch, or null with [actionErrorMessage]
+  /// set.
+  Future<BranchRecord?> setBranchActive({
+    required UserAccessContext access,
+    required String branchId,
+    required bool isActive,
+  }) async {
+    final current = await getBranch(access, branchId);
+    if (current == null) return null;
+    return saveBranch(
+      access: access,
+      branch: current.copyWith(
+        summary: current.summary.copyWith(isActive: isActive),
+      ),
+    );
+  }
+
   Future<BranchRecord?> saveBranch({
     required UserAccessContext access,
     required BranchRecord branch,

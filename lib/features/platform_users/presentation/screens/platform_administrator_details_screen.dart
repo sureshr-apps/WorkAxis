@@ -19,7 +19,7 @@ import 'package:workaxis/features/platform_users/domain/models/platform_administ
 import 'package:workaxis/features/platform_users/presentation/controllers/platform_users_controller.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_delete_flow.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_dialogs.dart';
-import 'package:workaxis/features/platform_users/presentation/widgets/platform_users_panel.dart';
+import 'package:workaxis/core/widgets/access_panel.dart';
 
 /// Space below the content for the circular edit button: 56dp button, 16dp
 /// edge margin and a little breathing room.
@@ -244,35 +244,39 @@ class _StatusPanel extends StatelessWidget {
       onPressed: isUpdating ? null : () => onResetPassword(administrator),
     );
 
-    final statusInfo = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final statusInfo = Text(
+      isActive
+          ? 'This administrator can sign in to the WorkAxis platform.'
+          : 'This administrator cannot sign in while access is suspended.',
+      style: AppTypography.bodyMedium.copyWith(
+        color: AppColors.onSurfaceVariant,
+      ),
+    );
+
+    // Status and delete sit in the top-right corner of the card, beside its title.
+    final headerActions = Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          children: [
-            StatusChip.fromStatus(isActive ? 'Active' : 'Suspended'),
-            const SizedBox(width: AppSpacing.sm),
-            AppButton.outlined(
-              text: 'Delete',
-              iconData: Icons.delete_outline,
-              isFullWidth: false,
-              onPressed: isUpdating ? null : () => onDelete(administrator),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          isActive
-              ? 'This administrator can sign in to the WorkAxis platform.'
-              : 'This administrator cannot sign in while access is suspended.',
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.onSurfaceVariant,
+        StatusChip.fromStatus(isActive ? 'Active' : 'Suspended'),
+        const SizedBox(width: AppSpacing.xs),
+        IconButton(
+          tooltip: 'Delete administrator',
+          icon: const Icon(
+            Icons.delete_outline,
+            color: AppColors.statusUrgentText,
           ),
+          constraints: const BoxConstraints(
+            minWidth: AppSpacing.minTouchTarget,
+            minHeight: AppSpacing.minTouchTarget,
+          ),
+          onPressed: isUpdating ? null : () => onDelete(administrator),
         ),
       ],
     );
 
-    return PlatformUsersPanel(
+    return AccessPanel(
       title: 'Account access',
+      trailing: headerActions,
       child: isCompact
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -308,7 +312,7 @@ class _ProfilePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PlatformUsersPanel(
+    return AccessPanel(
       title: 'Administrator profile',
       child: _DetailGrid(
         values: [
@@ -334,7 +338,7 @@ class _AccountPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PlatformUsersPanel(
+    return AccessPanel(
       title: 'Account activity',
       child: _DetailGrid(
         values: [
