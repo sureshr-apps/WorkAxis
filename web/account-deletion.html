@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request account deletion - WorkAxis</title>
+  <style>
+    :root {
+      --primary: #004ac6;
+      --text: #191c1e;
+      --muted: #5f6368;
+      --surface: #f8f9fb;
+      --card: #ffffff;
+      --border: #dfe3ea;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --text: #e2e4e8;
+        --muted: #b5bac4;
+        --surface: #111418;
+        --card: #1b1f25;
+        --border: #2f3640;
+      }
+    }
+    :root[data-theme="dark"] {
+      --text: #e2e4e8;
+      --muted: #b5bac4;
+      --surface: #111418;
+      --card: #1b1f25;
+      --border: #2f3640;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 32px 16px 48px;
+    }
+    h1 { font-size: 1.7rem; margin: 0 0 8px; }
+    h2 { font-size: 1.1rem; margin: 0 0 8px; }
+    p, li { font-size: 0.98rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    .muted { color: var(--muted); }
+    a { color: var(--primary); }
+    .button {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 12px 20px;
+      background: var(--primary);
+      color: #ffffff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    ul { padding-left: 20px; margin: 8px 0 0; }
+    li + li { margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Request account deletion</h1>
+    <p class="muted">WorkAxis - operated by Yashassu Technologies</p>
+
+    <section class="card">
+      <h2>Who can use this page</h2>
+      <p>Anyone with a WorkAxis account, including employees, branch managers, and organization administrators, can ask for their account and personal data to be deleted.</p>
+    </section>
+
+    <section class="card">
+      <h2>What we delete</h2>
+      <ul>
+        <li>Your sign-in account, including your username, email address, and phone number</li>
+        <li>Your employee profile details, such as your name, employee code, designation, and profile photo</li>
+        <li>Attachments uploaded to your account</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>What we may keep</h2>
+      <p>Attendance and return records are kept because your organization relies on them for payroll, audit, and legal obligations. An account that has these records cannot be fully deleted, so it is suspended instead, and your personal details are removed as far as the records allow. [CONFIRM RETENTION PERIOD AND WORDING WITH YOUR LEGAL ADVISER.]</p>
+    </section>
+
+    <section class="card">
+      <h2>How to make a request</h2>
+      <ol>
+        <li>Send an email to <a href="mailto:sureshr.apps@gmail.com?subject=WorkAxis%20account%20deletion%20request&amp;body=Please%20delete%20my%20WorkAxis%20account%20and%20associated%20personal%20data.%0A%0AUsername%3A%20%0AEmail%20or%20phone%20on%20the%20account%3A%20%0AOrganization%20name%3A%20">sureshr.apps@gmail.com</a> from the email address or phone number linked to your account.</li>
+        <li>Include your username, your organization name, and the email address or phone number on the account, so we can find it.</li>
+        <li>We verify the request with your organization and confirm once it is complete, normally within [30] days.</li>
+      </ol>
+      <p class="muted">You can also ask your organization administrator to remove your account from within WorkAxis.</p>
+      <a class="button" href="mailto:sureshr.apps@gmail.com?subject=WorkAxis%20account%20deletion%20request">Email a deletion request</a>
+    </section>
+
+    <section class="card">
+      <h2>Privacy policy</h2>
+      <p>For details on what data WorkAxis collects and how it is used, read our <a href="privacy-policy.html">privacy policy</a>.</p>
+    </section>
+  </main>
+</body>
+</html>
