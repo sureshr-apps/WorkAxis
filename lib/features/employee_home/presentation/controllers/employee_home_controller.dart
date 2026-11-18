@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:workaxis/core/errors/user_message.dart';
 import 'package:workaxis/core/session/session_scoped.dart';
 import 'package:workaxis/core/state/request_generation.dart';
 import 'package:workaxis/core/state/safe_notifier.dart';
+import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
@@ -24,9 +27,14 @@ class EmployeeHomeController extends ChangeNotifier
   String? _errorMessage;
   String? _actionErrorMessage;
   bool _isActionProcessing = false;
+  AttendanceAction? _processingAction;
   UserAccessContext? _access;
 
-  EmployeeHomeController({required this.repository});
+  EmployeeHomeController({required this.repository, Now? now})
+    : _now = now ?? systemNow;
+
+  final Now _now;
+  Timer? _ticker;
 
   /// The debug-only simulator, or null in production builds and for any
   /// repository that is not a mock. Screens render demo controls only when
@@ -42,7 +50,14 @@ class EmployeeHomeController extends ChangeNotifier
   bool get isLoading => _status == EmployeeHomeStatus.loading;
   bool get hasError => _status == EmployeeHomeStatus.error;
   bool get isActionProcessing => _isActionProcessing;
-  EmployeeHomeSummary? get summary => _summary;
+
+  /// The attendance action currently being recorded, or null. Only the
+  /// button for this action shows progress.
+  AttendanceAction? get processingAction => _processingAction;
+
+  /// The summary with elapsed time measured now, so a running shift keeps
+  /// moving between loads.
+  EmployeeHomeSummary? get summary => _summary?.atTime(_now());
 
   /// Failure from the last load attempt.
   String? get errorMessage => _errorMessage;
@@ -71,6 +86,7 @@ class EmployeeHomeController extends ChangeNotifier
       );
       if (!_requests.isCurrent(token)) return;
       _summary = result;
+      _syncTicker();
       _status = EmployeeHomeStatus.loaded;
     } catch (e, st) {
       if (!_requests.isCurrent(token)) return;
@@ -94,6 +110,7 @@ class EmployeeHomeController extends ChangeNotifier
     return _runAction(
       () => repository.recordAttendanceAction(access: access, action: action),
       fallback: 'The attendance action could not be recorded. Try again.',
+      action: action,
     );
   }
 
@@ -127,28 +144,54 @@ class EmployeeHomeController extends ChangeNotifier
   }
 
   Future<bool> _runAction(
-    Future<EmployeeHomeSummary> Function() action, {
+    Future<EmployeeHomeSummary> Function() perform, {
     required String fallback,
+    AttendanceAction? action,
   }) async {
     final token = _actionRequests.next();
     _isActionProcessing = true;
+    _processingAction = action;
     _actionErrorMessage = null;
     notifyListeners();
 
     try {
-      final updated = await action();
+      final updated = await perform();
       if (!_actionRequests.isCurrent(token)) return false;
       _summary = updated;
+      _syncTicker();
       _isActionProcessing = false;
+      _processingAction = null;
       notifyListeners();
       return true;
     } catch (e, st) {
       if (!_actionRequests.isCurrent(token)) return false;
       _actionErrorMessage = userMessageFor(e, st, fallback: fallback);
       _isActionProcessing = false;
+      _processingAction = null;
       notifyListeners();
       return false;
     }
+  }
+
+  /// Re-renders once a second while a session is running, and stops as soon
+  /// as the employee checks out.
+  void _syncTicker() {
+    final running = _summary?.session?.isRunning ?? false;
+    if (running) {
+      _ticker ??= Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => notifyListeners(),
+      );
+    } else {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
   }
 
   @override
@@ -157,9 +200,11 @@ class EmployeeHomeController extends ChangeNotifier
     _actionRequests.invalidate();
     _status = EmployeeHomeStatus.initial;
     _summary = null;
+    _syncTicker();
     _errorMessage = null;
     _actionErrorMessage = null;
     _isActionProcessing = false;
+    _processingAction = null;
     _access = null;
     notifyListeners();
   }

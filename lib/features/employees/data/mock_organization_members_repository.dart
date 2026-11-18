@@ -107,6 +107,9 @@ class MockOrganizationMembersRepository
       access,
       activeBranchId,
     );
+    if (access.user.role == UserRole.branchManager) {
+      role = UserRole.employee;
+    }
     final normalized = query?.trim().toLowerCase() ?? '';
     final matches = _members.values.where((member) {
       if (member.organizationId != orgId) return false;

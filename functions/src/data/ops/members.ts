@@ -103,7 +103,12 @@ export const membersOps: OperationRegistry = {
     const q = new Query()
       .eq("a.branch_id", branchId)
       .contains("m.full_name", optText(vars, "nameContains", 200))
-      .eq("m.status", optString(vars, "status", 1, 50));
+      .eq("m.status", optString(vars, "status", 1, 50))
+      .eq(
+        "m.role",
+        // A branch manager lists only employees, never managers or themselves.
+        actor.role === "branchManager" ? "employee" : optString(vars, "role", 1, 50),
+      );
     const { rows, total } = await paged<Row>(db, {
       columns: memberCols("m", MEMBER_LIST_FIELDS),
       from: "user_branch_assignment a JOIN organization_member m ON m.id = a.member_id",

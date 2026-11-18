@@ -1,3 +1,4 @@
+import 'package:workaxis/features/employee_home/domain/models/attendance_session.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 
 /// Typed dashboard metrics for Employee Home overview matching Stitch design.
@@ -100,7 +101,28 @@ class EmployeeHomeSummary {
     this.recentReturnOffice = unavailable,
     this.recentReturnStatus,
     String? recentReturnItem,
+    this.session,
   });
+
+  /// Today's attendance times, when the employee has checked in.
+  final AttendanceSession? session;
+
+  /// This summary with the running time measured at [now]. Only a session still
+  /// in progress changes; anything else is returned as it is.
+  EmployeeHomeSummary atTime(DateTime now) {
+    final running = session;
+    if (running == null || !running.isRunning) return this;
+    final worked = running.workedAt(now);
+    final progress = running.progressAt(now);
+    final workedText = AttendanceSession.formatDuration(worked);
+    return copyWith(
+      workingDuration: workedText,
+      elapsedActive: workedText,
+      shiftProgress: progress,
+      elapsedActivePercentText:
+          '${(progress * 100).toStringAsFixed(0)}% complete',
+    );
+  }
 
   EmployeeHomeSummary copyWith({
     AttendanceStatus? currentStatus,

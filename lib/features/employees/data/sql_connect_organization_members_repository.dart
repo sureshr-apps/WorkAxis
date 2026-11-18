@@ -60,6 +60,10 @@ class SqlConnectOrganizationMembersRepository
         activeBranchId,
       );
       final name = query?.trim();
+      // Branch managers list employees only; they never see managers.
+      final scopedRole = access.user.role == UserRole.branchManager
+          ? UserRole.employee
+          : role;
       final PageResult<OrganizationMember> page;
       if (branchId == null) {
         page = await dataSource.listByOrganization(
@@ -68,7 +72,7 @@ class SqlConnectOrganizationMembersRepository
           offset: offset,
           nameContains: name,
           status: status,
-          role: role,
+          role: scopedRole,
         );
       } else {
         page = await dataSource.listByBranch(
@@ -78,6 +82,7 @@ class SqlConnectOrganizationMembersRepository
           offset: offset,
           nameContains: name,
           status: status,
+          role: scopedRole,
         );
       }
       final enriched = await _enrichWithProfiles(page.items);

@@ -18,11 +18,15 @@ class HeroAttendanceCard extends StatelessWidget {
     required this.summary,
     required this.isProcessing,
     required this.onPrimaryAction,
+    this.processingAction,
     this.onCheckOut,
   });
 
   final EmployeeHomeSummary summary;
   final bool isProcessing;
+
+  /// The action being recorded; only its button shows progress.
+  final AttendanceAction? processingAction;
   final VoidCallback onPrimaryAction;
   final VoidCallback? onCheckOut;
 
@@ -236,8 +240,10 @@ class HeroAttendanceCard extends StatelessWidget {
           AppButton.primary(
             text: status.heroActionLabel,
             iconData: status.heroActionIcon,
-            isLoading: isProcessing,
-            onPressed: canAct ? onPrimaryAction : null,
+            isLoading:
+                processingAction != null &&
+                processingAction == status.nextAction,
+            onPressed: canAct && !isProcessing ? onPrimaryAction : null,
           ),
           if (onCheckOut != null &&
               (status == AttendanceStatus.checkedIn ||
@@ -246,8 +252,8 @@ class HeroAttendanceCard extends StatelessWidget {
             AppButton.outlined(
               text: 'Check Out',
               iconData: Icons.logout,
-              isLoading: isProcessing,
-              onPressed: onCheckOut,
+              isLoading: processingAction == AttendanceAction.checkOut,
+              onPressed: isProcessing ? null : onCheckOut,
             ),
           ],
           if (summary.locationStatus.isNotEmpty) ...[

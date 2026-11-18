@@ -230,12 +230,14 @@ class FakeMembersDataSource implements OrganizationMembersRemoteDataSource {
     required int offset,
     String? nameContains,
     AccountStatus? status,
+    UserRole? role,
   }) async {
     _maybeFail();
     final rows = server.all.where((m) {
       if (m.organizationId != organizationId) return false;
       if (!m.branchIds.contains(branchId)) return false;
       if (status != null && m.status != status) return false;
+      if (role != null && m.role != role) return false;
       return _nameMatches(m, nameContains);
     }).toList()..sort((a, b) => a.fullName.compareTo(b.fullName));
     return _page(rows, limit, offset);

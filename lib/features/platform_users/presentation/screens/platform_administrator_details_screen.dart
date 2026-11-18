@@ -4,22 +4,19 @@ import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
-import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
-import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/platform_users/domain/models/platform_administrator.dart';
 import 'package:workaxis/features/platform_users/presentation/controllers/platform_users_controller.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_delete_flow.dart';
 import 'package:workaxis/features/platform_users/presentation/widgets/platform_administrator_dialogs.dart';
-import 'package:workaxis/core/widgets/access_panel.dart';
+import 'package:workaxis/core/widgets/account_details/account_detail_panels.dart';
+import 'package:workaxis/core/widgets/account_details/account_status_panel.dart';
 
 /// Space below the content for the circular edit button: 56dp button, 16dp
 /// edge margin and a little breathing room.
@@ -139,19 +136,33 @@ class _PlatformAdministratorDetailsScreenState
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                _StatusPanel(
-                  administrator: administrator,
+                AccountStatusPanel(
+                  isActive: administrator.status == AccountStatus.active,
+                  activeMessage: 'This administrator can sign in to the WorkAxis platform.',
+                  inactiveMessage: 'This administrator cannot sign in while access is suspended.',
                   isUpdating: controller.isSaving,
-                  onStatusChange: _changeStatus,
-                  onDelete: _deleteAdministrator,
-                  onResetPassword: (administrator) => context.push(
+                  deleteTooltip: 'Delete administrator',
+                  onReset: () => context.push(
                     AppRoutes.platformUserResetPasswordPath(administrator.id),
                   ),
+                  onToggleActive: () => _changeStatus(
+                    administrator,
+                    administrator.status == AccountStatus.active
+                        ? AccountStatus.suspended
+                        : AccountStatus.active,
+                  ),
+                  onDelete: () => _deleteAdministrator(administrator),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _ProfilePanel(administrator: administrator),
+                AccountDetailsPanel(
+                  title: 'Administrator profile',
+                  values: _profileValues(administrator),
+                ),
                 const SizedBox(height: AppSpacing.md),
-                _AccountPanel(administrator: administrator),
+                AccountDetailsPanel(
+                  title: 'Account activity',
+                  values: _activityValues(administrator),
+                ),
                 // Keeps the last panel scrollable above the floating edit button.
                 const SizedBox(height: _floatingButtonClearance),
               ],
@@ -200,213 +211,20 @@ class _PlatformAdministratorDetailsScreenState
   }
 }
 
-class _StatusPanel extends StatelessWidget {
-  const _StatusPanel({
-    required this.administrator,
-    required this.isUpdating,
-    required this.onStatusChange,
-    required this.onDelete,
-    required this.onResetPassword,
-  });
+List<(String, String)> _profileValues(PlatformAdministrator administrator) => [
+  ('Full name', administrator.fullName),
+  ('Role', 'Platform Administrator'),
+  ('Work email', administrator.email.isEmpty ? '—' : administrator.email),
+  ('Username', administrator.username),
+  if (administrator.phone != null) ('Phone number', administrator.phone!),
+];
 
-  final PlatformAdministrator administrator;
-  final bool isUpdating;
-  final void Function(PlatformAdministrator, AccountStatus) onStatusChange;
-  final ValueChanged<PlatformAdministrator> onDelete;
-  final ValueChanged<PlatformAdministrator> onResetPassword;
-
-  @override
-  Widget build(BuildContext context) {
-    final isActive = administrator.status == AccountStatus.active;
-    final isCompact = context.isCompact;
-
-    final actionButton = isActive
-        ? AppButton.outlined(
-            text: 'Suspend',
-            iconData: Icons.block_outlined,
-            isFullWidth: isCompact,
-            onPressed: isUpdating
-                ? null
-                : () => onStatusChange(administrator, AccountStatus.suspended),
-          )
-        : AppButton.secondary(
-            text: 'Restore',
-            iconData: Icons.check_circle_outline,
-            isFullWidth: isCompact,
-            onPressed: isUpdating
-                ? null
-                : () => onStatusChange(administrator, AccountStatus.active),
-          );
-    final resetButton = AppButton.outlined(
-      text: 'Reset',
-      iconData: Icons.key_outlined,
-      isFullWidth: isCompact,
-      onPressed: isUpdating ? null : () => onResetPassword(administrator),
-    );
-
-    final statusInfo = Text(
-      isActive
-          ? 'This administrator can sign in to the WorkAxis platform.'
-          : 'This administrator cannot sign in while access is suspended.',
-      style: AppTypography.bodyMedium.copyWith(
-        color: AppColors.onSurfaceVariant,
-      ),
-    );
-
-    // Status and delete sit in the top-right corner of the card, beside its title.
-    final headerActions = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        StatusChip.fromStatus(isActive ? 'Active' : 'Suspended'),
-        const SizedBox(width: AppSpacing.xs),
-        IconButton(
-          tooltip: 'Delete administrator',
-          icon: const Icon(
-            Icons.delete_outline,
-            color: AppColors.statusUrgentText,
-          ),
-          constraints: const BoxConstraints(
-            minWidth: AppSpacing.minTouchTarget,
-            minHeight: AppSpacing.minTouchTarget,
-          ),
-          onPressed: isUpdating ? null : () => onDelete(administrator),
-        ),
-      ],
-    );
-
-    return AccessPanel(
-      title: 'Account access',
-      trailing: headerActions,
-      child: isCompact
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                statusInfo,
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    Expanded(child: resetButton),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: actionButton),
-                  ],
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(child: statusInfo),
-                const SizedBox(width: AppSpacing.md),
-                resetButton,
-                const SizedBox(width: AppSpacing.sm),
-                actionButton,
-              ],
-            ),
-    );
-  }
-}
-
-class _ProfilePanel extends StatelessWidget {
-  const _ProfilePanel({required this.administrator});
-
-  final PlatformAdministrator administrator;
-
-  @override
-  Widget build(BuildContext context) {
-    return AccessPanel(
-      title: 'Administrator profile',
-      child: _DetailGrid(
-        values: [
-          ('Full name', administrator.fullName),
-          ('Role', 'Platform Administrator'),
-          (
-            'Work email',
-            administrator.email.isEmpty ? '—' : administrator.email,
-          ),
-          ('Username', administrator.username),
-          if (administrator.phone != null)
-            ('Phone number', administrator.phone!),
-        ],
-      ),
-    );
-  }
-}
-
-class _AccountPanel extends StatelessWidget {
-  const _AccountPanel({required this.administrator});
-
-  final PlatformAdministrator administrator;
-
-  @override
-  Widget build(BuildContext context) {
-    return AccessPanel(
-      title: 'Account activity',
-      child: _DetailGrid(
-        values: [
-          ('Created', AppFormatters.formatDate(administrator.createdAt)),
-          (
-            'Last active',
-            administrator.lastActiveAt == null
-                ? 'Never signed in'
-                : AppFormatters.formatDateTime(administrator.lastActiveAt),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Label/value pairs laid out in one or two columns by available width.
-class _DetailGrid extends StatelessWidget {
-  const _DetailGrid({required this.values});
-
-  final List<(String, String)> values;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = AppSpacing.lg;
-        final twoColumns = constraints.maxWidth >= AppBreakpoints.formSplit;
-        final width = twoColumns
-            ? (constraints.maxWidth - gap) / 2
-            : constraints.maxWidth;
-        return Wrap(
-          spacing: gap,
-          runSpacing: AppSpacing.lg,
-          children: [
-            for (final (label, value) in values)
-              SizedBox(
-                width: width,
-                child: _DetailValue(label: label, value: value),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _DetailValue extends StatelessWidget {
-  const _DetailValue({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: AppTypography.labelSmall.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.7,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        SelectableText(value, style: AppTypography.bodyMedium),
-      ],
-    );
-  }
-}
+List<(String, String)> _activityValues(PlatformAdministrator administrator) => [
+  ('Created', AppFormatters.formatDate(administrator.createdAt)),
+  (
+    'Last active',
+    administrator.lastActiveAt == null
+        ? 'Never signed in'
+        : AppFormatters.formatDateTime(administrator.lastActiveAt),
+  ),
+];

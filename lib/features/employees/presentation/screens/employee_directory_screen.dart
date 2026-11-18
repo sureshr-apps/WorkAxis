@@ -16,13 +16,12 @@ import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
-import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 import 'package:workaxis/features/employees/domain/policies/organization_member_policy.dart';
 import 'package:workaxis/features/employees/presentation/controllers/organization_members_controller.dart';
 import 'package:workaxis/features/employees/presentation/member_branch_names.dart';
-import 'package:workaxis/features/employees/presentation/widgets/member_action_dialogs.dart';
+import 'package:workaxis/features/employees/presentation/member_account_actions.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_card.dart';
 
 class EmployeeDirectoryScreen extends StatefulWidget {
@@ -254,19 +253,31 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                 : width < AppBreakpoints.expandedMin
                 ? 2
                 : 3;
-            // Card content is fixed-structure; scale the row height with the
-            // user's text scale so large text does not overflow.
-            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-            return SliverGrid.builder(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                mainAxisSpacing: AppSpacing.md,
-                crossAxisSpacing: AppSpacing.md,
-                mainAxisExtent: 304 * (scale < 1 ? 1 : scale),
-              ),
-              itemCount: members.length,
-              itemBuilder: (context, index) =>
-                  _cardFor(members[index], access, branchId),
+            return SliverList.separated(
+              itemCount: (members.length / columns).ceil(),
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+              itemBuilder: (context, row) {
+                final cells = <Widget>[];
+                for (var col = 0; col < columns; col++) {
+                  final index = row * columns + col;
+                  if (col > 0) cells.add(const SizedBox(width: AppSpacing.md));
+                  cells.add(
+                    Expanded(
+                      child: index < members.length
+                          ? _cardFor(members[index], access, branchId)
+                          : const SizedBox.shrink(),
+                    ),
+                  );
+                }
+                // Each row is as tall as its tallest card, so cards never leave
+                // unused space below their actions.
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: cells,
+                  ),
+                );
+              },
             );
           },
         ),
@@ -296,9 +307,30 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
       branchNames: memberBranchNames(member, access),
       onOpen: () => _openDetails(member, access),
       onEdit: canManage ? () => _openEditor(access, member: member) : null,
-      onResetPassword: canAct ? () => _resetPassword(access, member) : null,
-      onToggleStatus: canAct ? () => _toggleStatus(access, member) : null,
-      onDelete: canAct ? () => _deleteMember(access, member) : null,
+      onResetPassword: canAct
+          ? () => resetMemberPassword(
+              context,
+              access: access,
+              member: member,
+              activeBranchId: _activeBranchId,
+            )
+          : null,
+      onToggleStatus: canAct
+          ? () => toggleMemberStatus(
+              context,
+              access: access,
+              member: member,
+              activeBranchId: _activeBranchId,
+            )
+          : null,
+      onDelete: canAct
+          ? () => deleteMember(
+              context,
+              access: access,
+              member: member,
+              activeBranchId: _activeBranchId,
+            )
+          : null,
     );
   }
 
@@ -321,86 +353,6 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
           ),
         ],
       ],
-    );
-  }
-
-  void _toast(String message) => ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
-
-  Future<void> _toggleStatus(
-    UserAccessContext access,
-    OrganizationMember member,
-  ) async {
-    final suspend = member.status == AccountStatus.active;
-    final confirmed = await confirmMemberStatusChange(
-      context,
-      member: member,
-      suspend: suspend,
-    );
-    if (!confirmed || !mounted) return;
-    final controller = context.read<OrganizationMembersController>()
-      ..clearActionError();
-    final saved = await controller.setMemberStatus(
-      access: access,
-      member: member,
-      status: suspend ? AccountStatus.suspended : AccountStatus.active,
-      activeBranchId: _activeBranchId,
-    );
-    if (!mounted) return;
-    _toast(
-      saved == null
-          ? controller.actionErrorMessage ??
-                'The account status could not be changed. Try again.'
-          : '${member.fullName} ${suspend ? 'suspended' : 'restored'}.',
-    );
-  }
-
-  Future<void> _resetPassword(
-    UserAccessContext access,
-    OrganizationMember member,
-  ) async {
-    final password = await showResetMemberPasswordDialog(
-      context,
-      member: member,
-    );
-    if (password == null || !mounted) return;
-    final controller = context.read<OrganizationMembersController>()
-      ..clearActionError();
-    final ok = await controller.resetMemberPassword(
-      access: access,
-      member: member,
-      newPassword: password,
-      activeBranchId: _activeBranchId,
-    );
-    if (!mounted) return;
-    _toast(
-      ok
-          ? 'Password reset for ${member.fullName}.'
-          : controller.actionErrorMessage ??
-                'The password could not be reset. Try again.',
-    );
-  }
-
-  Future<void> _deleteMember(
-    UserAccessContext access,
-    OrganizationMember member,
-  ) async {
-    final confirmed = await confirmMemberDelete(context, member: member);
-    if (!confirmed || !mounted) return;
-    final controller = context.read<OrganizationMembersController>()
-      ..clearActionError();
-    final deleted = await controller.deleteMember(
-      access: access,
-      member: member,
-      activeBranchId: _activeBranchId,
-    );
-    if (!mounted) return;
-    _toast(
-      deleted
-          ? '${member.fullName} deleted.'
-          : controller.actionErrorMessage ??
-                'The account could not be deleted. Try again.',
     );
   }
 
