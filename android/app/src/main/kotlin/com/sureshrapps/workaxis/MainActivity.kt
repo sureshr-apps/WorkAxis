@@ -1,4 +1,4 @@
-package com.workaxis.workaxis
+package com.sureshrapps.workaxis
 
 import io.flutter.embedding.android.FlutterActivity
 

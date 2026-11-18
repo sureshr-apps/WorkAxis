@@ -60,7 +60,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBdCa14ZGqjg92oZVOuW9VpW8LDbLa-kIo',
-    appId: '1:720758703173:android:abc878fdbe73450403cf2c',
+    appId: '1:720758703173:android:17756956a7d8872603cf2c',
     messagingSenderId: '720758703173',
     projectId: 'workaxis-app',
     storageBucket: 'workaxis-app.firebasestorage.app',
