@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:720758703173:android:17756956a7d8872603cf2c",
+        "android_client_info": {
+          "package_name": "com.sureshrapps.workaxis"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdCa14ZGqjg92oZVOuW9VpW8LDbLa-kIo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:720758703173:android:abc878fdbe73450403cf2c",
         "android_client_info": {
           "package_name": "com.workaxis.workaxis"
