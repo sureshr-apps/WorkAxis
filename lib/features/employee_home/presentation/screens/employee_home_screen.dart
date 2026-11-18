@@ -132,6 +132,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             HeroAttendanceCard(
               summary: summary,
               isProcessing: controller.isActionProcessing,
+              processingAction: controller.processingAction,
               onPrimaryAction: () => _handlePrimaryAction(controller),
               onCheckOut: () =>
                   _handlePrimaryAction(controller, checkOut: true),

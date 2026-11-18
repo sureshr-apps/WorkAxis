@@ -52,6 +52,7 @@ class SqlConnectOrganizationMembersRemoteDataSource
     required int offset,
     String? nameContains,
     AccountStatus? status,
+    UserRole? role,
   }) async {
     final data = await _gateway.call('ListMembersByBranchPaged', {
       'branchId': branchId,
@@ -60,6 +61,7 @@ class SqlConnectOrganizationMembersRemoteDataSource
       if (nameContains != null && nameContains.isNotEmpty)
         'nameContains': nameContains,
       'status': ?status?.name,
+      'role': ?role?.name,
     });
     return PageResult(
       items: [

@@ -22,6 +22,7 @@ abstract interface class OrganizationMembersRemoteDataSource {
     required int offset,
     String? nameContains,
     AccountStatus? status,
+    UserRole? role,
   });
 
   Future<OrganizationMember?> getById(String memberId);

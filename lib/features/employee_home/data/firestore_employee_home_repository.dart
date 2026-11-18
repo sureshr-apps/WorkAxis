@@ -11,6 +11,7 @@ import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/attendance/data/attendance_entry_mapper.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/employee_home/domain/models/attendance_session.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 import 'package:workaxis/features/employee_home/domain/models/location_peek.dart';
@@ -172,9 +173,6 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         ? AttendanceStatus.checkedIn
         : AttendanceStatus.notCheckedIn;
 
-    final worked = checkIn == null
-        ? null
-        : _worked(checkIn, checkOut ?? _now(), breaks);
     final recordedByManager = entry?['source'] == 'manager-group';
 
     final branch = _displayBranch(access);
@@ -237,11 +235,19 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         '${stdHours}h ${stdMins.toString().padLeft(2, '0')}m';
 
     final standardShiftSeconds = (dailyWorkHours * 3600).round();
-    final progress = worked == null
-        ? 0.0
-        : standardShiftSeconds > 0
-        ? (worked.inSeconds / standardShiftSeconds).clamp(0.0, 1.0)
-        : 0.0;
+    final session = checkIn == null
+        ? null
+        : AttendanceSession(
+            checkIn: checkIn,
+            checkOut: checkOut,
+            breaks: [
+              for (final b in breaks)
+                AttendanceBreak(start: b.start, end: b.end),
+            ],
+            standardSeconds: standardShiftSeconds,
+          );
+    final worked = session?.workedAt(_now());
+    final progress = session?.progressAt(_now()) ?? 0.0;
 
     return EmployeeHomeSummary(
       employeeId: access.user.id,
@@ -255,9 +261,13 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       checkInTime: AppFormatters.formatTime(checkIn, placeholder: '-- : --'),
       checkInNote: recordedByManager ? 'Recorded by your manager' : null,
       checkOutTime: AppFormatters.formatTime(checkOut, placeholder: '-- : --'),
-      workingDuration: worked == null ? '0h 00m' : _formatDuration(worked),
+      workingDuration: worked == null
+          ? '0h 00m'
+          : AttendanceSession.formatDuration(worked),
       shiftProgress: progress,
-      elapsedActive: worked == null ? '-- : --' : _formatDuration(worked),
+      elapsedActive: worked == null
+          ? '-- : --'
+          : AttendanceSession.formatDuration(worked),
       elapsedActivePercentText: worked == null
           ? EmployeeHomeSummary.unavailable
           : '${(progress * 100).toStringAsFixed(0)}% complete',
@@ -266,6 +276,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       latitude: branch?.latitude,
       longitude: branch?.longitude,
       geofenceRadiusMeters: branch?.geofenceRadiusMeters,
+      session: session,
     );
   }
 
@@ -311,23 +322,6 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
           end: AttendanceEntryMapper.instant(b['endAt']),
         ),
     ];
-  }
-
-  Duration _worked(
-    DateTime start,
-    DateTime end,
-    List<({DateTime start, DateTime? end})> breaks,
-  ) {
-    var total = end.difference(start);
-    for (final b in breaks) {
-      total -= (b.end ?? end).difference(b.start);
-    }
-    return total.isNegative ? Duration.zero : total;
-  }
-
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes % 60;
-    return '${d.inHours}h ${minutes.toString().padLeft(2, '0')}m';
   }
 
   String _kind(AttendanceAction action) => switch (action) {
