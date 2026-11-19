@@ -83,6 +83,7 @@ Status is based on the code and the last test run. Areas marked "verify" should 
 | Employees | `features/employees` | Implemented: directory, create (mandatory Aadhaar, photo, designation, salary for employees), edit, reset password, suspend, delete, details. Branch managers see only employees in their branch. |
 | Employee home and attendance | `features/employee_home`, `features/attendance` | Implemented: check-in and check-out with location, breaks, live timer, group attendance |
 | Returns | `features/returns` | Implemented: multi-item returns, bill photos, approval flow |
+| Leaves | `features/leaves` | Employee and Branch Manager applications; Branch Managers or Organization Admins review employee requests; only Organization Admins review manager requests; approved requests cannot be edited |
 | Reports | `features/reports` | Implemented: operational reports (verify the full set in the app) |
 | Profile | `features/profile` | Implemented: own profile, change password |
 | Settings | `features/settings` | Partial. Some controls are saved preferences only and not enforced (see section 7). |
@@ -139,6 +140,7 @@ Status is based on the code and the last test run. Areas marked "verify" should 
 2. **Migrate photo paths.** Records saved before the photo-upload change still hold local device paths, not storage references.
 3. **Plan for the shared database.** The `db-f1-micro` instance has tight connection limits. Raise them only together with the instance size, or move to a self-hosted PostgreSQL VM (`DB_MODE=tcp`, `docs/architecture.md` section 21c).
 4. **Build the 90-day deletion job** (see section 7). Until it exists, the privacy policy and deletion page describe deletion that does not happen.
+5. Leave requests use PostgreSQL migration `functions/db/migrations/005_leave_requests.sql`; the deploy workflow applies pending migrations before deploying Functions.
 
 ### 6.3 Platform targets
 1. **iOS:** register a Firebase iOS app for `com.sureshrapps.workaxis` and update the iOS entry in `lib/firebase_options.dart`. Until then, iOS Firebase initialization won't match the bundle ID.
@@ -149,7 +151,7 @@ Status is based on the code and the last test run. Areas marked "verify" should 
 1. **Legal review of the privacy policy** and the deletion page.
 2. **Aadhaar handling:** the app stores the full number and the card image. The Aadhaar Act and UIDAI rules restrict this. Decide whether to keep, mask, or drop it.
 3. **Retention start point:** confirm the 90 days runs from when each record is created.
-4. **Deletion blocking:** accounts with attendance or return records cannot be deleted, only suspended. Decide whether to keep that rule.
+4. **Deletion blocking:** accounts with attendance, return, or leave records cannot be deleted, only suspended. Decide whether to keep that rule.
 
 ### 6.5 Product and code
 1. **Settings enforcement:** session timeout, lockout and complexity, maintenance broadcast, attendance policy defaults, and notification automation are saved but not enforced. Either implement them or mark them clearly as not active.
@@ -162,7 +164,7 @@ Status is based on the code and the last test run. Areas marked "verify" should 
 ## 7. Known gaps
 
 - **90-day retention is not enforced.** No code deletes attendance or return records. The privacy policy and the deletion page both say records are deleted after 90 days. Do not let this ship unfixed without a decision.
-- **Accounts with attendance or return records cannot be deleted.** `functions/src/employees/memberDeletion.ts` refuses deletion and the account is suspended. The deletion page says so.
+- **Accounts with attendance, return, or leave records cannot be deleted.** `functions/src/employees/memberDeletion.ts` refuses deletion and the account is suspended. The deletion page says so.
 - **Aadhaar number and image are stored** in Firestore and Storage. Legal review pending.
 - **Settings controls** listed in 6.5 are not enforced.
 - **Test credentials were shared in chat** during development. They are not in the repo. Rotate them before reviewers or testers use them.

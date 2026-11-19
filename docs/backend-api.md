@@ -74,7 +74,7 @@ Errors are `HttpsError` codes; internal details are never returned:
 | `setUserStatus` | `{targetUid, status: 'active'\|'suspended'}` | `{uid, status}` | see matrix |
 | `deletePlatformAdministrator` | `{targetUid}` | `{uid, deleted}` | Platform Owner only; not self; platform administrators only |
 | `deleteOrganizationAdmin` | `{targetUid}` | `{uid, deleted}` | Platform staff only; organization administrators only; refused for the organization's only active administrator |
-| `deleteOrganizationMember` | `{targetUid}` | `{uid, deleted}` | Employees and branch managers; by their organization admin or branch manager; refused while the account has returns or attendance |
+| `deleteOrganizationMember` | `{targetUid}` | `{uid, deleted}` | Employees and branch managers; by their organization admin or branch manager; refused while the account has returns, leave, or attendance |
 | `setOrganizationStatus` | `{organizationId, status}` | `{organizationId, status, membersUpdated, membersFailed}` | platform roles |
 | `resolveLoginIdentifier` | `{identifier}` | `{email}` | unauthenticated |
 | `recordAttendancePunch` | `{kind: 'checkIn'\|'checkOut'\|'breakStart'\|'breakEnd', branchId, latitude, longitude, accuracyMeters}` | `{entryId, kind, recordedAt, workDate, distanceMeters}` | Employee |
@@ -223,6 +223,25 @@ Branch Manager (BM) = assigned branches only. Paged operations take
 | `UpdateReturnRecordStatus` | Same as review (legacy, no notes) | `id`, `status` | `returnRecord_update` |
 
 Submitter and reviewer identity, organization and timestamps are stamped server-side.
+
+### Leaves (`ops/leaves.ts`)
+
+Apply `functions/db/migrations/005_leave_requests.sql` before deploying the leave
+screen and operations. PostgreSQL is authoritative for leave requests.
+
+| Operation | Who may call | Key vars | Response keys |
+| --- | --- | --- | --- |
+| `ListMyLeaveRequests` | Employee or Branch Manager | `limit`, `offset`, optional `status` | `leaveRequests`, `total` |
+| `ListOrganizationLeaveRequestsPaged` | Organization Admin of its organization | `limit`, `offset`, optional `branchId`, `status` | `leaveRequests`, `total` |
+| `ListEmployeeLeaveRequestsByBranchPaged` | Branch Manager assigned to the active branch | `branchId`, `limit`, `offset`, optional `status` | `leaveRequests`, `total` |
+| `SubmitLeaveRequest` | Employee or Branch Manager for an active assigned branch | `branchId`, `leaveType`, `startDate`, `endDate`, `reason`; Branch Manager also sends `activeBranchId` | `leaveRequest` |
+| `UpdateMyPendingLeaveRequest` | Applicant, while request is pending | `id`, `leaveType`, `startDate`, `endDate`, `reason`; Branch Manager also sends `activeBranchId` | `leaveRequest` |
+| `ReviewLeaveRequest` | Organization Admin in its organization; Branch Manager for an employee in the active assigned branch | `id`, `status` (`approved`/`rejected`), optional `reviewerNotes`; Branch Manager also sends `activeBranchId` | `leaveRequest` |
+
+The server derives applicant/reviewer identity and organization. Branch Managers
+cannot review a Branch Manager's request; only an Organization Admin can.
+Applicants can edit only pending requests. The SQL trigger prevents any update
+to an approved request, including changes to its review details.
 
 ### Dashboards (`ops/dashboards.ts`)
 

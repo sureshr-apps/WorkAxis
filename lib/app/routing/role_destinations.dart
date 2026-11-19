@@ -80,6 +80,12 @@ abstract final class RoleDestinations {
       route: AppRoutes.orgAdminReturns,
     ),
     AppNavDestination(
+      label: 'Leaves',
+      icon: Icons.event_note_outlined,
+      selectedIcon: Icons.event_note,
+      route: AppRoutes.orgAdminLeaves,
+    ),
+    AppNavDestination(
       label: 'Reports',
       icon: Icons.analytics_outlined,
       selectedIcon: Icons.analytics,
@@ -125,6 +131,12 @@ abstract final class RoleDestinations {
       route: AppRoutes.branchManagerReturns,
     ),
     AppNavDestination(
+      label: 'Leaves',
+      icon: Icons.event_note_outlined,
+      selectedIcon: Icons.event_note,
+      route: AppRoutes.branchManagerLeaves,
+    ),
+    AppNavDestination(
       label: 'Reports',
       icon: Icons.assessment_outlined,
       selectedIcon: Icons.assessment,
@@ -144,6 +156,12 @@ abstract final class RoleDestinations {
       icon: Icons.access_time_outlined,
       selectedIcon: Icons.access_time_filled,
       route: AppRoutes.employeeAttendance,
+    ),
+    AppNavDestination(
+      label: 'Leaves',
+      icon: Icons.event_note_outlined,
+      selectedIcon: Icons.event_note,
+      route: AppRoutes.employeeLeaves,
     ),
     AppNavDestination(
       label: 'Returns',
