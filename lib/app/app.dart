@@ -25,6 +25,7 @@ import 'package:workaxis/features/plans/presentation/controllers/license_plans_c
 import 'package:workaxis/features/platform_users/presentation/controllers/platform_users_controller.dart';
 import 'package:workaxis/features/reports/presentation/controllers/reports_controller.dart';
 import 'package:workaxis/features/returns/presentation/controllers/returns_controller.dart';
+import 'package:workaxis/features/leaves/presentation/controllers/leaves_controller.dart';
 import 'package:workaxis/features/settings/presentation/controllers/settings_controller.dart';
 
 /// Root WorkAxis application widget configuring providers, theming, and routing.
@@ -62,6 +63,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
   late final AssetsController _assetsController;
   late final AttendanceController _attendanceController;
   late final ReturnsController _returnsController;
+  late final LeavesController _leavesController;
   late final ReportsController _reportsController;
   late final SettingsController _settingsController;
   late final SessionController _sessionController;
@@ -113,6 +115,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
       repository: repos.attendanceRepository,
     );
     _returnsController = ReturnsController(repository: repos.returnsRepository);
+    _leavesController = LeavesController(repository: repos.leavesRepository);
     _reportsController = ReportsController(repository: repos.reportsRepository);
     _settingsController = SettingsController(
       repository: repos.settingsRepository,
@@ -122,6 +125,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
       _branchDashboardController,
       _attendanceController,
       _returnsController,
+      _leavesController,
       _organizationMembersController,
       _assetsController,
       _reportsController,
@@ -174,6 +178,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
     _assetsController.dispose();
     _attendanceController.dispose();
     _returnsController.dispose();
+    _leavesController.dispose();
     _reportsController.dispose();
     _settingsController.dispose();
     super.dispose();
@@ -232,6 +237,9 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
         ),
         ChangeNotifierProvider<ReturnsController>.value(
           value: _returnsController,
+        ),
+        ChangeNotifierProvider<LeavesController>.value(
+          value: _leavesController,
         ),
         ChangeNotifierProvider<ReportsController>.value(
           value: _reportsController,

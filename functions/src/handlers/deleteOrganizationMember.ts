@@ -14,7 +14,7 @@ import { asBag, reqString } from "../util/input";
  * Request:  { targetUid }
  * Response: { uid, deleted }
  * Removes an employee or branch manager. Refused while the account has return
- * or attendance records, which must be kept; suspend those accounts instead.
+ * or leave records, which must be kept; suspend those accounts instead.
  * The login identity and profile go first and the SQL member last, so a
  * failure leaves the account in place and the same call can be retried.
  */

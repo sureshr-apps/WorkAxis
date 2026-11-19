@@ -46,6 +46,7 @@ import 'package:workaxis/features/returns/presentation/screens/employee_returns_
 import 'package:workaxis/features/returns/presentation/screens/return_details_route.dart';
 import 'package:workaxis/features/returns/presentation/screens/submit_return_route.dart';
 import 'package:workaxis/features/returns/presentation/screens/returns_operations_screen.dart';
+import 'package:workaxis/features/leaves/presentation/screens/leaves_screen.dart';
 import 'package:workaxis/features/settings/presentation/screens/organization_settings_screen.dart';
 import 'package:workaxis/features/settings/presentation/screens/platform_settings_screen.dart';
 
@@ -343,6 +344,10 @@ GoRouter createAppRouter({
             builder: (context, state) => const OperationalReportsScreen(),
           ),
           GoRoute(
+            path: AppRoutes.orgAdminLeaves,
+            builder: (context, state) => const LeavesScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.orgAdminSettings,
             builder: (context, state) => const OrganizationSettingsScreen(),
           ),
@@ -448,6 +453,10 @@ GoRouter createAppRouter({
             path: AppRoutes.branchManagerReports,
             builder: (context, state) => const OperationalReportsScreen(),
           ),
+          GoRoute(
+            path: AppRoutes.branchManagerLeaves,
+            builder: (context, state) => const LeavesScreen(),
+          ),
         ],
       ),
 
@@ -503,6 +512,10 @@ GoRouter createAppRouter({
                 ),
               ),
             ],
+          ),
+          GoRoute(
+            path: AppRoutes.employeeLeaves,
+            builder: (context, state) => const LeavesScreen(),
           ),
           GoRoute(
             path: AppRoutes.employeeProfile,

@@ -66,6 +66,10 @@ import 'package:workaxis/features/reports/domain/repositories/reports_repository
 import 'package:workaxis/features/returns/data/mock_returns_repository.dart';
 import 'package:workaxis/features/returns/data/sql_connect_returns_repository.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
+import 'package:workaxis/features/leaves/data/mock_leaves_data_source.dart';
+import 'package:workaxis/features/leaves/data/mock_leaves_repository.dart';
+import 'package:workaxis/features/leaves/data/sql_connect_leaves_repository.dart';
+import 'package:workaxis/features/leaves/domain/repositories/leaves_repository.dart';
 import 'package:workaxis/features/settings/data/firestore_settings_repository.dart';
 import 'package:workaxis/features/settings/data/mock_settings_repository.dart';
 import 'package:workaxis/features/settings/domain/repositories/settings_repository.dart';
@@ -87,6 +91,7 @@ class BackendRepositories {
     required this.assetsRepository,
     required this.attendanceRepository,
     required this.returnsRepository,
+    required this.leavesRepository,
     required this.reportsRepository,
     required this.settingsRepository,
     required this.attachmentStorage,
@@ -106,6 +111,7 @@ class BackendRepositories {
   final AssetsRepository assetsRepository;
   final AttendanceRepository attendanceRepository;
   final ReturnsRepository returnsRepository;
+  final LeavesRepository leavesRepository;
   final ReportsRepository reportsRepository;
   final SettingsRepository settingsRepository;
   final AttachmentStorage attachmentStorage;
@@ -212,13 +218,14 @@ class BackendFactory {
           now: now,
           attachments: attachments,
         ),
+        leavesRepository: SqlConnectLeavesRepository(gateway: data),
         reportsRepository: SqlConnectReportsRepository(gateway: data),
         settingsRepository: FirestoreSettingsRepository(firestore: firestore),
         attachmentStorage: attachmentStorage,
       );
     }
 
-    return createMockRepositories();
+    return createMockRepositories(now: now);
   }
 
   /// Builds the mock bundle with the shared fixtures that the real backend
@@ -227,9 +234,13 @@ class BackendFactory {
   /// and members/branches repositories always agree.
   ///
   /// [delay] overrides the simulated latency (tests pass [Duration.zero]).
-  static BackendRepositories createMockRepositories({Duration? delay}) {
+  static BackendRepositories createMockRepositories({
+    Duration? delay,
+    Now? now,
+  }) {
     final accessDataSource = MockAccessDataSource();
     final organizationsDataSource = MockPlatformOrganizationsDataSource();
+    final leavesDataSource = MockLeavesDataSource(now: now);
     final organizationMembersRepository = MockOrganizationMembersRepository(
       accessDataSource: accessDataSource,
     );
@@ -271,6 +282,11 @@ class BackendFactory {
       returnsRepository: delay == null
           ? MockReturnsRepository()
           : MockReturnsRepository(delay: delay),
+      leavesRepository: MockLeavesRepository(
+        leavesDataSource,
+        now: now,
+        delay: delay ?? const Duration(milliseconds: 140),
+      ),
       reportsRepository: delay == null
           ? MockReportsRepository()
           : MockReportsRepository(delay: delay),

@@ -89,6 +89,10 @@ export const ORGANIZATION_DELETE_STEPS: ReadonlyArray<{
     sql: `DELETE FROM return_record WHERE organization_id = $1`,
   },
   {
+    name: "leave requests",
+    sql: `DELETE FROM leave_request WHERE organization_id = $1`,
+  },
+  {
     name: "license history",
     sql: `DELETE FROM license_history WHERE organization_id = $1`,
   },

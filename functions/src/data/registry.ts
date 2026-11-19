@@ -2,6 +2,7 @@ import type { OperationRegistry } from "./operation";
 import { assetsOps } from "./ops/assets";
 import { branchesOps } from "./ops/branches";
 import { dashboardsOps } from "./ops/dashboards";
+import { leavesOps } from "./ops/leaves";
 import { licensePlanOps } from "./ops/licensePlans";
 import { membersOps } from "./ops/members";
 import { organizationLicenseOps } from "./ops/organizationLicenses";
@@ -15,6 +16,7 @@ export const operations: OperationRegistry = {
   ...assetsOps,
   ...membersOps,
   ...returnsOps,
+  ...leavesOps,
   ...dashboardsOps,
   ...licensePlanOps,
   ...organizationLicenseOps,
