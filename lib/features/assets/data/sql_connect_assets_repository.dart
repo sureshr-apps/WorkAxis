@@ -31,6 +31,7 @@ class SqlConnectAssetsRepository implements AssetsRepository {
         );
       }
       vars['branchId'] = branchId;
+      vars['activeBranchId'] = branchId;
     }
     final data = await gateway.call(operation, vars);
     final rows = data['employeeAssets'];
