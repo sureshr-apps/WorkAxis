@@ -447,6 +447,23 @@ The instance is a shared `db-f1-micro`, so keep `DB_POOL_MAX` at 3 and
 
 `updateUserAccount` accepts `email: null` to clear a real email alias, matching phone clearing. SQL member/assignment edits are atomic; Auth/alias compensation and durable identity jobs handle cross-store failures. Identity jobs and leases are server-only, contain no passwords, and serialize edits/retries for each UID. `reconcileIdentitySync` runs every minute with delayed first attempt and retry backoff.
 
+## Employee assets
+
+Apply `functions/db/migrations/004_employee_assets.sql` before deploying the
+asset screen and callable operations. Assets are stored in PostgreSQL and linked
+to one organization, branch, and employee membership. Asset tags are unique
+within an organization.
+
+- `ListMyEmployeeAssets` resolves the signed-in Employee's membership from the
+  authenticated UID and returns only that employee's assets.
+- `ListOrganizationEmployeeAssets` is limited to the signed-in Organization
+  Admin's organization.
+- `ListBranchEmployeeAssets` requires a Branch Manager's assigned active branch
+  and returns assets for employees currently assigned to that outlet.
+- `SaveEmployeeAsset` and `DeleteEmployeeAsset` allow Organization Admins in
+  their organization and Branch Managers only for employees and assets within
+  the selected outlet. Employee accounts are read-only.
+
 Run the SQL-facing tests locally (they use an in-memory `FakeDb`, no database
 or emulator needed) from the repository root:
 

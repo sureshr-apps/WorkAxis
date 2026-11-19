@@ -10,6 +10,7 @@ import 'package:workaxis/features/access/presentation/controllers/branch_context
 import 'package:workaxis/features/access/presentation/screens/access_verification_screen.dart';
 import 'package:workaxis/features/access/presentation/screens/branch_selection_screen.dart';
 import 'package:workaxis/features/access/presentation/screens/no_branch_assigned_screen.dart';
+import 'package:workaxis/features/assets/presentation/screens/assets_screen.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:workaxis/features/authentication/presentation/screens/sign_in_screen.dart';
@@ -299,6 +300,10 @@ GoRouter createAppRouter({
             ],
           ),
           GoRoute(
+            path: AppRoutes.orgAdminAssets,
+            builder: (context, state) => const AssetsScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.orgAdminAttendance,
             builder: (context, state) => const AttendanceOperationsScreen(),
             routes: [
@@ -392,6 +397,10 @@ GoRouter createAppRouter({
                 ],
               ),
             ],
+          ),
+          GoRoute(
+            path: AppRoutes.branchManagerAssets,
+            builder: (context, state) => const AssetsScreen(),
           ),
           GoRoute(
             path: AppRoutes.branchManagerAttendance,
@@ -498,6 +507,10 @@ GoRouter createAppRouter({
           GoRoute(
             path: AppRoutes.employeeProfile,
             builder: (context, state) => const EmployeeProfileScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.employeeAssets,
+            builder: (context, state) => const AssetsScreen(),
           ),
         ],
       ),

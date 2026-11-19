@@ -136,9 +136,6 @@ class MemberDetailsView extends StatelessWidget {
             label: 'Monthly Salary',
             value: '₹${member.salary!.toStringAsFixed(0)}',
           ),
-        if (member.assetDetails != null && member.assetDetails!.isNotEmpty)
-          _Detail(label: 'Assigned Assets', value: member.assetDetails!),
-
         _Detail(
           label: 'Branches',
           value: branchNames.isEmpty ? 'None' : branchNames.join(', '),

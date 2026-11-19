@@ -11,6 +11,7 @@ import 'package:workaxis/core/session/session_scoped.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/attendance/presentation/controllers/attendance_controller.dart';
+import 'package:workaxis/features/assets/presentation/controllers/assets_controller.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:workaxis/features/branch_dashboard/presentation/controllers/branch_dashboard_controller.dart';
 import 'package:workaxis/features/branches/presentation/controllers/branch_management_controller.dart';
@@ -58,6 +59,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
   late final EmployeeHomeController _employeeController;
   late final BranchManagementController _branchManagementController;
   late final OrganizationMembersController _organizationMembersController;
+  late final AssetsController _assetsController;
   late final AttendanceController _attendanceController;
   late final ReturnsController _returnsController;
   late final ReportsController _reportsController;
@@ -103,6 +105,10 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
     _organizationMembersController = OrganizationMembersController(
       repository: repos.organizationMembersRepository,
     );
+    _assetsController = AssetsController(
+      repository: repos.assetsRepository,
+      membersRepository: repos.organizationMembersRepository,
+    );
     _attendanceController = AttendanceController(
       repository: repos.attendanceRepository,
     );
@@ -117,6 +123,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
       _attendanceController,
       _returnsController,
       _organizationMembersController,
+      _assetsController,
       _reportsController,
     ];
     _sessionController = SessionController(
@@ -164,6 +171,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
     _employeeController.dispose();
     _branchManagementController.dispose();
     _organizationMembersController.dispose();
+    _assetsController.dispose();
     _attendanceController.dispose();
     _returnsController.dispose();
     _reportsController.dispose();
@@ -215,6 +223,9 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
         ),
         ChangeNotifierProvider<OrganizationMembersController>.value(
           value: _organizationMembersController,
+        ),
+        ChangeNotifierProvider<AssetsController>.value(
+          value: _assetsController,
         ),
         ChangeNotifierProvider<AttendanceController>.value(
           value: _attendanceController,

@@ -62,6 +62,12 @@ abstract final class RoleDestinations {
       route: AppRoutes.orgAdminEmployees,
     ),
     AppNavDestination(
+      label: 'Assets',
+      icon: Icons.inventory_2_outlined,
+      selectedIcon: Icons.inventory_2,
+      route: AppRoutes.orgAdminAssets,
+    ),
+    AppNavDestination(
       label: 'Attendance',
       icon: Icons.event_available_outlined,
       selectedIcon: Icons.event_available,
@@ -101,6 +107,12 @@ abstract final class RoleDestinations {
       route: AppRoutes.branchManagerEmployees,
     ),
     AppNavDestination(
+      label: 'Assets',
+      icon: Icons.inventory_2_outlined,
+      selectedIcon: Icons.inventory_2,
+      route: AppRoutes.branchManagerAssets,
+    ),
+    AppNavDestination(
       label: 'Attendance',
       icon: Icons.access_time_outlined,
       selectedIcon: Icons.access_time_filled,
@@ -138,6 +150,12 @@ abstract final class RoleDestinations {
       icon: Icons.assignment_return_outlined,
       selectedIcon: Icons.assignment_return,
       route: AppRoutes.employeeReturns,
+    ),
+    AppNavDestination(
+      label: 'Assets',
+      icon: Icons.inventory_2_outlined,
+      selectedIcon: Icons.inventory_2,
+      route: AppRoutes.employeeAssets,
     ),
     AppNavDestination(
       label: 'Profile',

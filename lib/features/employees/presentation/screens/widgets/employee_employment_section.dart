@@ -9,12 +9,11 @@ import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/employees/domain/models/member_field.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/member_form_feedback.dart';
 
-/// Form section managing employment terms and asset allocations:
+/// Form section managing employment terms:
 /// - Designation (e.g., Billing Executive, Cashier, Store Associate)
 /// - Monthly Salary (INR)
 /// - Joining Date (DatePicker)
 /// - Relieving Date (Optional DatePicker)
-/// - Issued Asset Details
 class EmployeeEmploymentSection extends StatelessWidget {
   const EmployeeEmploymentSection({
     super.key,
@@ -24,7 +23,7 @@ class EmployeeEmploymentSection extends StatelessWidget {
     required this.onJoiningDateChanged,
     required this.relievingDate,
     required this.onRelievingDateChanged,
-    required this.assetsController,
+    this.assetsController,
     this.feedback = MemberFormFeedback.none,
   });
 
@@ -34,7 +33,9 @@ class EmployeeEmploymentSection extends StatelessWidget {
   final ValueChanged<DateTime?> onJoiningDateChanged;
   final DateTime? relievingDate;
   final ValueChanged<DateTime?> onRelievingDateChanged;
-  final TextEditingController assetsController;
+
+  /// Accepted for legacy callers; asset assignments are managed elsewhere.
+  final TextEditingController? assetsController;
   final MemberFormFeedback feedback;
 
   static final _dateFormat = DateFormat('dd MMM yyyy');
@@ -87,7 +88,7 @@ class EmployeeEmploymentSection extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Role designation, service tenure dates, salary and issued company assets.',
+          'Role designation, service tenure dates, and compensation.',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.onSurfaceVariant,
           ),
@@ -167,21 +168,6 @@ class EmployeeEmploymentSection extends StatelessWidget {
               ),
             ),
           ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        // Asset Details
-        AppTextField(
-          controller: assetsController,
-          label: feedback.label(
-            'Issued Asset Details',
-            MemberField.assetDetails,
-          ),
-          errorText: feedback.errorFor(MemberField.assetDetails),
-          hintText: 'e.g. Samsung Galaxy A14, ID Badge #042, Store Keys, Apron',
-          minLines: 2,
-          maxLines: 4,
-          prefixIcon: const Icon(Icons.inventory_2_outlined, size: 20),
         ),
       ],
     );

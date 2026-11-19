@@ -21,10 +21,31 @@ class UserProfileMenu extends StatelessWidget {
   final bool showNameAndRole;
   final VoidCallback onSignOut;
 
-  bool get _hasName => userName != null && userName!.isNotEmpty;
+  String? get _displayName {
+    final name = userName?.trim();
+    if (name == null || name.isEmpty) return null;
+
+    final role = roleLabel?.trim();
+    if (role != null &&
+        role.isNotEmpty &&
+        name.toLowerCase() == role.toLowerCase()) {
+      return role;
+    }
+    return name;
+  }
+
+  String? get _displayRole {
+    final role = roleLabel?.trim();
+    if (role == null || role.isEmpty) return null;
+
+    return _displayName?.toLowerCase() == role.toLowerCase() ? null : role;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final displayName = _displayName;
+    final displayRole = _displayRole;
+
     return PopupMenuButton<String>(
       tooltip: 'User Profile & Actions',
       offset: const Offset(0, 48),
@@ -36,23 +57,23 @@ class UserProfileMenu extends StatelessWidget {
         if (value == 'sign_out') onSignOut();
       },
       itemBuilder: (context) => [
-        if (_hasName) ...[
+        if (displayName != null) ...[
           PopupMenuItem<String>(
             enabled: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  userName!,
+                  displayName,
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                     color: AppColors.onSurface,
                   ),
                 ),
-                if (roleLabel != null)
+                if (displayRole != null)
                   Text(
-                    roleLabel!,
+                    displayRole,
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       color: AppColors.secondary,
@@ -97,7 +118,7 @@ class UserProfileMenu extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.end,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              if (showNameAndRole && _hasName) ...[
+              if (showNameAndRole && displayName != null) ...[
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 150),
                   child: Column(
@@ -105,7 +126,7 @@ class UserProfileMenu extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        userName!,
+                        displayName,
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -115,9 +136,9 @@ class UserProfileMenu extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                       ),
-                      if (roleLabel != null)
+                      if (displayRole != null)
                         Text(
-                          roleLabel!,
+                          displayRole,
                           style: GoogleFonts.inter(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,

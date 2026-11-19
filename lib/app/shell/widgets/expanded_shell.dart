@@ -49,6 +49,7 @@ class ExpandedShell extends StatelessWidget {
                   destinations: destinations,
                   selectedIndex: selectedIndex,
                   onDestinationSelected: onDestinationSelected,
+                  onSignOut: () => context.read<SessionController>().signOut(),
                   role: user?.role,
                   organizationName: accessContext?.organization?.name,
                   activeBranch: activeBranch,

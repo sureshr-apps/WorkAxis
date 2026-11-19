@@ -6,6 +6,7 @@ import 'package:workaxis/app/shell/widgets/org_scope_card.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/features/access/domain/models/active_branch_context.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
@@ -16,6 +17,7 @@ class ShellSidebar extends StatelessWidget {
     required this.destinations,
     required this.selectedIndex,
     required this.onDestinationSelected,
+    required this.onSignOut,
     this.role,
     this.organizationName,
     this.activeBranch,
@@ -25,6 +27,7 @@ class ShellSidebar extends StatelessWidget {
   final List<AppNavDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
+  final VoidCallback onSignOut;
   final UserRole? role;
   final String? organizationName;
   final ActiveBranchContext? activeBranch;
@@ -74,7 +77,18 @@ class ShellSidebar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const Divider(height: 1, color: AppColors.kpiBorder),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: AppButton.outlined(
+                text: 'Sign Out',
+                onPressed: onSignOut,
+                iconData: Icons.logout,
+              ),
+            ),
+          ),
         ],
       ),
     );

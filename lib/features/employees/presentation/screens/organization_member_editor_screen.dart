@@ -46,7 +46,7 @@ import 'package:workaxis/features/employees/presentation/screens/widgets/work_ho
 /// 13. Salary
 /// 14. Status
 /// 15. Shift details (daily work hours & shift window)
-/// 16. Asset Details
+/// Asset assignments are managed from the Assets workspace.
 class OrganizationMemberEditorScreen extends StatefulWidget {
   const OrganizationMemberEditorScreen({
     super.key,
@@ -105,7 +105,6 @@ class _OrganizationMemberEditorScreenState
   // Employment & Terms
   late final TextEditingController _designation;
   late final TextEditingController _salary;
-  late final TextEditingController _assets;
   DateTime? _joiningDate;
   DateTime? _relievingDate;
   late AccountStatus _status;
@@ -172,7 +171,6 @@ class _OrganizationMemberEditorScreenState
     _salary = TextEditingController(
       text: member?.salary != null ? member!.salary!.toStringAsFixed(0) : '',
     );
-    _assets = TextEditingController(text: member?.assetDetails ?? '');
     // New accounts default to today; an existing account keeps (or clears) its own.
     _joiningDate = member == null ? DateTime.now() : member.joiningDate;
     _relievingDate = member?.relievingDate;
@@ -205,7 +203,6 @@ class _OrganizationMemberEditorScreenState
     _address.dispose();
     _designation.dispose();
     _salary.dispose();
-    _assets.dispose();
     super.dispose();
   }
 
@@ -423,7 +420,6 @@ class _OrganizationMemberEditorScreenState
         EmployeeEmploymentSection(
           designationController: _designation,
           salaryController: _salary,
-          assetsController: _assets,
           joiningDate: _joiningDate,
           onJoiningDateChanged: (date) => setState(() => _joiningDate = date),
           relievingDate: _relievingDate,
@@ -706,7 +702,9 @@ class _OrganizationMemberEditorScreenState
       joiningDate: _joiningDate,
       relievingDate: _relievingDate,
       salary: salary,
-      assetDetails: _assets.text.trim().isNotEmpty ? _assets.text.trim() : null,
+      // Preserve legacy free-text data without treating it as the source of
+      // truth for asset assignments.
+      assetDetails: widget.member?.assetDetails,
     );
 
     setState(() {

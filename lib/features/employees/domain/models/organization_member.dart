@@ -80,7 +80,8 @@ class OrganizationMember {
   /// Monthly salary/CTC.
   final double? salary;
 
-  /// Description of company assets assigned to employee.
+  /// Legacy free-text data preserved for compatibility. Structured asset
+  /// assignments are stored by the Assets feature.
   final String? assetDetails;
 
   String get initials {

@@ -21,6 +21,9 @@ import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/data/sql_connect_access_repository.dart';
 import 'package:workaxis/features/access/domain/repositories/access_repository.dart';
+import 'package:workaxis/features/assets/data/mock_assets_repository.dart';
+import 'package:workaxis/features/assets/data/sql_connect_assets_repository.dart';
+import 'package:workaxis/features/assets/domain/repositories/assets_repository.dart';
 import 'package:workaxis/features/attendance/data/attendance_day_counter.dart';
 import 'package:workaxis/features/attendance/data/firestore_attendance_repository.dart';
 import 'package:workaxis/features/attendance/data/mock_attendance_repository.dart';
@@ -81,6 +84,7 @@ class BackendRepositories {
     required this.employeeRepository,
     required this.branchManagementRepository,
     required this.organizationMembersRepository,
+    required this.assetsRepository,
     required this.attendanceRepository,
     required this.returnsRepository,
     required this.reportsRepository,
@@ -99,6 +103,7 @@ class BackendRepositories {
   final EmployeeHomeRepository employeeRepository;
   final BranchManagementRepository branchManagementRepository;
   final OrganizationMembersRepository organizationMembersRepository;
+  final AssetsRepository assetsRepository;
   final AttendanceRepository attendanceRepository;
   final ReturnsRepository returnsRepository;
   final ReportsRepository reportsRepository;
@@ -196,6 +201,7 @@ class BackendFactory {
           firestore: firestore,
           attachments: attachments,
         ),
+        assetsRepository: SqlConnectAssetsRepository(gateway: data),
         attendanceRepository: FirestoreAttendanceRepository(
           functions: callables,
           firestore: firestore,
@@ -224,6 +230,9 @@ class BackendFactory {
   static BackendRepositories createMockRepositories({Duration? delay}) {
     final accessDataSource = MockAccessDataSource();
     final organizationsDataSource = MockPlatformOrganizationsDataSource();
+    final organizationMembersRepository = MockOrganizationMembersRepository(
+      accessDataSource: accessDataSource,
+    );
 
     return BackendRepositories(
       authRepository: delay == null
@@ -254,8 +263,9 @@ class BackendFactory {
       branchManagementRepository: MockBranchManagementRepository(
         accessDataSource: accessDataSource,
       ),
-      organizationMembersRepository: MockOrganizationMembersRepository(
-        accessDataSource: accessDataSource,
+      organizationMembersRepository: organizationMembersRepository,
+      assetsRepository: MockAssetsRepository(
+        members: organizationMembersRepository,
       ),
       attendanceRepository: MockAttendanceRepository(),
       returnsRepository: delay == null
