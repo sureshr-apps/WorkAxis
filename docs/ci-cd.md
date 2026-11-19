@@ -14,8 +14,9 @@ except the Cloud SQL connection used for migrations (see "Database access").
 | `play-store.yml` | manual run from `main` | by default validates Play access and a signed App Bundle without publishing; when validation-only is unchecked, runs `verify.yml` and publishes to the configured testing track. It cannot publish to `production` |
 
 Deployments are serialised (`concurrency: deploy-main`) and are never cancelled
-midway. Android `versionCode` uses GitHub's repository-wide run ID so Android
-builds launched from different workflows do not reuse per-workflow run numbers.
+midway. Android `versionCode` is `(GitHub run ID % 2,000,000,000) + 100`: this
+avoids per-workflow run-number collisions and stays below Android's 2.1 billion
+limit. The sequence increments until the modulo interval wraps.
 Play closed-test uploads are serialized and Fastlane is pinned to `2.242.0`.
 
 Where to find the Android build: the run's page, section Artifacts,

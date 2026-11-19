@@ -48,16 +48,16 @@ jobs:
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
 
-      # Use the repository-wide GitHub run ID instead of a workflow run number.
-      # run_number resets per workflow, which can otherwise create duplicate
-      # Play version codes when multiple workflows build an App Bundle.
+      # Use the repository-wide run ID to avoid per-workflow run-number clashes,
+      # but keep the result below Android's 2.1B version-code limit. The modulo
+      # interval is large enough that it will not wrap during normal use.
       - name: Build
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          BUILD_NUMBER="$GITHUB_RUN_ID"
+          BUILD_NUMBER=$((GITHUB_RUN_ID % 2000000000 + 100))
           flutter build ${{ inputs.target }} --release \
             --dart-define=BACKEND_MODE=firebase \
             --build-number="$BUILD_NUMBER"
