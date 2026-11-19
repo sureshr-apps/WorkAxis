@@ -105,8 +105,6 @@ void main() {
       expect(find.textContaining(text), findsNothing, reason: text);
     }
 
-    await tester.tap(find.byIcon(Icons.person));
-    await tester.pumpAndSettle();
     expect(find.text('Sign Out'), findsOneWidget);
     for (final text in placeholders) {
       expect(find.textContaining(text), findsNothing, reason: text);
@@ -153,8 +151,6 @@ void main() {
     await access.resolveAccess(auth.currentUser!);
     await pumpShell(tester, size: const Size(1280, 800));
 
-    await tester.tap(find.byIcon(Icons.person));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('Sign Out'));
     await tester.pumpAndSettle();
 

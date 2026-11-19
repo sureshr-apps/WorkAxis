@@ -57,6 +57,7 @@ class TopConsoleBar extends StatelessWidget {
               userName: userName,
               roleLabel: role?.displayName,
               showNameAndRole: true,
+              showSignOut: false,
               onSignOut: onSignOut,
             ),
           ),

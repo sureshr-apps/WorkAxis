@@ -11,13 +11,15 @@ except the Cloud SQL connection used for migrations (see "Database access").
 | `verify.yml` | called by the two below | `dart format` check, `flutter analyze`, `flutter test`; functions `npm test` (tsc + node tests); Firestore rules tests in the emulator |
 | `ci.yml` | pull requests and pushes to any branch except `main` | runs `verify.yml` only. No secrets, nothing deployed |
 | `deploy.yml` | push to `main`, or run manually | `changes` detects what the push touched. `verify` always runs (analysis, two test shards, functions, rules). Then only what changed deploys: database migrations (`functions/db`), functions + Firestore/Storage rules and indexes (`functions/`, rules, indexes), web build and Hosting (`lib/`, `web/`, `assets/`, `pubspec`, `firebase.json`). The signed Android APK (`app` changes) is built from `android.yml` and does not wait for `verify`. The App Bundle is built only on a manual run, for Play uploads. A manual run deploys everything |
-| `play-store.yml` | manual run from `main` | by default validates Play access and a signed App Bundle without publishing; when validation-only is unchecked, runs `verify.yml` and publishes to the configured testing track. It cannot publish to `production` |
+| `play-store.yml` | Android app changes pushed to `main`, or manual run | on a push, runs `verify.yml`, builds a signed App Bundle, and publishes it to the configured closed testing track. Manual runs default to validation-only; uncheck that option to publish. It cannot publish to `production` |
 
 Deployments are serialised (`concurrency: deploy-main`) and are never cancelled
 midway. Android `versionCode` is `(GitHub run ID % 2,000,000,000) + 100`: this
 avoids per-workflow run-number collisions and stays below Android's 2.1 billion
 limit. The sequence increments until the modulo interval wraps.
-Play closed-test uploads are serialized and Fastlane is pinned to `2.242.0`.
+Play closed-test uploads are serialized and Fastlane is pinned to `2.242.0`. The
+Play workflow triggers for changes under `android/`, `assets/`, `lib/`,
+`pubspec.yaml`, or `pubspec.lock` (and for edits to its own workflow file).
 
 Where to find the Android build: the run's page, section Artifacts,
 `workaxis-apk-<run number>` (APK for direct install). The App Bundle (AAB, for the
@@ -66,7 +68,9 @@ service-account key JSON or Play credential secret. Before its first run:
    `PLAY_CLOSED_TEST_TRACK` to the track identifier returned by the Play
    Developer API. Closed testing tracks have custom identifiers; the console
    title (for example, `Alpha-1`) is not guaranteed to be the API identifier.
-5. Run **Actions → Publish Android closed test → Run workflow** on `main`.
+5. For automatic publishing, push Android app changes to `main`. To validate or
+   publish manually, run **Actions → Publish Android closed test → Run workflow**
+   on `main`.
 
 In the GitHub Actions form, **Validate Play access and the bundle without
 publishing** is checked by default. This uses Fastlane's `validate_only` mode to

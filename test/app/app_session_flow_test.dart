@@ -41,9 +41,7 @@ void main() {
     );
     expect(appContext().read<AccessController>().hasResolved, isTrue);
 
-    // Sign out through the profile menu.
-    await tester.tap(find.byIcon(Icons.person));
-    await tester.pumpAndSettle();
+    // Sign out through the expanded sidebar action.
     await tester.tap(find.text('Sign Out'));
     await tester.pumpAndSettle();
 
