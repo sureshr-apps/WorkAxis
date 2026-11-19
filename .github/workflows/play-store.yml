@@ -6,7 +6,6 @@ on:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/play-store.yml"
       - "android/**"
       - "assets/**"
       - "lib/**"
@@ -61,6 +60,54 @@ jobs:
             exit 1
           fi
 
+  version:
+    name: Select closed-test version
+    needs: [guard]
+    runs-on: ubuntu-latest
+    outputs:
+      build_name: ${{ steps.select.outputs.build_name }}
+      tag_name: ${{ steps.select.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select version
+        id: select
+        env:
+          VALIDATE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_version="$(sed -nE 's/^version:[[:space:]]*((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))(\+[0-9]+)?[[:space:]]*$/\1/p' pubspec.yaml | head -n 1)"
+          if [[ ! "$base_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "pubspec.yaml must define a numeric three-part base version, got: $base_version" >&2
+            exit 1
+          fi
+
+          latest_tag_version="$(git tag --list 'play-v*' \
+            | sed -nE 's/^play-v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$/\1/p' \
+            | sort -V \
+            | tail -n 1)"
+          current_version="$base_version"
+          if [[ -n "$latest_tag_version" ]]; then
+            current_version="$(printf '%s\n%s\n' "$base_version" "$latest_tag_version" | sort -V | tail -n 1)"
+          fi
+
+          if [[ "$VALIDATE_ONLY" == "true" ]]; then
+            build_name="$current_version"
+            tag_name=""
+          else
+            IFS='.' read -r major minor patch <<< "$current_version"
+            build_name="$major.$minor.$((patch + 1))"
+            tag_name="play-v$build_name"
+          fi
+
+          echo "build_name=$build_name" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+          echo "Selected Android version name: $build_name"
+
   verify:
     needs: [guard]
     if: ${{ !inputs.validate_only }}
@@ -68,16 +115,17 @@ jobs:
 
   android-bundle:
     name: Build signed App Bundle
-    needs: [guard]
+    needs: [guard, version]
     uses: ./.github/workflows/android.yml
     with:
       target: appbundle
+      build_name: ${{ needs.version.outputs.build_name }}
     secrets: inherit
 
   publish:
     name: Validate or upload to Google Play testing track
-    needs: [guard, verify, android-bundle]
-    if: ${{ always() && needs.guard.result == 'success' && needs.android-bundle.result == 'success' && (inputs.validate_only || needs.verify.result == 'success') }}
+    needs: [guard, version, verify, android-bundle]
+    if: ${{ always() && needs.guard.result == 'success' && needs.version.result == 'success' && needs.android-bundle.result == 'success' && (inputs.validate_only || needs.verify.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -121,3 +169,23 @@ jobs:
             --skip_upload_images true \
             --skip_upload_screenshots true \
             --validate_only "$VALIDATE_ONLY"
+
+  record-version:
+    name: Record successfully published version
+    needs: [version, publish]
+    if: ${{ needs.publish.result == 'success' && !inputs.validate_only }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create version tag
+        env:
+          PLAY_BUILD_NAME: ${{ needs.version.outputs.build_name }}
+          PLAY_VERSION_TAG: ${{ needs.version.outputs.tag_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$PLAY_VERSION_TAG" -m "WorkAxis closed test $PLAY_BUILD_NAME"
+          git push origin "$PLAY_VERSION_TAG"
