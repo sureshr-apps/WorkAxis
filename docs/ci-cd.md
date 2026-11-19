@@ -11,14 +11,18 @@ except the Cloud SQL connection used for migrations (see "Database access").
 | `verify.yml` | called by the two below | `dart format` check, `flutter analyze`, `flutter test`; functions `npm test` (tsc + node tests); Firestore rules tests in the emulator |
 | `ci.yml` | pull requests and pushes to any branch except `main` | runs `verify.yml` only. No secrets, nothing deployed |
 | `deploy.yml` | push to `main`, or run manually | `changes` detects what the push touched. `verify` always runs (analysis, two test shards, functions, rules). Then only what changed deploys: database migrations (`functions/db`), functions + Firestore/Storage rules and indexes (`functions/`, rules, indexes), web build and Hosting (`lib/`, `web/`, `assets/`, `pubspec`, `firebase.json`). The signed Android APK (`app` changes) is built from `android.yml` and does not wait for `verify`. The App Bundle is built only on a manual run, for Play uploads. A manual run deploys everything |
+| `play-store.yml` | manual run from `main` | runs `verify.yml`, builds a signed App Bundle, and publishes it to the configured Google Play testing track. It cannot publish to `production` |
 
 Deployments are serialised (`concurrency: deploy-main`) and are never cancelled
-midway. The Android `versionCode` is `100 + the workflow run number`, so each build
-installs over the previous one (the offset keeps it above early hand-made builds).
+midway. Android `versionCode` uses GitHub's repository-wide run ID so Android
+builds launched from different workflows do not reuse per-workflow run numbers.
+Play closed-test uploads are serialized and Fastlane is pinned to `2.242.0`.
 
 Where to find the Android build: the run's page, section Artifacts,
 `workaxis-apk-<run number>` (APK for direct install). The App Bundle (AAB, for the
-Play Store) is `workaxis-appbundle-<run number>` and exists only for manual runs. Artifacts are kept for 30 days. The repository is public, so artifacts
+Play Store) from `deploy.yml` is `workaxis-appbundle-<run number>` and exists only
+for manual runs. The Play publishing workflow downloads its own run's bundle and
+uploads it directly. Artifacts are kept for 30 days. The repository is public, so artifacts
 are visible to any signed-in GitHub user; add a private release channel (for
 example Firebase App Distribution) before sharing builds more widely.
 
@@ -41,6 +45,32 @@ Repository variables (Settings, Secrets and variables, Actions, Variables):
 
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`
 - `GCP_DEPLOYER_SERVICE_ACCOUNT`
+- `GCP_PLAY_PUBLISHER_SERVICE_ACCOUNT` (dedicated account used only for Play publishing)
+- `PLAY_CLOSED_TEST_TRACK` (exact Google Play Developer API identifier of the closed testing track, not necessarily its display title)
+
+### Google Play closed-test publishing
+
+The Play publishing workflow uses Workload Identity Federation, so it needs no
+service-account key JSON or Play credential secret. Before its first run:
+
+1. Enable the Google Play Developer API in the linked `workaxis-app` Google
+   Cloud project. Create a dedicated service account for Play publishing.
+2. Allow the existing `github` Workload Identity Pool/provider to impersonate
+   that service account. Keep the provider's current repository and `main`
+   branch restrictions.
+3. In Play Console, add the service-account email under **Users and
+   permissions** and grant the WorkAxis app the **Release apps to testing
+   tracks** permission. Production release permission is not required.
+4. Set `GCP_PLAY_PUBLISHER_SERVICE_ACCOUNT` to that service-account email and
+   `PLAY_CLOSED_TEST_TRACK` to the track identifier returned by the Play
+   Developer API. Closed testing tracks have custom identifiers; the console
+   title (for example, `Alpha-1`) is not guaranteed to be the API identifier.
+5. Run **Actions → Publish Android closed test → Run workflow** on `main`.
+
+The workflow uploads a completed release to that testing track after verification
+passes. Play review or account-app setup requirements can still need action in
+Play Console; the upload workflow does not fill the app-access declaration or
+release notes.
 
 ## Database access for migrations
 

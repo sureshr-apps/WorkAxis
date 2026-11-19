@@ -1,0 +1,104 @@
+# Manually publish a signed App Bundle to the configured Google Play testing
+# track. Publishing is limited to main and requires the normal CI checks.
+name: Publish Android closed test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-closed-test
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Validate Play release settings
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PLAY_CLOSED_TEST_TRACK: ${{ vars.PLAY_CLOSED_TEST_TRACK }}
+      GCP_PLAY_PUBLISHER_SERVICE_ACCOUNT: ${{ vars.GCP_PLAY_PUBLISHER_SERVICE_ACCOUNT }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+    steps:
+      - name: Require main and a closed testing track
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Run this workflow from the main branch."
+            exit 1
+          fi
+          if [[ -z "$PLAY_CLOSED_TEST_TRACK" ]]; then
+            echo "Set the PLAY_CLOSED_TEST_TRACK repository variable to the Google Play API track identifier."
+            exit 1
+          fi
+          if [[ "$PLAY_CLOSED_TEST_TRACK" == "production" ]]; then
+            echo "This workflow only publishes to a testing track; production is not allowed."
+            exit 1
+          fi
+          if [[ -z "$GCP_PLAY_PUBLISHER_SERVICE_ACCOUNT" ]]; then
+            echo "Set the GCP_PLAY_PUBLISHER_SERVICE_ACCOUNT repository variable."
+            exit 1
+          fi
+          if [[ -z "$GCP_WORKLOAD_IDENTITY_PROVIDER" ]]; then
+            echo "Set the GCP_WORKLOAD_IDENTITY_PROVIDER repository variable."
+            exit 1
+          fi
+
+  verify:
+    needs: [guard]
+    uses: ./.github/workflows/verify.yml
+
+  android-bundle:
+    name: Build signed App Bundle
+    needs: [verify]
+    uses: ./.github/workflows/android.yml
+    with:
+      target: appbundle
+    secrets: inherit
+
+  publish:
+    name: Upload to Google Play testing track
+    needs: [verify, android-bundle]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PLAY_CLOSED_TEST_TRACK: ${{ vars.PLAY_CLOSED_TEST_TRACK }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download signed App Bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: workaxis-appbundle-${{ github.run_number }}
+          path: build/app/outputs/bundle/release
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_PLAY_PUBLISHER_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - name: Install Fastlane
+        run: gem install fastlane --version 2.242.0 --no-document
+
+      - name: Publish closed test release
+        run: |
+          fastlane supply \
+            --json_key "$GOOGLE_APPLICATION_CREDENTIALS" \
+            --aab build/app/outputs/bundle/release/app-release.aab \
+            --package_name com.sureshrapps.workaxis \
+            --track "$PLAY_CLOSED_TEST_TRACK" \
+            --release_status completed \
+            --skip_upload_metadata true \
+            --skip_upload_changelogs true \
+            --skip_upload_images true \
+            --skip_upload_screenshots true
