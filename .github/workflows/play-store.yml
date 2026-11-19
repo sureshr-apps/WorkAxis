@@ -1,8 +1,17 @@
-# Manually publish a signed App Bundle to the configured Google Play testing
-# track. Publishing requires the normal CI checks; validation-only is the default.
+# Publish a signed App Bundle to the configured Google Play closed testing track
+# when Android app changes reach main. Manual validation remains available.
 name: Publish Android closed test
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/play-store.yml"
+      - "android/**"
+      - "assets/**"
+      - "lib/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
   workflow_dispatch:
     inputs:
       validate_only:
@@ -76,7 +85,7 @@ jobs:
       id-token: write
     env:
       PLAY_CLOSED_TEST_TRACK: ${{ vars.PLAY_CLOSED_TEST_TRACK }}
-      VALIDATE_ONLY: ${{ inputs.validate_only }}
+      VALIDATE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_only }}
     steps:
       - uses: actions/checkout@v4
 
