@@ -11,7 +11,7 @@ except the Cloud SQL connection used for migrations (see "Database access").
 | `verify.yml` | called by the two below | `dart format` check, `flutter analyze`, `flutter test`; functions `npm test` (tsc + node tests); Firestore rules tests in the emulator |
 | `ci.yml` | pull requests and pushes to any branch except `main` | runs `verify.yml` only. No secrets, nothing deployed |
 | `deploy.yml` | push to `main`, or run manually | `changes` detects what the push touched. `verify` always runs (analysis, two test shards, functions, rules). Then only what changed deploys: database migrations (`functions/db`), functions + Firestore/Storage rules and indexes (`functions/`, rules, indexes), web build and Hosting (`lib/`, `web/`, `assets/`, `pubspec`, `firebase.json`). The signed Android APK (`app` changes) is built from `android.yml` and does not wait for `verify`. The App Bundle is built only on a manual run, for Play uploads. A manual run deploys everything |
-| `play-store.yml` | Android app changes pushed to `main`, or manual run | on a push, runs `verify.yml`, builds a signed App Bundle, and publishes it to the configured closed testing track. Manual runs default to validation-only; uncheck that option to publish. It cannot publish to `production` |
+| `play-store.yml` | Android app changes pushed to `main`, or manual run | on an app change, runs `verify.yml`, selects the next patch version, builds a signed App Bundle, and publishes it to the configured closed testing track. Manual runs default to validation-only; uncheck that option to publish. It cannot publish to `production` |
 
 Deployments are serialised (`concurrency: deploy-main`) and are never cancelled
 midway. Android `versionCode` is `(GitHub run ID % 2,000,000,000) + 100`: this
@@ -71,6 +71,14 @@ service-account key JSON or Play credential secret. Before its first run:
 5. For automatic publishing, push Android app changes to `main`. To validate or
    publish manually, run **Actions → Publish Android closed test → Run workflow**
    on `main`.
+
+Closed-test version names increment automatically from the `pubspec.yaml` base
+version. After a successful upload, the workflow creates a `play-vX.Y.Z` Git
+tag for that release. The next published bundle increments its patch component
+(for example, `1.0.1`, then `1.0.2`). The first release uses the pubspec base as
+the starting point, so the current `1.0.0` base produces `1.0.1`. Validation-only
+runs reuse the latest version and do not create a tag. Android `versionCode`
+continues to use the unique GitHub run ID calculation above.
 
 In the GitHub Actions form, **Validate Play access and the bundle without
 publishing** is checked by default. This uses Fastlane's `validate_only` mode to

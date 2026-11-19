@@ -10,6 +10,11 @@ on:
         description: "flutter build target: apk or appbundle"
         required: true
         type: string
+      build_name:
+        description: "Optional Android version name, for example 1.0.1"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -53,14 +58,30 @@ jobs:
       # interval is large enough that it will not wrap during normal use.
       - name: Build
         env:
+          TARGET: ${{ inputs.target }}
+          BUILD_NAME: ${{ inputs.build_name }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          if [[ "$TARGET" != "apk" && "$TARGET" != "appbundle" ]]; then
+            echo "Unsupported Android build target: $TARGET" >&2
+            exit 1
+          fi
+
           BUILD_NUMBER=$((GITHUB_RUN_ID % 2000000000 + 100))
-          flutter build ${{ inputs.target }} --release \
+          BUILD_ARGS=(--build-number="$BUILD_NUMBER")
+          if [[ -n "$BUILD_NAME" ]]; then
+            if [[ ! "$BUILD_NAME" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              echo "Build name must be a three-part numeric version, got: $BUILD_NAME" >&2
+              exit 1
+            fi
+            BUILD_ARGS+=(--build-name="$BUILD_NAME")
+          fi
+
+          flutter build "$TARGET" --release \
             --dart-define=BACKEND_MODE=firebase \
-            --build-number="$BUILD_NUMBER"
+            "${BUILD_ARGS[@]}"
 
       - name: Remove keystore
         if: always()
