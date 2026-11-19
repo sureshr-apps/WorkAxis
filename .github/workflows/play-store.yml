@@ -1,9 +1,15 @@
 # Manually publish a signed App Bundle to the configured Google Play testing
-# track. Publishing is limited to main and requires the normal CI checks.
+# track. Publishing requires the normal CI checks; validation-only is the default.
 name: Publish Android closed test
 
 on:
   workflow_dispatch:
+    inputs:
+      validate_only:
+        description: Validate Play access and the bundle without publishing
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -48,19 +54,21 @@ jobs:
 
   verify:
     needs: [guard]
+    if: ${{ !inputs.validate_only }}
     uses: ./.github/workflows/verify.yml
 
   android-bundle:
     name: Build signed App Bundle
-    needs: [verify]
+    needs: [guard]
     uses: ./.github/workflows/android.yml
     with:
       target: appbundle
     secrets: inherit
 
   publish:
-    name: Upload to Google Play testing track
-    needs: [verify, android-bundle]
+    name: Validate or upload to Google Play testing track
+    needs: [guard, verify, android-bundle]
+    if: ${{ always() && needs.guard.result == 'success' && needs.android-bundle.result == 'success' && (inputs.validate_only || needs.verify.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -68,6 +76,7 @@ jobs:
       id-token: write
     env:
       PLAY_CLOSED_TEST_TRACK: ${{ vars.PLAY_CLOSED_TEST_TRACK }}
+      VALIDATE_ONLY: ${{ inputs.validate_only }}
     steps:
       - uses: actions/checkout@v4
 
@@ -90,7 +99,7 @@ jobs:
       - name: Install Fastlane
         run: gem install fastlane --version 2.242.0 --no-document
 
-      - name: Publish closed test release
+      - name: Validate or publish closed test release
         run: |
           fastlane supply \
             --json_key "$GOOGLE_APPLICATION_CREDENTIALS" \
@@ -101,4 +110,5 @@ jobs:
             --skip_upload_metadata true \
             --skip_upload_changelogs true \
             --skip_upload_images true \
-            --skip_upload_screenshots true
+            --skip_upload_screenshots true \
+            --validate_only "$VALIDATE_ONLY"

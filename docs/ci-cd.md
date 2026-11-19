@@ -11,7 +11,7 @@ except the Cloud SQL connection used for migrations (see "Database access").
 | `verify.yml` | called by the two below | `dart format` check, `flutter analyze`, `flutter test`; functions `npm test` (tsc + node tests); Firestore rules tests in the emulator |
 | `ci.yml` | pull requests and pushes to any branch except `main` | runs `verify.yml` only. No secrets, nothing deployed |
 | `deploy.yml` | push to `main`, or run manually | `changes` detects what the push touched. `verify` always runs (analysis, two test shards, functions, rules). Then only what changed deploys: database migrations (`functions/db`), functions + Firestore/Storage rules and indexes (`functions/`, rules, indexes), web build and Hosting (`lib/`, `web/`, `assets/`, `pubspec`, `firebase.json`). The signed Android APK (`app` changes) is built from `android.yml` and does not wait for `verify`. The App Bundle is built only on a manual run, for Play uploads. A manual run deploys everything |
-| `play-store.yml` | manual run from `main` | runs `verify.yml`, builds a signed App Bundle, and publishes it to the configured Google Play testing track. It cannot publish to `production` |
+| `play-store.yml` | manual run from `main` | by default validates Play access and a signed App Bundle without publishing; when validation-only is unchecked, runs `verify.yml` and publishes to the configured testing track. It cannot publish to `production` |
 
 Deployments are serialised (`concurrency: deploy-main`) and are never cancelled
 midway. Android `versionCode` uses GitHub's repository-wide run ID so Android
@@ -67,10 +67,13 @@ service-account key JSON or Play credential secret. Before its first run:
    title (for example, `Alpha-1`) is not guaranteed to be the API identifier.
 5. Run **Actions → Publish Android closed test → Run workflow** on `main`.
 
-The workflow uploads a completed release to that testing track after verification
-passes. Play review or account-app setup requirements can still need action in
-Play Console; the upload workflow does not fill the app-access declaration or
-release notes.
+In the GitHub Actions form, **Validate Play access and the bundle without
+publishing** is checked by default. This uses Fastlane's `validate_only` mode to
+validate the Play edit without committing it; the AAB is uploaded to the
+temporary edit for validation. To publish, uncheck that option. Publishing runs
+only after verification passes. Play review or account-app setup requirements
+can still need action in Play Console; this workflow does not fill the
+app-access declaration or release notes.
 
 ## Database access for migrations
 
