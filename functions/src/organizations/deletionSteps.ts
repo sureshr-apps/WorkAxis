@@ -1,5 +1,6 @@
 import { getAuth } from "firebase-admin/auth";
 import { getStorage } from "firebase-admin/storage";
+import { attachmentsBucketName } from "../config";
 import { withIdentityLocks } from "../accounts/identityLocks";
 import { normalizeIdentity } from "../auth/aliasKeys";
 import { deleteProfile, releaseAliases } from "../firestore/userStore";
@@ -19,11 +20,6 @@ import {
 } from "./organizationDeletionFirestore";
 import { markOrganizationDeleting } from "./organizationLifecycle";
 import type { OrganizationDeleteSteps } from "./deletionWorkflow";
-
-/** Runtime-only setting, so plain process.env is enough (no deploy-time param). */
-export function attachmentsBucketName(): string {
-  return process.env.ATTACHMENTS_BUCKET || "workaxis-app-attachments";
-}
 
 async function deleteStorageObjects(organizationId: string): Promise<void> {
   await getStorage()

@@ -7,6 +7,7 @@ import { licensePlanOps } from "./ops/licensePlans";
 import { membersOps } from "./ops/members";
 import { organizationLicenseOps } from "./ops/organizationLicenses";
 import { organizationsOps } from "./ops/organizations";
+import { offSiteWorkOps } from "./ops/offSiteWork";
 import { returnsOps } from "./ops/returns";
 
 /** Every operation reachable through the `dataOp` callable, by name. */
@@ -17,6 +18,7 @@ export const operations: OperationRegistry = {
   ...membersOps,
   ...returnsOps,
   ...leavesOps,
+  ...offSiteWorkOps,
   ...dashboardsOps,
   ...licensePlanOps,
   ...organizationLicenseOps,

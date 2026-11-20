@@ -69,6 +69,7 @@ class FirestoreSettingsRepository implements SettingsRepository {
         'returnAlerts': settings.returnAlerts,
         'requireEmployeeAssetAcknowledgement':
             settings.requireEmployeeAssetAcknowledgement,
+        'requireAttendanceSelfie': settings.requireAttendanceSelfie,
         'operationsEmail': _blankToNull(settings.operationsEmail),
         'emergencyPhone': _blankToNull(settings.emergencyPhone),
         'updatedBy': access.user.id,
@@ -133,6 +134,8 @@ class FirestoreSettingsRepository implements SettingsRepository {
       requireEmployeeAssetAcknowledgement:
           data['requireEmployeeAssetAcknowledgement'] as bool? ??
           d.requireEmployeeAssetAcknowledgement,
+      requireAttendanceSelfie:
+          data['requireAttendanceSelfie'] as bool? ?? d.requireAttendanceSelfie,
       operationsEmail: data['operationsEmail'] as String?,
       emergencyPhone: data['emergencyPhone'] as String?,
     );

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
@@ -10,6 +12,7 @@ import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
+import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/presentation/controllers/employee_home_controller.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/active_geofence_card.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/attendance_summary_card.dart';
@@ -28,6 +31,8 @@ class EmployeeHomeScreen extends StatefulWidget {
 }
 
 class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
+  bool _isPreparingAttendanceAction = false;
+
   @override
   void initState() {
     super.initState();
@@ -131,7 +136,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           children: [
             HeroAttendanceCard(
               summary: summary,
-              isProcessing: controller.isActionProcessing,
+              isProcessing:
+                  controller.isActionProcessing || _isPreparingAttendanceAction,
               processingAction: controller.processingAction,
               onPrimaryAction: () => _handlePrimaryAction(controller),
               onCheckOut: () =>
@@ -190,18 +196,69 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     EmployeeHomeController controller, {
     bool checkOut = false,
   }) async {
-    final recorded = await (checkOut
-        ? controller.performCheckOut()
-        : controller.performNextAttendanceAction());
-    if (!mounted) return;
+    if (_isPreparingAttendanceAction || controller.isActionProcessing) return;
+    final action = checkOut
+        ? AttendanceAction.checkOut
+        : controller.summary?.currentStatus.nextAction;
+    if (action == null) return;
+
+    setState(() => _isPreparingAttendanceAction = true);
+    try {
+      final selfieRequired = await controller
+          .checkAttendanceSelfieRequirement();
+      if (!mounted) return;
+      if (selfieRequired == null) {
+        _showActionMessage(
+          controller.actionErrorMessage ??
+              'Attendance settings could not be checked. Try again.',
+        );
+        return;
+      }
+
+      String? selfieLocalPath;
+      if (selfieRequired) {
+        try {
+          final image = await ImagePicker().pickImage(
+            source: ImageSource.camera,
+            preferredCameraDevice: CameraDevice.front,
+            imageQuality: 85,
+            maxWidth: 1280,
+          );
+          if (!mounted) return;
+          if (image == null) {
+            _showActionMessage('Take a selfie to record this action.');
+            return;
+          }
+          selfieLocalPath = image.path;
+        } on PlatformException {
+          if (!mounted) return;
+          _showActionMessage(
+            'Camera access is required to record this attendance action.',
+          );
+          return;
+        }
+      }
+
+      final recorded = await controller.recordAttendanceAction(
+        action,
+        selfieLocalPath: selfieLocalPath,
+      );
+      if (!mounted) return;
+      _showActionMessage(
+        recorded
+            ? 'Attendance updated: ${controller.summary?.currentStatus.displayName}'
+            : (controller.actionErrorMessage ??
+                  'Attendance could not be recorded.'),
+      );
+    } finally {
+      if (mounted) setState(() => _isPreparingAttendanceAction = false);
+    }
+  }
+
+  void _showActionMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          recorded
-              ? 'Attendance updated: ${controller.summary?.currentStatus.displayName}'
-              : (controller.actionErrorMessage ??
-                    'Attendance could not be recorded.'),
-        ),
+        content: Text(message),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
       ),

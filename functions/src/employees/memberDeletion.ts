@@ -3,19 +3,21 @@ import { getDb } from "../db";
 
 /** Shown when an account has history; deleting it would orphan or lose that history. */
 export const MEMBER_HAS_HISTORY_MESSAGE =
-  "This account has attendance, return or leave records, so it cannot be deleted. Suspend it instead.";
+  "This account has attendance, return, leave or off-site work records, so it cannot be deleted. Suspend it instead.";
 
 /** Whether anything an account has done still exists. */
 export interface MemberHistory {
   returnCount: number;
   hasAttendance: boolean;
   leaveRequestCount?: number;
+  offSiteWorkCount?: number;
 }
 
 /** Why the account cannot be deleted, or null when no history refers to it. Pure. */
 export function memberDeletionBlocker(history: MemberHistory): string | null {
   return history.returnCount > 0 ||
     (history.leaveRequestCount ?? 0) > 0 ||
+    (history.offSiteWorkCount ?? 0) > 0 ||
     history.hasAttendance
     ? MEMBER_HAS_HISTORY_MESSAGE
     : null;
@@ -32,6 +34,10 @@ export async function loadMemberHistory(authUid: string): Promise<MemberHistory>
     `SELECT count(*)::int AS n FROM leave_request WHERE applicant_uid = $1`,
     [authUid],
   );
+  const [offSiteWork] = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM off_site_work_assignment WHERE employee_uid = $1`,
+    [authUid],
+  );
   const firestore = getFirestore();
   const entries = await firestore
     .collection("attendance_entries")
@@ -46,6 +52,7 @@ export async function loadMemberHistory(authUid: string): Promise<MemberHistory>
   return {
     returnCount: returns?.n ?? 0,
     leaveRequestCount: leaves?.n ?? 0,
+    offSiteWorkCount: offSiteWork?.n ?? 0,
     hasAttendance: !entries.empty || !batches.empty,
   };
 }

@@ -15,10 +15,16 @@ abstract interface class EmployeeHomeRepository {
     bool requestLocationPermission = false,
   });
 
+  /// Whether the organization currently requires a new selfie for punches.
+  /// Employees retrieve this value through a trusted callable rather than
+  /// reading the full organization settings document.
+  Future<bool> isAttendanceSelfieRequired({required UserAccessContext access});
+
   /// Records an attendance action and returns the refreshed summary. The
   /// server stamps the time and validates the geofence.
   Future<EmployeeHomeSummary> recordAttendanceAction({
     required UserAccessContext access,
     required AttendanceAction action,
+    String? selfieLocalPath,
   });
 }

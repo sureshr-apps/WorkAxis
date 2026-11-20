@@ -40,6 +40,11 @@ export const RUNTIME_SERVICE_ACCOUNT = defineString("RUNTIME_SERVICE_ACCOUNT", {
  */
 export const MAX_INSTANCES = defineInt("MAX_INSTANCES", { default: 5 });
 
+/** Firebase Storage bucket used by attachment uploads. */
+export function attachmentsBucketName(): string {
+  return process.env.ATTACHMENTS_BUCKET || "workaxis-app-attachments";
+}
+
 export const callableOptions = {
   region: REGION,
   enforceAppCheck: ENFORCE_APP_CHECK,

@@ -5,6 +5,7 @@ import 'package:workaxis/core/backend/callable_functions.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
+import 'package:workaxis/core/storage/attachment_storage.dart';
 import 'package:workaxis/core/time/business_time.dart';
 import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
@@ -23,12 +24,13 @@ import 'package:workaxis/features/employee_home/domain/services/attendance_locat
 /// Reads the employee's own entry for today from `attendance_entries`
 /// (queried by uid, as `firestore.rules` require). Punches are recorded only
 /// through the `recordAttendancePunch` callable: the server stamps the time,
-/// computes the business day and validates the geofence, so the client sends
-/// just the action, the branch and its GPS fix.
+/// computes the business day and validates the geofence. When required, the
+/// client uploads a selfie and sends its storage reference with the punch.
 class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   FirestoreEmployeeHomeRepository({
     FirebaseFirestore? firestore,
     CallableFunctions? functions,
+    this._selfieStorage,
     AttendanceLocationProvider? locationProvider,
     Now? now,
   }) : _customFirestore = firestore,
@@ -39,9 +41,11 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
 
   /// Name of the punch callable (see `docs/backend-api.md`).
   static const String punchCallable = 'recordAttendancePunch';
+  static const String selfiePolicyCallable = 'getAttendanceSelfiePolicy';
 
   final FirebaseFirestore? _customFirestore;
   final CallableFunctions? _customFunctions;
+  final ScopedAttachmentStorage? _selfieStorage;
   final AttendanceLocationProvider _location;
   final Now _now;
 
@@ -69,21 +73,60 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   }
 
   @override
+  Future<bool> isAttendanceSelfieRequired({
+    required UserAccessContext access,
+  }) async {
+    try {
+      _requireEmployee(access);
+      final response = await _functions.call(selfiePolicyCallable);
+      final required = response['requireAttendanceSelfie'];
+      if (required is! bool) {
+        throw const DatabaseException(
+          'Attendance selfie policy returned an invalid value.',
+          userMessage: 'Attendance settings could not be checked. Try again before recording attendance.',
+        );
+      }
+      return required;
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
   Future<EmployeeHomeSummary> recordAttendanceAction({
     required UserAccessContext access,
     required AttendanceAction action,
+    String? selfieLocalPath,
   }) async {
     try {
       _requireEmployee(access);
       final branch = _punchBranch(access);
+      String? selfiePath;
+      if (selfieLocalPath != null) {
+        final storage = _selfieStorage;
+        if (storage == null) {
+          throw const DatabaseException(
+            'Attendance selfie storage is not configured.',
+            userMessage: 'A selfie could not be saved. Please try again or contact your administrator.',
+          );
+        }
+        selfiePath = await storage.uploadScoped(
+          localPath: selfieLocalPath,
+          organizationId: access.organization!.id,
+          kind: AttachmentKind.attendanceSelfie,
+          pathSegments: [branch.id, access.user.id],
+        );
+      }
       final fix = await _location.currentLocation();
-      await _functions.call(punchCallable, {
+      final payload = <String, dynamic>{
         'kind': _kind(action),
         'branchId': branch.id,
         'latitude': fix.latitude,
         'longitude': fix.longitude,
         'accuracyMeters': fix.accuracyMeters,
-      });
+      };
+      if (selfiePath != null) payload['selfiePath'] = selfiePath;
+      await _functions.call(punchCallable, payload);
       return await getEmployeeHomeSummary(access: access);
     } catch (e, st) {
       throw mapBackendError(e, st);

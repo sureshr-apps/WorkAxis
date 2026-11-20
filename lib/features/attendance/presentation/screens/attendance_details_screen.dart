@@ -9,6 +9,7 @@ import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 import 'package:workaxis/features/attendance/presentation/attendance_presentation.dart';
+import 'package:workaxis/features/attendance/presentation/widgets/attendance_selfie_evidence.dart';
 import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
 /// Read-only page with the details of one attendance record. [onClose] is
@@ -93,6 +94,8 @@ class AttendanceDetailsScreen extends StatelessWidget {
                       ],
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.md),
+                  AttendanceSelfieEvidence(entry: entry),
                   const SizedBox(height: AppSpacing.xxl),
                 ],
               ),

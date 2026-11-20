@@ -3,6 +3,8 @@ enum AttachmentKind {
   profilePhoto('profile-photos'),
   aadhaarDocument('aadhaar-documents'),
   returnBill('return-bills'),
+  attendanceSelfie('attendance-selfies'),
+  offSiteWorkEvidence('off-site-work-evidence'),
   organizationLogo('logo', maxMegabytes: 2);
 
   const AttachmentKind(this.folder, {this.maxMegabytes = 5});
@@ -32,6 +34,19 @@ abstract interface class AttachmentStorage {
 
   /// Returns a URL that can be loaded for the persisted [reference].
   Future<String> resolveUrl(String reference);
+}
+
+/// Attachment storage that supports feature-owned subdirectories.
+///
+/// Attendance selfies use branch and employee path segments so Storage rules
+/// can enforce Branch Manager scope without exposing other organization files.
+abstract interface class ScopedAttachmentStorage implements AttachmentStorage {
+  Future<String> uploadScoped({
+    required String localPath,
+    required String organizationId,
+    required AttachmentKind kind,
+    required List<String> pathSegments,
+  });
 }
 
 /// Classifies the strings that image fields can hold.

@@ -6,10 +6,11 @@ import 'package:workaxis/core/storage/attachment_storage.dart';
 
 /// Cloud Storage implementation of [AttachmentStorage].
 ///
-/// Objects live at `organizations/{organizationId}/{kind folder}/{uuid}.{ext}`.
-/// Only that path is persisted; `storage.rules` decide who may read it, and a
-/// short-lived download URL is requested at display time.
-class FirebaseAttachmentStorage implements AttachmentStorage {
+/// Objects live at `organizations/{organizationId}/{kind folder}/
+/// {optional scoped path segments}/{uuid}.{ext}`. Only that path is persisted;
+/// `storage.rules` decide who may read it, and a download URL is requested at
+/// display time.
+class FirebaseAttachmentStorage implements ScopedAttachmentStorage {
   FirebaseAttachmentStorage({required this.bucket, FirebaseStorage? storage})
     : _injected = storage;
 
@@ -27,7 +28,24 @@ class FirebaseAttachmentStorage implements AttachmentStorage {
     required String localPath,
     required String organizationId,
     required AttachmentKind kind,
+  }) => uploadScoped(
+    localPath: localPath,
+    organizationId: organizationId,
+    kind: kind,
+    pathSegments: const [],
+  );
+
+  @override
+  Future<String> uploadScoped({
+    required String localPath,
+    required String organizationId,
+    required AttachmentKind kind,
+    required List<String> pathSegments,
   }) async {
+    final segmentPattern = RegExp(r'^[A-Za-z0-9_-]{1,128}$');
+    if (pathSegments.any((segment) => !segmentPattern.hasMatch(segment))) {
+      throw ValidationException('The attachment location is invalid.');
+    }
     // XFile reads both file paths (Android) and blob URLs (web).
     final file = XFile(localPath);
     final bytes = await file.readAsBytes();
@@ -40,9 +58,10 @@ class FirebaseAttachmentStorage implements AttachmentStorage {
         (file.mimeType ?? '').toLowerCase() == 'image/png' ||
         localPath.toLowerCase().endsWith('.png');
     final extension = isPng ? 'png' : 'jpg';
+    final scopedPath = pathSegments.isEmpty ? '' : '${pathSegments.join('/')}/';
     final path =
-        '${AttachmentReference.storagePrefix}$organizationId/${kind.folder}/'
-        '${RequestIds.uuidV4()}.$extension';
+        '${AttachmentReference.storagePrefix}$organizationId/'
+        '${kind.folder}/$scopedPath${RequestIds.uuidV4()}.$extension';
     await _storage
         .ref(path)
         .putData(

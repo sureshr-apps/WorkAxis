@@ -77,7 +77,8 @@ Errors are `HttpsError` codes; internal details are never returned:
 | `deleteOrganizationMember` | `{targetUid}` | `{uid, deleted}` | Employees and branch managers; by their organization admin or branch manager; refused while the account has returns, leave, or attendance |
 | `setOrganizationStatus` | `{organizationId, status}` | `{organizationId, status, membersUpdated, membersFailed}` | platform roles |
 | `resolveLoginIdentifier` | `{identifier}` | `{email}` | unauthenticated |
-| `recordAttendancePunch` | `{kind: 'checkIn'\|'checkOut'\|'breakStart'\|'breakEnd', branchId, latitude, longitude, accuracyMeters}` | `{entryId, kind, recordedAt, workDate, distanceMeters}` | Employee |
+| `getAttendanceSelfiePolicy` | `{}` | `{requireAttendanceSelfie}` | Employee |
+| `recordAttendancePunch` | `{kind: 'checkIn'\|'checkOut'\|'breakStart'\|'breakEnd', branchId, latitude, longitude, accuracyMeters, selfiePath?}` | `{entryId, kind, recordedAt, workDate, distanceMeters}` | Employee |
 | `createKioskPairingToken` | `{branchId}` | `{token, expiresAt, branchId}` | Org Admin of the org, Branch Manager of the branch |
 
 #### Optional employee profile fields: omit vs null
@@ -119,8 +120,15 @@ Details:
   <= 100 m (`MAX_GPS_ACCURACY_METERS`), and rejects branches with no (or 0,0)
   coordinates. Writes `attendance_entries/{uid}_{workDate}` (one per employee
   per day) and enforces the check-in/break/check-out state machine.
-  Entries gain `breaks: [{startAt, endAt?}]`. Status is always `present`
-  (no shift schedule exists in the data model yet).
+  Entries gain `breaks: [{startAt, endAt?, startSelfiePath?, endSelfiePath?}]`
+  and optional `checkInSelfiePath` / `checkOutSelfiePath`. When the
+  organization's `requireAttendanceSelfie` setting is enabled, every
+  self-service punch must include a recently uploaded selfie in the dedicated
+  attachment bucket, under that employee's own organization/branch path. The
+  server checks ownership, image type, size and upload age before recording the
+  storage reference. `getAttendanceSelfiePolicy` returns only this boolean to
+  the employee; it does not expose the rest of organization settings. Status is
+  always `present` (no shift schedule exists in the data model yet).
 - `createKioskPairingToken`: 256-bit random token, 10-minute expiry, only the
   SHA-256 is stored in `kiosk_pairing_tokens/{hash}`. Redemption by the kiosk
   device is not implemented yet.
@@ -360,9 +368,15 @@ Changing, modifying or renewing an organization without a license is
   roles; create/update only by the Org Admin of that org. Field whitelist
   (`organizationId == orgId`, `geofenceRadiusMeters` int 10-5000,
   `gracePeriodMinutes` int 0-120, booleans `allowBreaks`/`requireGeolocation`/
-  `dailyDigest`/`returnAlerts`, optional `operationsEmail`/`emergencyPhone`
-  strings), `updatedBy == request.auth.uid`, `updatedAt == request.time`. No
-  list, no delete.
+  `dailyDigest`/`returnAlerts`, optional `requireEmployeeAssetAcknowledgement`
+  and `requireAttendanceSelfie` booleans, optional `operationsEmail`/
+  `emergencyPhone` strings), `updatedBy == request.auth.uid`,
+  `updatedAt == request.time`. No list, no delete.
+- Attendance selfie objects use
+  `organizations/{orgId}/attendance-selfies/{branchId}/{employeeUid}/{uuid}.{jpg|png}`.
+  An employee can upload only to their own UID and assigned branch. Reads are
+  limited to the organization's admins, Branch Managers assigned to that
+  branch, and the employee whose UID is in the path; objects are immutable.
 - `platform_settings/global`: `get` by platform roles; write only by
   `platformOwner` (`sessionTimeoutMinutes` int 5-1440, `maxLoginAttempts` int
   3-10, booleans `maintenanceMode`/`enforceStrongPasswords`, same audit
@@ -508,6 +522,37 @@ unique within an organization.
   serial number and notes. Older assignments have no reliable assignment audit
   data, so their assigner and time remain null. Existing acknowledgment names
   are backfilled only when the recorded UID matches the current employee.
+
+## Off-site work
+
+Apply `functions/db/migrations/008_off_site_work.sql` before deploying the
+off-site work data operations. Assignment metadata and immutable milestone
+events are authoritative in PostgreSQL. The feature is separate from attendance:
+the operations do not read or update attendance state, and they do not apply an
+attendance geofence.
+
+| Operation | Who may call | Key vars | Response keys |
+| --- | --- | --- | --- |
+| `ListOffSiteWorkAssignments` | Employee (own); Org Admin (own org); Branch Manager (active assigned branch) | `limit`, `offset`; Branch Manager also sends `activeBranchId`; Org Admin may filter with `branchId` | `offSiteWorkAssignments`, `total` |
+| `GetOffSiteWorkAssignment` | Employee (own); Org Admin (own org); Branch Manager (active assigned branch) | `id`; Branch Manager also sends `activeBranchId` | `offSiteWorkAssignment` including `events` |
+| `CreateOffSiteWorkAssignment` | Org Admin (own org); Branch Manager (active assigned branch) | `branchId`, `employeeMemberId`, `title`, `destination`; optional `activeBranchId` for Branch Manager, `instructions`, `dueAt` (ISO-8601), `reference`, `requiredEvidenceDescription` | `offSiteWorkAssignment` (with initial `assigned` event) |
+| `RecordOffSiteWorkMilestone` | Employee assigned to the work | `id`, `eventType` (`started`, `arrived`, `completed`, `unable_to_complete`, `returned_to_branch`), `latitude`, `longitude`, `accuracyMeters`; optional `note`, `evidenceReferences` | `offSiteWorkAssignment` with updated status and event history |
+
+The server permits only `assigned → started → arrived → completed` or
+`unable_to_complete → returned_to_branch`. Each milestone needs a valid GPS fix;
+the server timestamps the event. Failure requires a reason. If an assignment
+specifies completion evidence, completion needs a note/reference or at least one
+photo. Up to five JPEG/PNG evidence objects (each under 5 MB) are accepted.
+Photo references must point to objects under
+`organizations/{orgId}/off-site-work-evidence/{branchId}/{employeeUid}/{assignmentId}/`
+and are checked against the assignment before being persisted. Assignment
+creation stores an `assigned` event without a location. No operation records
+route locations.
+
+Organization deletion includes the new table in its ordered SQL cleanup.
+Branch/member deletion blockers preserve assignments with history. Deploy the
+database migration before the functions that reference these tables; this
+feature has not been deployed or migrated by local implementation work.
 
 Run the SQL-facing tests locally (they use an in-memory `FakeDb`, no database
 or emulator needed) from the repository root:

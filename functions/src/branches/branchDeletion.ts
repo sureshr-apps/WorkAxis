@@ -3,7 +3,7 @@ import { getDb } from "../db";
 
 /** Shown when a branch still has people or history; deleting it would orphan or lose them. */
 export const BRANCH_HAS_HISTORY_MESSAGE =
-  "This branch has employees, returns, leave or attendance records, so it cannot be deleted. Suspend it instead.";
+  "This branch has employees, returns, leave, off-site work or attendance records, so it cannot be deleted. Suspend it instead.";
 
 /** Firestore collections that record attendance for a branch. */
 const ATTENDANCE_COLLECTIONS = ["attendance_entries", "group_attendance_batches"] as const;
@@ -40,10 +40,15 @@ export async function branchDeletionBlocker(
     `SELECT count(*)::int AS n FROM leave_request WHERE branch_id = $1`,
     [branchId],
   );
+  const [offSiteWork] = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM off_site_work_assignment WHERE branch_id = $1`,
+    [branchId],
+  );
   if (
     (assignments?.n ?? 0) > 0 ||
     (returns?.n ?? 0) > 0 ||
     (leaves?.n ?? 0) > 0
+    || (offSiteWork?.n ?? 0) > 0
   ) return BRANCH_HAS_HISTORY_MESSAGE;
   if (await attendanceHistory(branchId)) return BRANCH_HAS_HISTORY_MESSAGE;
   return null;

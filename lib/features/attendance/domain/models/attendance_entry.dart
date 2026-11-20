@@ -16,6 +16,9 @@ class AttendanceEntry {
     required this.reviewStatus,
     this.checkInAt,
     this.checkOutAt,
+    this.checkInSelfiePath,
+    this.checkOutSelfiePath,
+    this.breaks = const [],
     this.note,
     this.kioskEntry = false,
   });
@@ -30,6 +33,9 @@ class AttendanceEntry {
   final AttendanceReviewStatus reviewStatus;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
+  final String? checkInSelfiePath;
+  final String? checkOutSelfiePath;
+  final List<AttendanceBreakRecord> breaks;
   final String? note;
   final bool kioskEntry;
 
@@ -45,7 +51,24 @@ class AttendanceEntry {
         reviewStatus: reviewStatus ?? this.reviewStatus,
         checkInAt: checkInAt,
         checkOutAt: checkOutAt,
+        checkInSelfiePath: checkInSelfiePath,
+        checkOutSelfiePath: checkOutSelfiePath,
+        breaks: breaks,
         note: note,
         kioskEntry: kioskEntry,
       );
+}
+
+class AttendanceBreakRecord {
+  const AttendanceBreakRecord({
+    required this.startAt,
+    this.endAt,
+    this.startSelfiePath,
+    this.endSelfiePath,
+  });
+
+  final DateTime startAt;
+  final DateTime? endAt;
+  final String? startSelfiePath;
+  final String? endSelfiePath;
 }
