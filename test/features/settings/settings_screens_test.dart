@@ -174,6 +174,8 @@ void main() {
 
       expect(find.text('Organization Settings'), findsOneWidget);
       expect(find.text('Organization Information'), findsOneWidget);
+      expect(find.text('Asset Management'), findsOneWidget);
+      expect(find.text('Require employee acknowledgment'), findsOneWidget);
       expect(find.text('Attendance & Geofencing Policies'), findsOneWidget);
       expect(find.text('Automated Operational Digests'), findsOneWidget);
       expect(find.text('Save Changes'), findsOneWidget);
@@ -208,13 +210,37 @@ void main() {
       await tester.tap(saveButton);
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('Organization operational settings saved.'),
-        findsOneWidget,
-      );
+      expect(find.text('Organization settings saved.'), findsOneWidget);
       expect(
         settingsController.organizationSettings,
         OrganizationSettings.defaults,
+      );
+    });
+
+    testWidgets('asset acknowledgment policy is saved by organization admin', (
+      tester,
+    ) async {
+      await pumpOrganizationSettingsScreen(tester, width: 1200);
+
+      final toggle = find.byWidgetPredicate(
+        (widget) =>
+            widget is SwitchListTile &&
+            (widget.title as Text?)?.data == 'Require employee acknowledgment',
+      );
+      expect(toggle, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+
+      await tester.tap(find.text('Save Changes'));
+      await tester.pumpAndSettle();
+
+      expect(
+        settingsController
+            .organizationSettings
+            ?.requireEmployeeAssetAcknowledgement,
+        isTrue,
       );
     });
   });

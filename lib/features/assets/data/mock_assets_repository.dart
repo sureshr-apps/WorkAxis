@@ -7,9 +7,15 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 
 class MockAssetsRepository implements AssetsRepository {
-  MockAssetsRepository({required this.members});
+  MockAssetsRepository({
+    required this.members,
+    this.isAcknowledgementRequired = _acknowledgementDisabled,
+  });
 
   final OrganizationMembersRepository members;
+  final bool Function(String organizationId) isAcknowledgementRequired;
+
+  static bool _acknowledgementDisabled(String _) => false;
 
   final List<EmployeeAsset> _assets = [
     const EmployeeAsset(
@@ -167,6 +173,25 @@ class MockAssetsRepository implements AssetsRepository {
     }
 
     final branch = access.assignedBranches.where((item) => item.id == branchId);
+    final existingIndex = _assets.indexWhere((item) => item.id == asset.id);
+    final EmployeeAsset? existing = existingIndex == -1
+        ? null
+        : _assets[existingIndex];
+    final assignmentChanged =
+        existing == null ||
+        existing.employeeId != employee.id ||
+        existing.branchId != branchId ||
+        (existing.status == AssetStatus.returned &&
+            asset.status == AssetStatus.assigned);
+    final clearPendingAcknowledgement =
+        asset.status == AssetStatus.returned &&
+        existing?.acknowledgementStatus == AssetAcknowledgementStatus.pending;
+    final resetAcknowledgement =
+        assignmentChanged || clearPendingAcknowledgement;
+    final acknowledgementRequired = resetAcknowledgement
+        ? asset.status != AssetStatus.returned &&
+              isAcknowledgementRequired(orgId)
+        : existing.acknowledgementRequired;
     final saved = EmployeeAsset(
       id: asset.id.isEmpty ? 'asset-${_nextId++}' : asset.id,
       organizationId: orgId,
@@ -179,9 +204,14 @@ class MockAssetsRepository implements AssetsRepository {
       assetTag: asset.assetTag.trim(),
       serialNumber: _optional(asset.serialNumber),
       status: asset.status,
+      acknowledgementRequired: acknowledgementRequired,
+      acknowledgementStatus: resetAcknowledgement
+          ? (acknowledgementRequired
+                ? AssetAcknowledgementStatus.pending
+                : AssetAcknowledgementStatus.notRequired)
+          : existing.acknowledgementStatus,
       notes: _optional(asset.notes),
     );
-    final existingIndex = _assets.indexWhere((item) => item.id == saved.id);
     if (existingIndex == -1) {
       _assets.add(saved);
     } else {
@@ -191,6 +221,38 @@ class MockAssetsRepository implements AssetsRepository {
       _assets[existingIndex] = saved;
     }
     return saved;
+  }
+
+  @override
+  Future<EmployeeAsset> acknowledgeAsset({
+    required UserAccessContext access,
+    required String assetId,
+  }) async {
+    if (access.user.role != UserRole.employee) {
+      throw const AccessDeniedException();
+    }
+    final orgId = _requireOrganization(access);
+    final index = _assets.indexWhere(
+      (asset) =>
+          asset.id == assetId &&
+          asset.organizationId == orgId &&
+          asset.employeeId == access.user.id,
+    );
+    if (index == -1) throw const AccessDeniedException();
+    final asset = _assets[index];
+    if (asset.acknowledgementStatus ==
+        AssetAcknowledgementStatus.acknowledged) {
+      return asset;
+    }
+    if (!asset.acknowledgementRequired ||
+        asset.acknowledgementStatus != AssetAcknowledgementStatus.pending) {
+      throw ValidationException('This asset does not need acknowledgment.');
+    }
+    final acknowledged = asset.copyWith(
+      acknowledgementStatus: AssetAcknowledgementStatus.acknowledged,
+    );
+    _assets[index] = acknowledged;
+    return acknowledged;
   }
 
   @override

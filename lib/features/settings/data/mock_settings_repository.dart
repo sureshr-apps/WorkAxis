@@ -17,6 +17,11 @@ class MockSettingsRepository implements SettingsRepository {
   final Map<String, OrganizationSettings> _organizations = {};
   PlatformSettings _platform;
 
+  /// Internal feature policy lookup shared with mock asset assignments.
+  bool employeeAssetAcknowledgementRequired(String organizationId) =>
+      _organizations[organizationId]?.requireEmployeeAssetAcknowledgement ??
+      OrganizationSettings.defaults.requireEmployeeAssetAcknowledgement;
+
   Future<void> _latency() async {
     if (delay > Duration.zero) await Future<void>.delayed(delay);
   }

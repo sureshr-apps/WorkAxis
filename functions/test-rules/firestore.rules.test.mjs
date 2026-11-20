@@ -272,6 +272,7 @@ describe("settings", () => {
     requireGeolocation: true,
     dailyDigest: true,
     returnAlerts: true,
+    requireEmployeeAssetAcknowledgement: false,
     operationsEmail: null,
     emergencyPhone: "+919876543210",
     updatedBy: "orgAdmin",
@@ -325,6 +326,11 @@ describe("settings", () => {
     await assertFails(setDoc(ref(), orgSettings({ gracePeriodMinutes: 121 })));
     await assertFails(setDoc(ref(), orgSettings({ gracePeriodMinutes: -1 })));
     await assertFails(setDoc(ref(), orgSettings({ allowBreaks: "yes" })));
+    await assertFails(setDoc(ref(), orgSettings({ requireEmployeeAssetAcknowledgement: "yes" })));
+    await assertSucceeds(setDoc(ref(), orgSettings({ requireEmployeeAssetAcknowledgement: true })));
+    const legacySettings = orgSettings();
+    delete legacySettings.requireEmployeeAssetAcknowledgement;
+    await assertSucceeds(setDoc(ref(), legacySettings));
     await assertFails(setDoc(ref(), orgSettings({ updatedBy: "someoneElse" })));
     await assertFails(setDoc(ref(), orgSettings({ updatedAt: Timestamp.fromDate(new Date(0)) })));
     await assertSucceeds(setDoc(ref(), orgSettings({ geofenceRadiusMeters: 10, gracePeriodMinutes: 120 })));

@@ -20,6 +20,7 @@ const _org = OrganizationSettings(
   requireGeolocation: true,
   dailyDigest: false,
   returnAlerts: true,
+  requireEmployeeAssetAcknowledgement: true,
   operationsEmail: 'ops@acme.example',
   emergencyPhone: '+919876543210',
 );
@@ -149,6 +150,7 @@ void main() {
       expect(data['geofenceRadiusMeters'], 200);
       expect(data['organizationId'], 'org-acme');
       expect(data['updatedBy'], 'user-oa-01');
+      expect(data['requireEmployeeAssetAcknowledgement'], isTrue);
       expect(data['updatedAt'], isA<Timestamp>());
     });
 
@@ -176,6 +178,7 @@ void main() {
           loaded.gracePeriodMinutes,
           OrganizationSettings.defaults.gracePeriodMinutes,
         );
+        expect(loaded.requireEmployeeAssetAcknowledgement, isFalse);
       },
     );
   });

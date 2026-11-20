@@ -201,6 +201,8 @@ class _AssetsScreenState extends State<AssetsScreen> {
                     return EmployeeAssetCard(
                       asset: asset,
                       canEdit: canEdit,
+                      canAcknowledge: isEmployee,
+                      isAcknowledging: controller.isAcknowledging,
                       onEdit: canEdit
                           ? () => _openEditor(
                               access: access,
@@ -217,11 +219,23 @@ class _AssetsScreenState extends State<AssetsScreen> {
                               asset: asset,
                             )
                           : null,
+                      onAcknowledge:
+                          isEmployee &&
+                              asset.status != AssetStatus.returned &&
+                              asset.acknowledgementRequired &&
+                              asset.acknowledgementStatus ==
+                                  AssetAcknowledgementStatus.pending
+                          ? () => _confirmReceipt(
+                              access: access,
+                              controller: controller,
+                              asset: asset,
+                            )
+                          : null,
                     );
                   }, childCount: visibleAssets.length),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 440,
-                    mainAxisExtent: 236,
+                    mainAxisExtent: 280,
                     mainAxisSpacing: AppSpacing.md,
                     crossAxisSpacing: AppSpacing.md,
                   ),
@@ -308,6 +322,44 @@ class _AssetsScreenState extends State<AssetsScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text(controller.actionErrorMessage!)));
     }
+  }
+
+  Future<void> _confirmReceipt({
+    required UserAccessContext access,
+    required AssetsController controller,
+    required EmployeeAsset asset,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirm asset receipt?'),
+        content: Text(
+          'Confirm that you received ${asset.name} (${asset.assetTag}). '
+          'Your acknowledgment will be recorded.',
+        ),
+        actions: [
+          AppButton.outlined(
+            text: 'Cancel',
+            isFullWidth: false,
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+          ),
+          AppButton.primary(
+            text: 'Confirm receipt',
+            isFullWidth: false,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final acknowledged = await controller.acknowledgeAsset(access, asset);
+    if (!mounted) return;
+    final message = acknowledged
+        ? 'Receipt acknowledged for ${asset.name}.'
+        : (controller.actionErrorMessage ??
+              'The asset receipt could not be acknowledged.');
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

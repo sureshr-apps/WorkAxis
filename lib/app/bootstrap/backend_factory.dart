@@ -241,6 +241,9 @@ class BackendFactory {
     final accessDataSource = MockAccessDataSource();
     final organizationsDataSource = MockPlatformOrganizationsDataSource();
     final leavesDataSource = MockLeavesDataSource(now: now);
+    final settingsRepository = MockSettingsRepository(
+      delay: delay ?? const Duration(milliseconds: 150),
+    );
     final organizationMembersRepository = MockOrganizationMembersRepository(
       accessDataSource: accessDataSource,
     );
@@ -277,6 +280,8 @@ class BackendFactory {
       organizationMembersRepository: organizationMembersRepository,
       assetsRepository: MockAssetsRepository(
         members: organizationMembersRepository,
+        isAcknowledgementRequired:
+            settingsRepository.employeeAssetAcknowledgementRequired,
       ),
       attendanceRepository: MockAttendanceRepository(),
       returnsRepository: delay == null
@@ -290,9 +295,7 @@ class BackendFactory {
       reportsRepository: delay == null
           ? MockReportsRepository()
           : MockReportsRepository(delay: delay),
-      settingsRepository: delay == null
-          ? MockSettingsRepository()
-          : MockSettingsRepository(delay: delay),
+      settingsRepository: settingsRepository,
       attachmentStorage: const MockAttachmentStorage(),
     );
   }
