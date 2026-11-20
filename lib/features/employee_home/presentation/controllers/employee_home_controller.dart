@@ -22,6 +22,7 @@ class EmployeeHomeController extends ChangeNotifier
 
   final RequestGeneration _requests = RequestGeneration();
   final RequestGeneration _actionRequests = RequestGeneration();
+  final RequestGeneration _policyRequests = RequestGeneration();
   EmployeeHomeStatus _status = EmployeeHomeStatus.initial;
   EmployeeHomeSummary? _summary;
   String? _errorMessage;
@@ -102,16 +103,54 @@ class EmployeeHomeController extends ChangeNotifier
 
   /// Dispatches an attendance action to the repository and updates summary.
   /// Returns whether it was recorded; on failure [actionErrorMessage] is set.
-  Future<bool> recordAttendanceAction(AttendanceAction action) async {
+  Future<bool> recordAttendanceAction(
+    AttendanceAction action, {
+    String? selfieLocalPath,
+  }) async {
     final access = _access;
     if (_summary == null || access == null || _isActionProcessing) {
       return false;
     }
     return _runAction(
-      () => repository.recordAttendanceAction(access: access, action: action),
+      () => repository.recordAttendanceAction(
+        access: access,
+        action: action,
+        selfieLocalPath: selfieLocalPath,
+      ),
       fallback: 'The attendance action could not be recorded. Try again.',
       action: action,
     );
+  }
+
+  /// Reads the current organization policy immediately before a punch. A null
+  /// result means the policy could not be verified.
+  Future<bool?> checkAttendanceSelfieRequirement() async {
+    final access = _access;
+    if (access == null) {
+      _actionErrorMessage = 'Sign in again before recording attendance.';
+      notifyListeners();
+      return null;
+    }
+
+    final token = _policyRequests.next();
+    _actionErrorMessage = null;
+    try {
+      final required = await repository.isAttendanceSelfieRequired(
+        access: access,
+      );
+      if (!_policyRequests.isCurrent(token) || isDisposed) return null;
+      return required;
+    } catch (e, st) {
+      if (!_policyRequests.isCurrent(token) || isDisposed) return null;
+      _actionErrorMessage = userMessageFor(
+        e,
+        st,
+        fallback: 'Attendance settings could not be checked. Try again.',
+      );
+      return null;
+    } finally {
+      if (_policyRequests.isCurrent(token) && !isDisposed) notifyListeners();
+    }
   }
 
   /// Triggers the next suggested attendance action based on current state.
@@ -198,6 +237,7 @@ class EmployeeHomeController extends ChangeNotifier
   void reset() {
     _requests.invalidate();
     _actionRequests.invalidate();
+    _policyRequests.invalidate();
     _status = EmployeeHomeStatus.initial;
     _summary = null;
     _syncTicker();

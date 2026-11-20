@@ -1,4 +1,5 @@
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { onCall } from "firebase-functions/v2/https";
 import { resolveActor } from "../auth/actor";
 import {
@@ -9,14 +10,22 @@ import {
   type DayState,
   type PunchKind,
 } from "../attendance/punchRules";
-import { callableOptions } from "../config";
+import { attachmentsBucketName, callableOptions } from "../config";
 import { denied, guarded, notFound, precondition } from "../errors";
 import { getBranch } from "../sql/branches";
 import { getMemberByAuthUid } from "../sql/members";
 import { workDateStart, workDateString } from "../time/workDate";
-import { asBag, reqEnum, reqNumber, reqString } from "../util/input";
+import { asBag, optString, reqEnum, reqNumber, reqString } from "../util/input";
 
-type StoredBreak = { startAt: Timestamp; endAt?: Timestamp };
+type StoredBreak = {
+  startAt: Timestamp;
+  endAt?: Timestamp;
+  startSelfiePath?: string;
+  endSelfiePath?: string;
+};
+
+const MAX_SELFIE_AGE_MS = 15 * 60 * 1000;
+const MAX_SELFIE_SIZE_BYTES = 5 * 1024 * 1024;
 
 const toDate = (t: Timestamp | undefined): Date | undefined => t?.toDate();
 
@@ -35,7 +44,7 @@ function readState(data: FirebaseFirestore.DocumentData | undefined): DayState {
 /**
  * recordAttendancePunch (callable, asia-south1) - Employees only.
  * Request:  { kind: 'checkIn'|'checkOut'|'breakStart'|'breakEnd', branchId,
- *             latitude, longitude, accuracyMeters }
+ *             latitude, longitude, accuracyMeters, selfiePath? }
  * Response: { entryId, kind, recordedAt (ISO), workDate, distanceMeters }
  * Server time and the Asia/Kolkata workDate are stamped here; the geofence is
  * evaluated against the branch coordinates/radius stored in SQL.
@@ -53,6 +62,7 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
       longitude: reqNumber(bag, "longitude", -180, 180),
     };
     const accuracy = reqNumber(bag, "accuracyMeters", 0, 100_000);
+    const selfiePath = optString(bag, "selfiePath", 1, 512);
 
     if (!actor.branchIds.includes(branchId)) throw denied("You are not assigned to this branch.");
     const branch = await getBranch(branchId);
@@ -63,6 +73,17 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
     const member = await getMemberByAuthUid(actor.uid);
     if (!member) throw denied();
 
+    const settingsRef = getFirestore()
+      .collection("organization_settings")
+      .doc(branch.organizationId);
+    if (selfiePath) {
+      await validateSelfieObject(selfiePath, {
+        organizationId: branch.organizationId,
+        branchId,
+        employeeUid: actor.uid,
+      });
+    }
+
     const now = new Date();
     const workDate = workDateString(now);
     const entryId = `${actor.uid}_${workDate}`;
@@ -71,12 +92,20 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
 
     await getFirestore().runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+      const settings = await tx.get(settingsRef);
+      const selfieRequired = settings.get("requireAttendanceSelfie") === true;
+      if (selfieRequired && !selfiePath) {
+        throw precondition("Take a selfie before recording this attendance action.");
+      }
       const data = snap.data();
       if (snap.exists && data?.branchId !== branchId) {
         throw precondition("You are already checked in at a different branch today.");
       }
       const state = readState(data);
       assertPunchAllowed(kind, state);
+      if (selfiePath && hasUsedSelfiePath(data, selfiePath)) {
+        throw precondition("Take a new selfie for each attendance action.");
+      }
 
       if (kind === "checkIn") {
         tx.set(ref, {
@@ -90,6 +119,7 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
           status: "present",
           reviewStatus: "none",
           checkInAt: stamp,
+          ...(selfiePath ? { checkInSelfiePath: selfiePath } : {}),
           breaks: [],
           kioskEntry: false,
           source: "employee-app",
@@ -98,10 +128,28 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
         return;
       }
       const stored = (data?.breaks as StoredBreak[] | undefined) ?? [];
-      if (kind === "checkOut") tx.update(ref, { checkOutAt: stamp });
-      else if (kind === "breakStart") tx.update(ref, { breaks: [...stored, { startAt: stamp }] });
-      else {
-        const next = stored.map((b) => (b.endAt ? b : { ...b, endAt: stamp }));
+      if (kind === "checkOut") {
+        tx.update(ref, {
+          checkOutAt: stamp,
+          ...(selfiePath ? { checkOutSelfiePath: selfiePath } : {}),
+        });
+      } else if (kind === "breakStart") {
+        tx.update(ref, {
+          breaks: [
+            ...stored,
+            { startAt: stamp, ...(selfiePath ? { startSelfiePath: selfiePath } : {}) },
+          ],
+        });
+      } else {
+        const next = stored.map((b) =>
+          b.endAt
+            ? b
+            : {
+                ...b,
+                endAt: stamp,
+                ...(selfiePath ? { endSelfiePath: selfiePath } : {}),
+              },
+        );
         tx.update(ref, { breaks: next });
       }
     });
@@ -115,3 +163,62 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
     };
   }),
 );
+
+async function validateSelfieObject(
+  path: string,
+  expected: { organizationId: string; branchId: string; employeeUid: string },
+): Promise<void> {
+  const prefix = `organizations/${expected.organizationId}/attendance-selfies/${expected.branchId}/${expected.employeeUid}/`;
+  const filename = path.startsWith(prefix) ? path.slice(prefix.length) : "";
+  if (!/^[0-9a-f-]{36}\.(jpg|png)$/i.test(filename)) {
+    throw denied("The attendance selfie does not belong to this employee and branch.");
+  }
+
+  let metadata: {
+    contentType?: string;
+    size?: string | number;
+    timeCreated?: string;
+  };
+  try {
+    [metadata] = await getStorage()
+      .bucket(attachmentsBucketName())
+      .file(path)
+      .getMetadata();
+  } catch {
+    throw precondition("The attendance selfie could not be verified. Take a new selfie.");
+  }
+
+  const size = Number(metadata.size);
+  const createdAt = metadata.timeCreated ? Date.parse(metadata.timeCreated) : NaN;
+  const age = Date.now() - createdAt;
+  const expectedContentType = filename.endsWith(".png")
+    ? "image/png"
+    : "image/jpeg";
+  const validContentType =
+    (metadata.contentType ?? "").toLowerCase() === expectedContentType;
+  if (
+    !validContentType ||
+    !Number.isFinite(size) ||
+    size <= 0 ||
+    size > MAX_SELFIE_SIZE_BYTES ||
+    !Number.isFinite(createdAt) ||
+    age < -60_000 ||
+    age > MAX_SELFIE_AGE_MS
+  ) {
+    throw precondition("The attendance selfie is invalid or too old. Take a new selfie.");
+  }
+}
+
+function hasUsedSelfiePath(
+  data: FirebaseFirestore.DocumentData | undefined,
+  path: string,
+): boolean {
+  if (!data) return false;
+  if (data.checkInSelfiePath === path || data.checkOutSelfiePath === path) {
+    return true;
+  }
+  const breaks = (data.breaks as StoredBreak[] | undefined) ?? [];
+  return breaks.some(
+    (entry) => entry.startSelfiePath === path || entry.endSelfiePath === path,
+  );
+}

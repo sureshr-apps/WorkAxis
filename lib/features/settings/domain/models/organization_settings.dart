@@ -10,6 +10,7 @@ class OrganizationSettings {
     required this.dailyDigest,
     required this.returnAlerts,
     this.requireEmployeeAssetAcknowledgement = false,
+    this.requireAttendanceSelfie = false,
     this.operationsEmail,
     this.emergencyPhone,
   });
@@ -23,6 +24,7 @@ class OrganizationSettings {
     dailyDigest: true,
     returnAlerts: true,
     requireEmployeeAssetAcknowledgement: false,
+    requireAttendanceSelfie: false,
   );
 
   /// Default geofence radius for newly created branches.
@@ -35,6 +37,7 @@ class OrganizationSettings {
   final bool dailyDigest;
   final bool returnAlerts;
   final bool requireEmployeeAssetAcknowledgement;
+  final bool requireAttendanceSelfie;
   final String? operationsEmail;
   final String? emergencyPhone;
 
@@ -46,6 +49,7 @@ class OrganizationSettings {
     bool? dailyDigest,
     bool? returnAlerts,
     bool? requireEmployeeAssetAcknowledgement,
+    bool? requireAttendanceSelfie,
     String? operationsEmail,
     String? emergencyPhone,
   }) => OrganizationSettings(
@@ -58,6 +62,8 @@ class OrganizationSettings {
     requireEmployeeAssetAcknowledgement:
         requireEmployeeAssetAcknowledgement ??
         this.requireEmployeeAssetAcknowledgement,
+    requireAttendanceSelfie:
+        requireAttendanceSelfie ?? this.requireAttendanceSelfie,
     operationsEmail: operationsEmail ?? this.operationsEmail,
     emergencyPhone: emergencyPhone ?? this.emergencyPhone,
   );
@@ -73,6 +79,7 @@ class OrganizationSettings {
       other.returnAlerts == returnAlerts &&
       other.requireEmployeeAssetAcknowledgement ==
           requireEmployeeAssetAcknowledgement &&
+      other.requireAttendanceSelfie == requireAttendanceSelfie &&
       other.operationsEmail == operationsEmail &&
       other.emergencyPhone == emergencyPhone;
 
@@ -85,6 +92,7 @@ class OrganizationSettings {
     dailyDigest,
     returnAlerts,
     requireEmployeeAssetAcknowledgement,
+    requireAttendanceSelfie,
     operationsEmail,
     emergencyPhone,
   );

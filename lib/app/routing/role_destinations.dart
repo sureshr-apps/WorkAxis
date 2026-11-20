@@ -86,6 +86,12 @@ abstract final class RoleDestinations {
       route: AppRoutes.orgAdminLeaves,
     ),
     AppNavDestination(
+      label: 'Off-site Work',
+      icon: Icons.near_me_outlined,
+      selectedIcon: Icons.near_me,
+      route: AppRoutes.orgAdminOffSiteWork,
+    ),
+    AppNavDestination(
       label: 'Reports',
       icon: Icons.analytics_outlined,
       selectedIcon: Icons.analytics,
@@ -137,6 +143,12 @@ abstract final class RoleDestinations {
       route: AppRoutes.branchManagerLeaves,
     ),
     AppNavDestination(
+      label: 'Off-site Work',
+      icon: Icons.near_me_outlined,
+      selectedIcon: Icons.near_me,
+      route: AppRoutes.branchManagerOffSiteWork,
+    ),
+    AppNavDestination(
       label: 'Reports',
       icon: Icons.assessment_outlined,
       selectedIcon: Icons.assessment,
@@ -162,6 +174,12 @@ abstract final class RoleDestinations {
       icon: Icons.event_note_outlined,
       selectedIcon: Icons.event_note,
       route: AppRoutes.employeeLeaves,
+    ),
+    AppNavDestination(
+      label: 'Off-site Work',
+      icon: Icons.near_me_outlined,
+      selectedIcon: Icons.near_me,
+      route: AppRoutes.employeeOffSiteWork,
     ),
     AppNavDestination(
       label: 'Returns',

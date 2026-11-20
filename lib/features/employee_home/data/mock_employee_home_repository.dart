@@ -51,9 +51,19 @@ class MockEmployeeHomeRepository
   }
 
   @override
+  Future<bool> isAttendanceSelfieRequired({
+    required UserAccessContext access,
+  }) async {
+    _applyIdentity(access);
+    await _latency();
+    return false;
+  }
+
+  @override
   Future<EmployeeHomeSummary> recordAttendanceAction({
     required UserAccessContext access,
     required AttendanceAction action,
+    String? selfieLocalPath,
   }) async {
     _applyIdentity(access);
     await _latency();

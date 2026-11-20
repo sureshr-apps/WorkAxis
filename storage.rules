@@ -2,9 +2,8 @@ rules_version = '2';
 
 // Attachments are uploaded by the Flutter client (AttachmentStorage) and are
 // immutable: every object gets a fresh UUID name, so only `create` is allowed.
-// Claims (role, organizationId, status) are the ones written by the trusted
-// account functions. Storage rules cannot check branch assignment, so manager
-// access is organization-wide.
+// Claims (role, organizationId, branchIds, status) are written by trusted
+// account functions. Attendance selfie reads are limited to assigned branches.
 service firebase.storage {
   match /b/{bucket}/o {
     function active() {
@@ -16,6 +15,14 @@ service firebase.storage {
     function isOrgManager(orgId) {
       return inOrg(orgId) &&
         request.auth.token.role in ['orgAdmin', 'branchManager'];
+    }
+    function isOrgAdmin(orgId) {
+      return inOrg(orgId) && request.auth.token.role == 'orgAdmin';
+    }
+    function isBranchManagerOf(orgId, branchId) {
+      return inOrg(orgId) &&
+        request.auth.token.role == 'branchManager' &&
+        request.auth.token.get('branchIds', []).hasAny([branchId]);
     }
     function validImage() {
       return request.resource.size < 5 * 1024 * 1024 &&
@@ -42,6 +49,34 @@ service firebase.storage {
     match /organizations/{orgId}/aadhaar-documents/{file} {
       allow read: if isOrgManager(orgId);
       allow create: if isOrgManager(orgId) && validImage();
+    }
+
+    // Attendance selfies are uploaded by the employee to a branch/employee
+    // path. Only Org Admins and managers assigned to that branch can read them.
+    match /organizations/{orgId}/attendance-selfies/{branchId}/{employeeUid}/{file} {
+      allow read: if isOrgAdmin(orgId) ||
+        isBranchManagerOf(orgId, branchId) ||
+        (inOrg(orgId) && request.auth.token.role == 'employee' &&
+          request.auth.uid == employeeUid);
+      allow create: if inOrg(orgId) &&
+        request.auth.token.role == 'employee' &&
+        request.auth.uid == employeeUid &&
+        request.auth.token.get('branchIds', []).hasAny([branchId]) &&
+        validImage();
+    }
+
+    // Evidence is uploaded by the assigned employee into a branch and
+    // assignment-specific path. Managers can read evidence only in their scope.
+    match /organizations/{orgId}/off-site-work-evidence/{branchId}/{employeeUid}/{assignmentId}/{file} {
+      allow read: if isOrgAdmin(orgId) ||
+        isBranchManagerOf(orgId, branchId) ||
+        (inOrg(orgId) && request.auth.token.role == 'employee' &&
+          request.auth.uid == employeeUid);
+      allow create: if inOrg(orgId) &&
+        request.auth.token.role == 'employee' &&
+        request.auth.uid == employeeUid &&
+        request.auth.token.get('branchIds', []).hasAny([branchId]) &&
+        validImage();
     }
 
     match /organizations/{orgId}/return-bills/{file} {

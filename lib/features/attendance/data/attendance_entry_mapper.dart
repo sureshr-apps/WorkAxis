@@ -16,6 +16,9 @@ abstract final class AttendanceEntryMapper {
       reviewStatus: _reviewStatus(data['reviewStatus'] as String?),
       checkInAt: instant(data['checkInAt']),
       checkOutAt: instant(data['checkOutAt']),
+      checkInSelfiePath: data['checkInSelfiePath'] as String?,
+      checkOutSelfiePath: data['checkOutSelfiePath'] as String?,
+      breaks: _breaks(data['breaks']),
       note: data['note'] as String?,
       kioskEntry: data['kioskEntry'] as bool? ?? false,
     );
@@ -45,6 +48,24 @@ abstract final class AttendanceEntryMapper {
     if (value is Timestamp) return value.toDate();
     if (value is String) return DateTime.tryParse(value);
     return null;
+  }
+
+  static List<AttendanceBreakRecord> _breaks(Object? value) {
+    if (value is! List) return const [];
+    final breaks = <AttendanceBreakRecord>[];
+    for (final item in value.whereType<Map>()) {
+      final startAt = instant(item['startAt']);
+      if (startAt == null) continue;
+      breaks.add(
+        AttendanceBreakRecord(
+          startAt: startAt,
+          endAt: instant(item['endAt']),
+          startSelfiePath: item['startSelfiePath'] as String?,
+          endSelfiePath: item['endSelfiePath'] as String?,
+        ),
+      );
+    }
+    return List.unmodifiable(breaks);
   }
 
   /// Unknown values are surfaced as `incomplete` (needs attention) rather than

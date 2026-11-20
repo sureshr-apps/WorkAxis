@@ -31,6 +31,8 @@ class _OrganizationSettingsScreenState
   bool _returnAlerts = OrganizationSettings.defaults.returnAlerts;
   bool _requireEmployeeAssetAcknowledgement =
       OrganizationSettings.defaults.requireEmployeeAssetAcknowledgement;
+  bool _requireAttendanceSelfie =
+      OrganizationSettings.defaults.requireAttendanceSelfie;
 
   /// The loaded settings the form fields were last populated from.
   OrganizationSettings? _populatedFrom;
@@ -60,6 +62,7 @@ class _OrganizationSettingsScreenState
     _returnAlerts = settings.returnAlerts;
     _requireEmployeeAssetAcknowledgement =
         settings.requireEmployeeAssetAcknowledgement;
+    _requireAttendanceSelfie = settings.requireAttendanceSelfie;
   }
 
   /// Unparseable numbers become -1 so validation reports the allowed range.
@@ -72,6 +75,7 @@ class _OrganizationSettingsScreenState
     dailyDigest: _dailyDigest,
     returnAlerts: _returnAlerts,
     requireEmployeeAssetAcknowledgement: _requireEmployeeAssetAcknowledgement,
+    requireAttendanceSelfie: _requireAttendanceSelfie,
     operationsEmail: _blankToNull(_emailController.text),
     emergencyPhone: _blankToNull(_phoneController.text),
   );
@@ -137,8 +141,8 @@ class _OrganizationSettingsScreenState
     return SettingsPage(
       eyebrow: 'Enterprise Administration',
       title: 'Organization Settings',
-      subtitle: 'Manage operational policies, asset receipt acknowledgment, and notifications.',
-      notice: 'When enabled, employees must acknowledge new asset assignments. Turning it off does not cancel acknowledgments already pending. Other policy controls remain read-only.',
+      subtitle: 'Manage asset receipt acknowledgment, attendance selfie verification, and organization contacts.',
+      notice: 'Attendance selfie verification applies to employee self-service check-in, check-out, break start, and resume actions. Manager-recorded group attendance is unchanged. Asset acknowledgments already pending remain open if that setting is turned off.',
       controller: settings,
       status: settings.organizationStatus,
       hasLoaded: loaded != null,
@@ -205,6 +209,20 @@ class _OrganizationSettingsScreenState
             },
             title: 'Require employee acknowledgment',
             subtitle: 'Employees confirm receipt of new assignments and transfers. Pending acknowledgments remain open if you turn this off.',
+          ),
+        ),
+        SettingsSectionCard(
+          icon: Icons.camera_alt_outlined,
+          title: 'Attendance Selfie Verification',
+          subtitle: 'Require a selfie for employee attendance actions',
+          child: SettingsSwitchTile(
+            value: _requireAttendanceSelfie,
+            onChanged: (value) {
+              setState(() => _requireAttendanceSelfie = value);
+              _edited();
+            },
+            title: 'Require selfie for attendance',
+            subtitle: 'Employees must take a selfie when checking in, checking out, starting a break, and resuming work. Organization Admins and Branch Managers can view each selfie in attendance records.',
           ),
         ),
         SettingsSectionCard(

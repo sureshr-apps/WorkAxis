@@ -5,6 +5,7 @@ initializeApp();
 export { createKioskPairingToken } from "./handlers/createKioskPairingToken";
 export { provisionUser } from "./handlers/provisionUser";
 export { recordAttendancePunch } from "./handlers/recordAttendancePunch";
+export { getAttendanceSelfiePolicy } from "./handlers/getAttendanceSelfiePolicy";
 export { resetUserPassword } from "./handlers/resetUserPassword";
 export { resolveLoginIdentifier } from "./handlers/resolveLoginIdentifier";
 export { setOrganizationStatus } from "./handlers/setOrganizationStatus";

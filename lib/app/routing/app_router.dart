@@ -47,6 +47,8 @@ import 'package:workaxis/features/returns/presentation/screens/return_details_ro
 import 'package:workaxis/features/returns/presentation/screens/submit_return_route.dart';
 import 'package:workaxis/features/returns/presentation/screens/returns_operations_screen.dart';
 import 'package:workaxis/features/leaves/presentation/screens/leaves_screen.dart';
+import 'package:workaxis/features/off_site_work/presentation/screens/off_site_work_details_screen.dart';
+import 'package:workaxis/features/off_site_work/presentation/screens/off_site_work_screen.dart';
 import 'package:workaxis/features/settings/presentation/screens/organization_settings_screen.dart';
 import 'package:workaxis/features/settings/presentation/screens/platform_settings_screen.dart';
 
@@ -348,6 +350,19 @@ GoRouter createAppRouter({
             builder: (context, state) => const LeavesScreen(),
           ),
           GoRoute(
+            path: AppRoutes.orgAdminOffSiteWork,
+            builder: (context, state) => const OffSiteWorkScreen(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => OffSiteWorkDetailsScreen(
+                  assignmentId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.orgAdminOffSiteWork,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
             path: AppRoutes.orgAdminSettings,
             builder: (context, state) => const OrganizationSettingsScreen(),
           ),
@@ -457,6 +472,19 @@ GoRouter createAppRouter({
             path: AppRoutes.branchManagerLeaves,
             builder: (context, state) => const LeavesScreen(),
           ),
+          GoRoute(
+            path: AppRoutes.branchManagerOffSiteWork,
+            builder: (context, state) => const OffSiteWorkScreen(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => OffSiteWorkDetailsScreen(
+                  assignmentId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.branchManagerOffSiteWork,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
 
@@ -488,6 +516,19 @@ GoRouter createAppRouter({
                   entryId: state.pathParameters['id'] ?? '',
                   listRoute: AppRoutes.employeeAttendance,
                   listLabel: 'My Attendance',
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: AppRoutes.employeeOffSiteWork,
+            builder: (context, state) => const OffSiteWorkScreen(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => OffSiteWorkDetailsScreen(
+                  assignmentId: state.pathParameters['id'] ?? '',
+                  listRoute: AppRoutes.employeeOffSiteWork,
                 ),
               ),
             ],

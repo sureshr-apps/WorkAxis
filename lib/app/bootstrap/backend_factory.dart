@@ -70,6 +70,10 @@ import 'package:workaxis/features/leaves/data/mock_leaves_data_source.dart';
 import 'package:workaxis/features/leaves/data/mock_leaves_repository.dart';
 import 'package:workaxis/features/leaves/data/sql_connect_leaves_repository.dart';
 import 'package:workaxis/features/leaves/domain/repositories/leaves_repository.dart';
+import 'package:workaxis/features/off_site_work/data/mock_off_site_work_repository.dart';
+import 'package:workaxis/features/off_site_work/data/off_site_work_remote_data_source.dart';
+import 'package:workaxis/features/off_site_work/data/sql_connect_off_site_work_repository.dart';
+import 'package:workaxis/features/off_site_work/domain/repositories/off_site_work_repository.dart';
 import 'package:workaxis/features/settings/data/firestore_settings_repository.dart';
 import 'package:workaxis/features/settings/data/mock_settings_repository.dart';
 import 'package:workaxis/features/settings/domain/repositories/settings_repository.dart';
@@ -92,6 +96,7 @@ class BackendRepositories {
     required this.attendanceRepository,
     required this.returnsRepository,
     required this.leavesRepository,
+    required this.offSiteWorkRepository,
     required this.reportsRepository,
     required this.settingsRepository,
     required this.attachmentStorage,
@@ -112,6 +117,7 @@ class BackendRepositories {
   final AttendanceRepository attendanceRepository;
   final ReturnsRepository returnsRepository;
   final LeavesRepository leavesRepository;
+  final OffSiteWorkRepository offSiteWorkRepository;
   final ReportsRepository reportsRepository;
   final SettingsRepository settingsRepository;
   final AttachmentStorage attachmentStorage;
@@ -143,6 +149,11 @@ class BackendFactory {
       final membersSource = SqlConnectOrganizationMembersRemoteDataSource(
         gateway: data,
       );
+      final resolvedLocationProvider =
+          locationProvider ??
+          GatewayAttendanceLocationProvider(
+            const GeolocatorDeviceLocationGateway(),
+          );
       final platformOrganizationsRepository =
           SqlConnectPlatformOrganizationsRepository(
             dataSource: SqlConnectPlatformOrganizationsRemoteDataSource(
@@ -189,11 +200,8 @@ class BackendFactory {
         employeeRepository: FirestoreEmployeeHomeRepository(
           firestore: firestore,
           functions: callables,
-          locationProvider:
-              locationProvider ??
-              GatewayAttendanceLocationProvider(
-                const GeolocatorDeviceLocationGateway(),
-              ),
+          selfieStorage: attachmentStorage,
+          locationProvider: resolvedLocationProvider,
           now: now,
         ),
         branchManagementRepository: SqlConnectBranchManagementRepository(
@@ -219,13 +227,18 @@ class BackendFactory {
           attachments: attachments,
         ),
         leavesRepository: SqlConnectLeavesRepository(gateway: data),
+        offSiteWorkRepository: SqlConnectOffSiteWorkRepository(
+          remote: OffSiteWorkRemoteDataSource(gateway: data),
+          attachments: attachmentStorage,
+          locationProvider: resolvedLocationProvider,
+        ),
         reportsRepository: SqlConnectReportsRepository(gateway: data),
         settingsRepository: FirestoreSettingsRepository(firestore: firestore),
         attachmentStorage: attachmentStorage,
       );
     }
 
-    return createMockRepositories(now: now);
+    return createMockRepositories(now: now, locationProvider: locationProvider);
   }
 
   /// Builds the mock bundle with the shared fixtures that the real backend
@@ -237,6 +250,7 @@ class BackendFactory {
   static BackendRepositories createMockRepositories({
     Duration? delay,
     Now? now,
+    AttendanceLocationProvider? locationProvider,
   }) {
     final accessDataSource = MockAccessDataSource();
     final organizationsDataSource = MockPlatformOrganizationsDataSource();
@@ -247,6 +261,9 @@ class BackendFactory {
     final organizationMembersRepository = MockOrganizationMembersRepository(
       accessDataSource: accessDataSource,
     );
+    const attachmentStorage = MockAttachmentStorage();
+    final offSiteLocationProvider =
+        locationProvider ?? const UnavailableAttendanceLocationProvider();
 
     return BackendRepositories(
       authRepository: delay == null
@@ -293,11 +310,17 @@ class BackendFactory {
         now: now,
         delay: delay ?? const Duration(milliseconds: 140),
       ),
+      offSiteWorkRepository: MockOffSiteWorkRepository(
+        members: organizationMembersRepository,
+        attachments: attachmentStorage,
+        locationProvider: offSiteLocationProvider,
+        now: now,
+      ),
       reportsRepository: delay == null
           ? MockReportsRepository()
           : MockReportsRepository(delay: delay),
       settingsRepository: settingsRepository,
-      attachmentStorage: const MockAttachmentStorage(),
+      attachmentStorage: attachmentStorage,
     );
   }
 }
