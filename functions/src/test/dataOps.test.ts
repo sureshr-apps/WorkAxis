@@ -93,6 +93,12 @@ describe("employee asset acknowledgments", () => {
     notes: null,
     acknowledgementRequired,
     acknowledgementStatus,
+    assignedByUid: "manager-1",
+    assignedByName: "Organization Owner",
+    assignedAt: "2026-11-02T08:30:00.000Z",
+    acknowledgedByUid: acknowledgementStatus === "acknowledged" ? "e1" : null,
+    acknowledgedByName: acknowledgementStatus === "acknowledged" ? "Employee One" : null,
+    acknowledgedAt: acknowledgementStatus === "acknowledged" ? "2026-11-02T09:00:00.000Z" : null,
   });
 
   function saveDb(initialStatus = "assigned") {
@@ -100,6 +106,9 @@ describe("employee asset acknowledgments", () => {
       const query = sql.toLowerCase();
       if (query.includes("from branch where id = $1")) {
         return [{ id: "b1", organizationId: "o1" }];
+      }
+      if (query.includes("select full_name as \"fullname\"")) {
+        return [{ fullName: "Organization Owner" }];
       }
       if (query.includes("from organization_member m") && query.includes("user_branch_assignment")) {
         return [{ id: "member-e1" }];
@@ -127,6 +136,9 @@ describe("employee asset acknowledgments", () => {
     assert.ok(insert);
     assert.equal(insert.params[9], true);
     assert.equal(insert.params[10], "pending");
+    assert.equal(insert.params[11], orgAdmin.uid);
+    assert.equal(insert.params[12], "Organization Owner");
+    assert.match(insert.sql, /assigned_at\s*\)\s*VALUES[\s\S]*now\(\)/i);
   });
 
   it("ignores client-supplied acknowledgment fields", async () => {
@@ -201,6 +213,9 @@ describe("employee asset acknowledgments", () => {
       if (query.includes("from employee_asset ea") && query.includes("join branch b")) {
         return [assetRow("pending", true)];
       }
+      if (query.includes("select full_name as \"fullname\"")) {
+        return [{ fullName: "Organization Owner" }];
+      }
       return undefined;
     });
     await run(db, orgAdmin, "SaveEmployeeAsset", {
@@ -223,7 +238,7 @@ describe("employee asset acknowledgments", () => {
     const db = new FakeDb().whenCall(({ sql }) => {
       const query = sql.toLowerCase();
       if (query.includes("for update of ea")) {
-        return [{ id: "asset-1", acknowledgementRequired: true, acknowledgementStatus: "pending" }];
+        return [{ id: "asset-1", acknowledgementRequired: true, acknowledgementStatus: "pending", employeeName: "Employee One" }];
       }
       if (query.includes("update employee_asset")) return [];
       if (query.includes("from employee_asset ea") && query.includes("join branch b")) {
@@ -235,6 +250,7 @@ describe("employee asset acknowledgments", () => {
     const update = db.calls.find((call) => call.sql.includes("UPDATE employee_asset"));
     assert.ok(update);
     assert.equal(update.params[1], employee.uid);
+    assert.equal(update.params[2], "Employee One");
     assert.deepEqual((result as { employeeAsset: { acknowledgementStatus: string } }).employeeAsset.acknowledgementStatus, "acknowledged");
     const lookup = db.calls.find((call) => call.sql.includes("FOR UPDATE OF ea"));
     assert.ok(lookup);

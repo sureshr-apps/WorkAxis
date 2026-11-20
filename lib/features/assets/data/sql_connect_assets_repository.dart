@@ -119,6 +119,13 @@ class SqlConnectAssetsRepository implements AssetsRepository {
       return field;
     }
 
+    DateTime? optionalDateTime(String key) {
+      final field = row[key];
+      if (field is DateTime) return field;
+      if (field is String) return DateTime.tryParse(field);
+      return null;
+    }
+
     return EmployeeAsset(
       id: requiredString('id'),
       organizationId: requiredString('organizationId'),
@@ -134,6 +141,12 @@ class SqlConnectAssetsRepository implements AssetsRepository {
       acknowledgementStatus: AssetAcknowledgementStatus.fromValue(
         row['acknowledgementStatus'],
       ),
+      assignedByUid: row['assignedByUid'] as String?,
+      assignedByName: row['assignedByName'] as String?,
+      assignedAt: optionalDateTime('assignedAt'),
+      acknowledgedByUid: row['acknowledgedByUid'] as String?,
+      acknowledgedByName: row['acknowledgedByName'] as String?,
+      acknowledgedAt: optionalDateTime('acknowledgedAt'),
       serialNumber: row['serialNumber'] as String?,
       notes: row['notes'] as String?,
     );

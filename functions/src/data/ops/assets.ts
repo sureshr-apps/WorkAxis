@@ -28,8 +28,14 @@ const ASSET_COLUMNS = `
   ea.serial_number AS "serialNumber",
   ea.status,
   ea.notes,
+  ea.assigned_by_uid AS "assignedByUid",
+  ea.assigned_by_name AS "assignedByName",
+  ea.assigned_at AS "assignedAt",
   ea.acknowledgement_required AS "acknowledgementRequired",
-  ea.acknowledgement_status AS "acknowledgementStatus"`;
+  ea.acknowledgement_status AS "acknowledgementStatus",
+  ea.acknowledged_by_uid AS "acknowledgedByUid",
+  ea.acknowledged_by_name AS "acknowledgedByName",
+  ea.acknowledged_at AS "acknowledgedAt"`;
 
 async function loadAsset(db: SqlExecutor, id: string) {
   const rows = await db.query<Record<string, unknown>>(
@@ -51,6 +57,25 @@ function requireEditor(actor: Actor): string {
     throw denied();
   }
   return actor.organizationId;
+}
+
+async function assignmentActorName(
+  db: SqlExecutor,
+  actor: Actor,
+  organizationId: string,
+): Promise<string> {
+  const rows = await db.query<{ fullName: string }>(
+    `SELECT full_name AS "fullName"
+       FROM organization_member
+      WHERE auth_uid = $1
+        AND organization_id = $2
+        AND role = $3
+      LIMIT 1`,
+    [actor.uid, organizationId, actor.role],
+  );
+  const fullName = rows[0]?.fullName;
+  if (!fullName) throw denied("Assignment actor not found.");
+  return fullName;
 }
 
 async function validateActiveBranch(
@@ -246,6 +271,9 @@ export const assetsOps: OperationRegistry = {
           resetAcknowledgement &&
           status !== "returned" &&
           requireAcknowledgement;
+        const assignedByName = assignmentChanged
+          ? await assignmentActorName(tx, actor, organizationId)
+          : null;
         await tx.query(
           `UPDATE employee_asset
               SET branch_id = $2,
@@ -264,8 +292,16 @@ export const assetsOps: OperationRegistry = {
                     THEN NULL ELSE acknowledged_at END,
                   acknowledged_by_uid = CASE WHEN $10
                     THEN NULL ELSE acknowledged_by_uid END,
+                  acknowledged_by_name = CASE WHEN $10
+                    THEN NULL ELSE acknowledged_by_name END,
+                  assigned_by_uid = CASE WHEN $13
+                    THEN $14 ELSE assigned_by_uid END,
+                  assigned_by_name = CASE WHEN $13
+                    THEN $15 ELSE assigned_by_name END,
+                  assigned_at = CASE WHEN $13
+                    THEN now() ELSE assigned_at END,
                   updated_at = now()
-            WHERE id = $1 AND organization_id = $13`,
+            WHERE id = $1 AND organization_id = $16`,
           [
             id,
             branchId,
@@ -279,6 +315,9 @@ export const assetsOps: OperationRegistry = {
             resetAcknowledgement,
             assignmentAcknowledgementRequired,
             assignmentAcknowledgementRequired ? "pending" : "not_required",
+            assignmentChanged,
+            actor.uid,
+            assignedByName,
             organizationId,
           ],
         );
@@ -287,12 +326,13 @@ export const assetsOps: OperationRegistry = {
         return { employeeAsset };
       }
 
-      const inserted = await tx.query<{ id: string }>(
+      const assignedByName = await assignmentActorName(tx, actor, organizationId);
+      const created = await tx.query<{ id: string }>(
         `INSERT INTO employee_asset (
            organization_id, branch_id, employee_member_id, name, category,
            asset_tag, serial_number, status, notes, acknowledgement_required,
-           acknowledgement_status
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           acknowledgement_status, assigned_by_uid, assigned_by_name, assigned_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
          RETURNING id`,
         [
           organizationId,
@@ -308,10 +348,12 @@ export const assetsOps: OperationRegistry = {
           requireAcknowledgement && status !== "returned"
             ? "pending"
             : "not_required",
+          actor.uid,
+          assignedByName,
         ],
       );
-      const employeeAsset = inserted[0]
-        ? await loadAsset(tx, inserted[0].id)
+      const employeeAsset = created[0]
+        ? await loadAsset(tx, created[0].id)
         : null;
       if (!employeeAsset) throw denied("Asset could not be saved.");
       return { employeeAsset };
@@ -326,10 +368,12 @@ export const assetsOps: OperationRegistry = {
         id: string;
         acknowledgementRequired: boolean;
         acknowledgementStatus: string;
+        employeeName: string;
       }>(
         `SELECT ea.id,
                 ea.acknowledgement_required AS "acknowledgementRequired",
-                ea.acknowledgement_status AS "acknowledgementStatus"
+                ea.acknowledgement_status AS "acknowledgementStatus",
+                m.full_name AS "employeeName"
            FROM employee_asset ea
            JOIN organization_member m ON m.id = ea.employee_member_id
           WHERE ea.id = $1
@@ -358,9 +402,10 @@ export const assetsOps: OperationRegistry = {
             SET acknowledgement_status = 'acknowledged',
                 acknowledged_at = now(),
                 acknowledged_by_uid = $2,
+                acknowledged_by_name = $3,
                 updated_at = now()
-          WHERE id = $1 AND organization_id = $3`,
-        [assetId, actor.uid, actor.organizationId],
+          WHERE id = $1 AND organization_id = $4`,
+        [assetId, actor.uid, assignedAsset.employeeName, actor.organizationId],
       );
       const employeeAsset = await loadAsset(tx, assetId);
       if (!employeeAsset) throw denied("Asset not found or access denied.");

@@ -1,5 +1,6 @@
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/validation_exception.dart';
+import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/assets/domain/models/employee_asset.dart';
 import 'package:workaxis/features/assets/domain/repositories/assets_repository.dart';
@@ -10,15 +11,17 @@ class MockAssetsRepository implements AssetsRepository {
   MockAssetsRepository({
     required this.members,
     this.isAcknowledgementRequired = _acknowledgementDisabled,
-  });
+    Now? now,
+  }) : now = now ?? systemNow;
 
   final OrganizationMembersRepository members;
   final bool Function(String organizationId) isAcknowledgementRequired;
+  final Now now;
 
   static bool _acknowledgementDisabled(String _) => false;
 
   final List<EmployeeAsset> _assets = [
-    const EmployeeAsset(
+    EmployeeAsset(
       id: 'asset-001',
       organizationId: 'org-acme',
       branchId: 'br-01',
@@ -28,6 +31,9 @@ class MockAssetsRepository implements AssetsRepository {
       name: 'Android handheld',
       category: 'Mobile device',
       assetTag: 'WA-DEV-001',
+      assignedByUid: 'mock-manager-01',
+      assignedByName: 'Jordan Lee',
+      assignedAt: DateTime.utc(2026, 11, 2, 8, 30),
       serialNumber: 'SN-1042-A',
       status: AssetStatus.assigned,
       notes: 'Issued for daily outlet operations.',
@@ -210,6 +216,20 @@ class MockAssetsRepository implements AssetsRepository {
                 ? AssetAcknowledgementStatus.pending
                 : AssetAcknowledgementStatus.notRequired)
           : existing.acknowledgementStatus,
+      assignedByUid: assignmentChanged
+          ? access.user.id
+          : existing.assignedByUid,
+      assignedByName: assignmentChanged
+          ? access.user.name
+          : existing.assignedByName,
+      assignedAt: assignmentChanged ? now() : existing.assignedAt,
+      acknowledgedByUid: resetAcknowledgement
+          ? null
+          : existing.acknowledgedByUid,
+      acknowledgedByName: resetAcknowledgement
+          ? null
+          : existing.acknowledgedByName,
+      acknowledgedAt: resetAcknowledgement ? null : existing.acknowledgedAt,
       notes: _optional(asset.notes),
     );
     if (existingIndex == -1) {
@@ -250,6 +270,9 @@ class MockAssetsRepository implements AssetsRepository {
     }
     final acknowledged = asset.copyWith(
       acknowledgementStatus: AssetAcknowledgementStatus.acknowledged,
+      acknowledgedByUid: access.user.id,
+      acknowledgedByName: access.user.name,
+      acknowledgedAt: now(),
     );
     _assets[index] = acknowledged;
     return acknowledged;
