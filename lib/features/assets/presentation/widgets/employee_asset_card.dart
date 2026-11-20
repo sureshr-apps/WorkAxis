@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/assets/domain/models/employee_asset.dart';
 
@@ -10,14 +11,20 @@ class EmployeeAssetCard extends StatelessWidget {
     super.key,
     required this.asset,
     required this.canEdit,
+    this.canAcknowledge = false,
+    this.isAcknowledging = false,
     this.onEdit,
     this.onDelete,
+    this.onAcknowledge,
   });
 
   final EmployeeAsset asset;
   final bool canEdit;
+  final bool canAcknowledge;
+  final bool isAcknowledging;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onAcknowledge;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +33,7 @@ class EmployeeAssetCard extends StatelessWidget {
       AssetStatus.maintenance => (asset.status.label, StatusType.urgent),
       AssetStatus.returned => (asset.status.label, StatusType.neutral),
     };
+    final acknowledgement = _acknowledgementAction();
 
     return Card(
       elevation: 0,
@@ -117,11 +125,73 @@ class EmployeeAssetCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               _MetadataLine(icon: Icons.qr_code_2, label: asset.serialNumber!),
             ],
+            if (acknowledgement != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              acknowledgement,
+            ],
           ],
         ),
       ),
     );
   }
+
+  Widget? _acknowledgementAction() {
+    if (!asset.acknowledgementRequired ||
+        asset.acknowledgementStatus == AssetAcknowledgementStatus.notRequired) {
+      return null;
+    }
+    if (asset.acknowledgementStatus == AssetAcknowledgementStatus.pending) {
+      if (canAcknowledge && onAcknowledge != null) {
+        return AppButton.primary(
+          text: 'Acknowledge receipt',
+          iconData: Icons.check_circle_outline,
+          isLoading: isAcknowledging,
+          onPressed: isAcknowledging ? null : onAcknowledge,
+        );
+      }
+      return const _AcknowledgementStatus(
+        icon: Icons.hourglass_top_rounded,
+        label: 'Awaiting employee acknowledgment',
+        color: AppColors.statusUrgentText,
+      );
+    }
+    return const _AcknowledgementStatus(
+      icon: Icons.verified_outlined,
+      label: 'Employee acknowledged receipt',
+      color: AppColors.statusActive,
+    );
+  }
+}
+
+class _AcknowledgementStatus extends StatelessWidget {
+  const _AcknowledgementStatus({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Icon(icon, size: 17, color: color),
+      const SizedBox(width: AppSpacing.xs),
+      Expanded(
+        child: Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.labelSmall.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class _Tag extends StatelessWidget {

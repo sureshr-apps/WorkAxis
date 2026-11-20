@@ -74,6 +74,20 @@ class SqlConnectAssetsRepository implements AssetsRepository {
   }
 
   @override
+  Future<EmployeeAsset> acknowledgeAsset({
+    required UserAccessContext access,
+    required String assetId,
+  }) async {
+    if (access.user.role != UserRole.employee) {
+      throw const AccessDeniedException();
+    }
+    final data = await gateway.call('AcknowledgeMyEmployeeAsset', {
+      'assetId': assetId,
+    });
+    return _fromJson(data['employeeAsset']);
+  }
+
+  @override
   Future<void> deleteAsset({
     required UserAccessContext access,
     required String assetId,
@@ -116,6 +130,10 @@ class SqlConnectAssetsRepository implements AssetsRepository {
       category: requiredString('category'),
       assetTag: requiredString('assetTag'),
       status: AssetStatus.fromValue(row['status']),
+      acknowledgementRequired: row['acknowledgementRequired'] as bool? ?? false,
+      acknowledgementStatus: AssetAcknowledgementStatus.fromValue(
+        row['acknowledgementStatus'],
+      ),
       serialNumber: row['serialNumber'] as String?,
       notes: row['notes'] as String?,
     );

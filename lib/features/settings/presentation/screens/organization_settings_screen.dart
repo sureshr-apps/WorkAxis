@@ -29,6 +29,8 @@ class _OrganizationSettingsScreenState
   bool _requireGeolocation = OrganizationSettings.defaults.requireGeolocation;
   bool _dailyDigest = OrganizationSettings.defaults.dailyDigest;
   bool _returnAlerts = OrganizationSettings.defaults.returnAlerts;
+  bool _requireEmployeeAssetAcknowledgement =
+      OrganizationSettings.defaults.requireEmployeeAssetAcknowledgement;
 
   /// The loaded settings the form fields were last populated from.
   OrganizationSettings? _populatedFrom;
@@ -56,6 +58,8 @@ class _OrganizationSettingsScreenState
     _requireGeolocation = settings.requireGeolocation;
     _dailyDigest = settings.dailyDigest;
     _returnAlerts = settings.returnAlerts;
+    _requireEmployeeAssetAcknowledgement =
+        settings.requireEmployeeAssetAcknowledgement;
   }
 
   /// Unparseable numbers become -1 so validation reports the allowed range.
@@ -67,6 +71,7 @@ class _OrganizationSettingsScreenState
     requireGeolocation: _requireGeolocation,
     dailyDigest: _dailyDigest,
     returnAlerts: _returnAlerts,
+    requireEmployeeAssetAcknowledgement: _requireEmployeeAssetAcknowledgement,
     operationsEmail: _blankToNull(_emailController.text),
     emergencyPhone: _blankToNull(_phoneController.text),
   );
@@ -112,7 +117,7 @@ class _OrganizationSettingsScreenState
     if (!mounted) return;
     _toast(
       saved
-          ? 'Organization operational settings saved.'
+          ? 'Organization settings saved.'
           : (controller.saveErrorMessage ??
                 controller.validationErrors.values.firstOrNull ??
                 'Settings could not be saved.'),
@@ -132,8 +137,8 @@ class _OrganizationSettingsScreenState
     return SettingsPage(
       eyebrow: 'Enterprise Administration',
       title: 'Organization Settings',
-      subtitle: 'Manage operational parameters, geofence radius defaults, and notification digests.',
-      notice: 'Policy controls are read-only until these features are available. You can update the operations contact details.',
+      subtitle: 'Manage operational policies, asset receipt acknowledgment, and notifications.',
+      notice: 'When enabled, employees must acknowledge new asset assignments. Turning it off does not cancel acknowledgments already pending. Other policy controls remain read-only.',
       controller: settings,
       status: settings.organizationStatus,
       hasLoaded: loaded != null,
@@ -183,6 +188,20 @@ class _OrganizationSettingsScreenState
                 ),
               ),
             ],
+          ),
+        ),
+        SettingsSectionCard(
+          icon: Icons.inventory_2_outlined,
+          title: 'Asset Management',
+          subtitle: 'Control how employees confirm asset assignments',
+          child: SettingsSwitchTile(
+            value: _requireEmployeeAssetAcknowledgement,
+            onChanged: (value) {
+              setState(() => _requireEmployeeAssetAcknowledgement = value);
+              _edited();
+            },
+            title: 'Require employee acknowledgment',
+            subtitle: 'Employees confirm receipt of new assignments and transfers. Pending acknowledgments remain open if you turn this off.',
           ),
         ),
         SettingsSectionCard(

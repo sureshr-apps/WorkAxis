@@ -234,6 +234,7 @@ service cloud.firestore {
       return hasOnlyAllowedFields([
           'organizationId', 'geofenceRadiusMeters', 'gracePeriodMinutes',
           'allowBreaks', 'requireGeolocation', 'dailyDigest', 'returnAlerts',
+          'requireEmployeeAssetAcknowledgement',
           'operationsEmail', 'emergencyPhone', 'updatedBy', 'updatedAt'
         ]) &&
         hasRequiredFields([
@@ -248,6 +249,8 @@ service cloud.firestore {
         data.requireGeolocation is bool &&
         data.dailyDigest is bool &&
         data.returnAlerts is bool &&
+        (!('requireEmployeeAssetAcknowledgement' in data) ||
+          data.requireEmployeeAssetAcknowledgement is bool) &&
         isValidOptionalString('operationsEmail', 3, 254) &&
         isValidOptionalString('emergencyPhone', 1, 32) &&
         data.updatedBy == request.auth.uid &&

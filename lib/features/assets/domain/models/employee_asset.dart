@@ -15,6 +15,23 @@ enum AssetStatus {
   };
 }
 
+enum AssetAcknowledgementStatus {
+  notRequired('Not required'),
+  pending('Awaiting acknowledgment'),
+  acknowledged('Acknowledged');
+
+  const AssetAcknowledgementStatus(this.label);
+
+  final String label;
+
+  static AssetAcknowledgementStatus fromValue(Object? value) => switch (value) {
+    null || 'not_required' => AssetAcknowledgementStatus.notRequired,
+    'pending' => AssetAcknowledgementStatus.pending,
+    'acknowledged' => AssetAcknowledgementStatus.acknowledged,
+    _ => throw FormatException('Unknown asset acknowledgement status: $value'),
+  };
+}
+
 /// An organization asset assigned to an employee at one branch.
 class EmployeeAsset {
   const EmployeeAsset({
@@ -28,6 +45,8 @@ class EmployeeAsset {
     required this.category,
     required this.assetTag,
     required this.status,
+    this.acknowledgementRequired = false,
+    this.acknowledgementStatus = AssetAcknowledgementStatus.notRequired,
     this.serialNumber,
     this.notes,
   });
@@ -43,6 +62,34 @@ class EmployeeAsset {
   final String category;
   final String assetTag;
   final AssetStatus status;
+  final bool acknowledgementRequired;
+  final AssetAcknowledgementStatus acknowledgementStatus;
   final String? serialNumber;
   final String? notes;
+
+  EmployeeAsset copyWith({
+    String? employeeId,
+    String? employeeName,
+    String? branchId,
+    String? branchName,
+    AssetStatus? status,
+    bool? acknowledgementRequired,
+    AssetAcknowledgementStatus? acknowledgementStatus,
+  }) => EmployeeAsset(
+    id: id,
+    organizationId: organizationId,
+    branchId: branchId ?? this.branchId,
+    branchName: branchName ?? this.branchName,
+    employeeId: employeeId ?? this.employeeId,
+    employeeName: employeeName ?? this.employeeName,
+    name: name,
+    category: category,
+    assetTag: assetTag,
+    status: status ?? this.status,
+    acknowledgementRequired:
+        acknowledgementRequired ?? this.acknowledgementRequired,
+    acknowledgementStatus: acknowledgementStatus ?? this.acknowledgementStatus,
+    serialNumber: serialNumber,
+    notes: notes,
+  );
 }

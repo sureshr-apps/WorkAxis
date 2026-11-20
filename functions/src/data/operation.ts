@@ -5,6 +5,10 @@ import type { SqlExecutor } from "../db/executor";
 export interface OperationContext {
   db: SqlExecutor;
   actor: Actor;
+  /** Reads the current organization policy from its authoritative settings document. */
+  requireEmployeeAssetAcknowledgement: (
+    organizationId: string,
+  ) => Promise<boolean>;
 }
 
 /**

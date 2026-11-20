@@ -17,6 +17,12 @@ abstract interface class AssetsRepository {
     String? activeBranchId,
   });
 
+  /// Records the signed-in employee's acknowledgment for one assigned asset.
+  Future<EmployeeAsset> acknowledgeAsset({
+    required UserAccessContext access,
+    required String assetId,
+  });
+
   Future<void> deleteAsset({
     required UserAccessContext access,
     required String assetId,

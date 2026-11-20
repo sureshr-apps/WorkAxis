@@ -16,8 +16,22 @@ const manager: Actor = {
 };
 const employee: Actor = { uid: "e1", role: "employee", organizationId: "o1", branchIds: ["b1"] };
 
-function run(db: FakeDb, actor: Actor, op: string, vars: Record<string, unknown> = {}) {
-  return runOperation(operations, { db, actor }, { op, vars });
+function run(
+  db: FakeDb,
+  actor: Actor,
+  op: string,
+  vars: Record<string, unknown> = {},
+  requireAcknowledgement = false,
+) {
+  return runOperation(
+    operations,
+    {
+      db,
+      actor,
+      requireEmployeeAssetAcknowledgement: async () => requireAcknowledgement,
+    },
+    { op, vars },
+  );
 }
 
 const denies = (p: Promise<unknown>) =>
@@ -56,8 +70,190 @@ describe("dispatch", () => {
       "GetOrganizationLicenseHistory", "AssignOrganizationLicense", "ChangeOrganizationLicensePlan",
       "ModifyOrganizationCommercialTerms", "RenewOrganizationLicense",
       "UpdateReturnRecordReview", "UpdateReturnRecordStatus",
+      "ListMyEmployeeAssets", "ListOrganizationEmployeeAssets", "ListBranchEmployeeAssets",
+      "SaveEmployeeAsset", "AcknowledgeMyEmployeeAsset", "DeleteEmployeeAsset",
     ];
     for (const name of expected) assert.ok(operations[name], name);
+  });
+});
+
+describe("employee asset acknowledgments", () => {
+  const assetRow = (acknowledgementStatus: string, acknowledgementRequired: boolean) => ({
+    id: "asset-1",
+    organizationId: "o1",
+    branchId: "b1",
+    branchName: "Main",
+    employeeId: "member-e1",
+    employeeName: "Employee One",
+    name: "Work phone",
+    category: "Device",
+    assetTag: "WA-001",
+    serialNumber: null,
+    status: "assigned",
+    notes: null,
+    acknowledgementRequired,
+    acknowledgementStatus,
+  });
+
+  function saveDb(initialStatus = "assigned") {
+    return new FakeDb().whenCall(({ sql }) => {
+      const query = sql.toLowerCase();
+      if (query.includes("from branch where id = $1")) {
+        return [{ id: "b1", organizationId: "o1" }];
+      }
+      if (query.includes("from organization_member m") && query.includes("user_branch_assignment")) {
+        return [{ id: "member-e1" }];
+      }
+      if (query.includes("lower(asset_tag)")) return [];
+      if (query.includes("insert into employee_asset")) return [{ id: "asset-1" }];
+      if (query.includes("from employee_asset ea") && query.includes("join branch b")) {
+        return [assetRow("pending", initialStatus === "assigned")];
+      }
+      return undefined;
+    });
+  }
+
+  it("creates a pending receipt when the organization's policy is enabled", async () => {
+    const db = saveDb();
+    await run(db, orgAdmin, "SaveEmployeeAsset", {
+      branchId: "b1",
+      employeeId: "member-e1",
+      name: "Work phone",
+      category: "Device",
+      assetTag: "WA-001",
+      status: "assigned",
+    }, true);
+    const insert = db.calls.find((call) => call.sql.includes("INSERT INTO employee_asset"));
+    assert.ok(insert);
+    assert.equal(insert.params[9], true);
+    assert.equal(insert.params[10], "pending");
+  });
+
+  it("ignores client-supplied acknowledgment fields", async () => {
+    const db = saveDb();
+    await run(db, orgAdmin, "SaveEmployeeAsset", {
+      branchId: "b1",
+      employeeId: "member-e1",
+      name: "Work phone",
+      category: "Device",
+      assetTag: "WA-001",
+      status: "assigned",
+      acknowledgementRequired: false,
+      acknowledgementStatus: "acknowledged",
+    }, true);
+    const insert = db.calls.find((call) => call.sql.includes("INSERT INTO employee_asset"));
+    assert.ok(insert);
+    assert.equal(insert.params[9], true);
+    assert.equal(insert.params[10], "pending");
+  });
+
+  it("creates a direct assignment when the policy is disabled", async () => {
+    const db = saveDb();
+    await run(db, orgAdmin, "SaveEmployeeAsset", {
+      branchId: "b1",
+      employeeId: "member-e1",
+      name: "Work phone",
+      category: "Device",
+      assetTag: "WA-001",
+      status: "assigned",
+    });
+    const insert = db.calls.find((call) => call.sql.includes("INSERT INTO employee_asset"));
+    assert.ok(insert);
+    assert.equal(insert.params[9], false);
+    assert.equal(insert.params[10], "not_required");
+  });
+
+  it("does not request acknowledgment for an asset already marked returned", async () => {
+    const db = saveDb("returned");
+    await run(db, orgAdmin, "SaveEmployeeAsset", {
+      branchId: "b1",
+      employeeId: "member-e1",
+      name: "Work phone",
+      category: "Device",
+      assetTag: "WA-001",
+      status: "returned",
+    }, true);
+    const insert = db.calls.find((call) => call.sql.includes("INSERT INTO employee_asset"));
+    assert.ok(insert);
+    assert.equal(insert.params[9], false);
+    assert.equal(insert.params[10], "not_required");
+  });
+
+  it("starts a new acknowledgment when an asset is transferred", async () => {
+    const db = new FakeDb().whenCall(({ sql }) => {
+      const query = sql.toLowerCase();
+      if (query.includes("from branch where id = $1")) {
+        return [{ id: "b1", organizationId: "o1" }];
+      }
+      if (query.includes("from organization_member m") && query.includes("user_branch_assignment")) {
+        return [{ id: "member-e2" }];
+      }
+      if (query.includes("lower(asset_tag)")) return [];
+      if (query.includes("from employee_asset") && query.includes("for update")) {
+        return [{
+          id: "asset-1",
+          organizationId: "o1",
+          branchId: "b1",
+          employeeId: "member-e1",
+          status: "assigned",
+        }];
+      }
+      if (query.includes("from employee_asset ea") && query.includes("join branch b")) {
+        return [assetRow("pending", true)];
+      }
+      return undefined;
+    });
+    await run(db, orgAdmin, "SaveEmployeeAsset", {
+      id: "asset-1",
+      branchId: "b1",
+      employeeId: "member-e2",
+      name: "Work phone",
+      category: "Device",
+      assetTag: "WA-001",
+      status: "assigned",
+    }, true);
+    const update = db.calls.find((call) => call.sql.includes("UPDATE employee_asset"));
+    assert.ok(update);
+    assert.equal(update.params[9], true);
+    assert.equal(update.params[10], true);
+    assert.equal(update.params[11], "pending");
+  });
+
+  it("allows only the assigned employee to acknowledge and records their uid", async () => {
+    const db = new FakeDb().whenCall(({ sql }) => {
+      const query = sql.toLowerCase();
+      if (query.includes("for update of ea")) {
+        return [{ id: "asset-1", acknowledgementRequired: true, acknowledgementStatus: "pending" }];
+      }
+      if (query.includes("update employee_asset")) return [];
+      if (query.includes("from employee_asset ea") && query.includes("join branch b")) {
+        return [assetRow("acknowledged", true)];
+      }
+      return undefined;
+    });
+    const result = await run(db, employee, "AcknowledgeMyEmployeeAsset", { assetId: "asset-1" });
+    const update = db.calls.find((call) => call.sql.includes("UPDATE employee_asset"));
+    assert.ok(update);
+    assert.equal(update.params[1], employee.uid);
+    assert.deepEqual((result as { employeeAsset: { acknowledgementStatus: string } }).employeeAsset.acknowledgementStatus, "acknowledged");
+    const lookup = db.calls.find((call) => call.sql.includes("FOR UPDATE OF ea"));
+    assert.ok(lookup);
+    assert.match(lookup.sql, /m\.auth_uid = \$3/);
+    assert.deepEqual(lookup.params, ["asset-1", "o1", "e1"]);
+  });
+
+  it("does not let an employee acknowledge another employee's asset", async () => {
+    const db = new FakeDb().whenCall(({ sql }) =>
+      sql.toLowerCase().includes("for update of ea") ? [] : undefined,
+    );
+    await denies(run(db, employee, "AcknowledgeMyEmployeeAsset", { assetId: "asset-2" }));
+    assert.equal(db.calls.some((call) => call.sql.includes("UPDATE employee_asset")), false);
+  });
+
+  it("denies managers from acknowledging for employees", async () => {
+    const db = new FakeDb();
+    await denies(run(db, manager, "AcknowledgeMyEmployeeAsset", { assetId: "asset-1" }));
+    assert.equal(db.calls.length, 0);
   });
 });
 

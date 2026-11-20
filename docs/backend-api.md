@@ -468,8 +468,9 @@ The instance is a shared `db-f1-micro`, so keep `DB_POOL_MAX` at 3 and
 
 ## Employee assets
 
-Apply `functions/db/migrations/004_employee_assets.sql` before deploying the
-asset screen and callable operations. Assets are stored in PostgreSQL and linked
+Apply `functions/db/migrations/004_employee_assets.sql` and
+`functions/db/migrations/006_asset_acknowledgement.sql` before deploying the
+asset screen and data operations. Assets are stored in PostgreSQL and linked
 to one organization, branch, and employee membership. Asset tags are unique
 within an organization.
 
@@ -482,6 +483,19 @@ within an organization.
 - `SaveEmployeeAsset` and `DeleteEmployeeAsset` allow Organization Admins in
   their organization and Branch Managers only for employees and assets within
   the selected outlet. Employee accounts are read-only.
+- The Organization Admin-controlled `requireEmployeeAssetAcknowledgement`
+  setting lives in `organization_settings/{orgId}` in Firestore. When it is on,
+  `SaveEmployeeAsset` creates a pending receipt acknowledgment. The server
+  ignores any acknowledgment fields supplied by a client. The setting is read
+  when an asset is first assigned, reassigned to another employee/branch, or
+  reissued after being marked returned; existing assignments are not changed
+  when the setting is toggled.
+- `AcknowledgeMyEmployeeAsset` accepts `{ assetId }` from the assigned Employee
+  only and returns `{ employeeAsset }`. The server derives the employee from the
+  authenticated UID, stamps the acknowledgment time and UID in PostgreSQL, and
+  makes repeat acknowledgments idempotent. Employees cannot acknowledge an
+  asset assigned to another user, and managers cannot acknowledge on an
+  employee's behalf.
 
 Run the SQL-facing tests locally (they use an in-memory `FakeDb`, no database
 or emulator needed) from the repository root:

@@ -1,4 +1,5 @@
 import { onCall } from "firebase-functions/v2/https";
+import { getFirestore } from "firebase-admin/firestore";
 import { resolveActor } from "../auth/actor";
 import { reprojectAfterLicenseChange } from "../accounts/licenseProjection";
 import { callableOptions } from "../config";
@@ -20,7 +21,21 @@ export const dataOp = onCall(callableOptions, (request) =>
   guarded(async () => {
     const actor = await resolveActor(request);
     const db = await getDb();
-    const data = await runOperation(operations, { db, actor }, request.data);
+    const data = await runOperation(
+      operations,
+      {
+        db,
+        actor,
+        requireEmployeeAssetAcknowledgement: async (organizationId) => {
+          const snapshot = await getFirestore()
+            .collection("organization_settings")
+            .doc(organizationId)
+            .get();
+          return snapshot.get("requireEmployeeAssetAcknowledgement") === true;
+        },
+      },
+      request.data,
+    );
     await reprojectAfterLicenseChange(request.data);
     return { data };
   }),

@@ -24,6 +24,7 @@ class AssetsController extends ChangeNotifier
   List<OrganizationMember> _members = const [];
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _isAcknowledging = false;
   String _query = '';
   String? _errorMessage;
   String? _actionErrorMessage;
@@ -32,6 +33,7 @@ class AssetsController extends ChangeNotifier
   List<OrganizationMember> get members => _members;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
+  bool get isAcknowledging => _isAcknowledging;
   String? get errorMessage => _errorMessage;
   String? get actionErrorMessage => _actionErrorMessage;
   String get query => _query;
@@ -172,6 +174,44 @@ class AssetsController extends ChangeNotifier
     }
   }
 
+  Future<bool> acknowledgeAsset(
+    UserAccessContext access,
+    EmployeeAsset asset,
+  ) async {
+    final scopeGeneration = _scopeGeneration;
+    _isAcknowledging = true;
+    _actionErrorMessage = null;
+    notifyListeners();
+    try {
+      final acknowledged = await repository.acknowledgeAsset(
+        access: access,
+        assetId: asset.id,
+      );
+      if (scopeGeneration != _scopeGeneration) return false;
+      final index = _assets.indexWhere((current) => current.id == asset.id);
+      if (index != -1) {
+        final updated = [..._assets];
+        updated[index] = acknowledged;
+        _assets = updated;
+      }
+      return true;
+    } catch (error, stackTrace) {
+      if (scopeGeneration != _scopeGeneration) return false;
+      _actionErrorMessage = userMessageFor(
+        error,
+        stackTrace,
+        fallback:
+            'The asset receipt could not be acknowledged. Please try again.',
+      );
+      return false;
+    } finally {
+      if (scopeGeneration == _scopeGeneration) {
+        _isAcknowledging = false;
+        notifyListeners();
+      }
+    }
+  }
+
   void clearActionError() {
     _actionErrorMessage = null;
     notifyListeners();
@@ -185,6 +225,7 @@ class AssetsController extends ChangeNotifier
     _members = const [];
     _isLoading = false;
     _isSaving = false;
+    _isAcknowledging = false;
     _query = '';
     _errorMessage = null;
     _actionErrorMessage = null;

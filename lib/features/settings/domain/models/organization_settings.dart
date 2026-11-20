@@ -9,6 +9,7 @@ class OrganizationSettings {
     required this.requireGeolocation,
     required this.dailyDigest,
     required this.returnAlerts,
+    this.requireEmployeeAssetAcknowledgement = false,
     this.operationsEmail,
     this.emergencyPhone,
   });
@@ -21,6 +22,7 @@ class OrganizationSettings {
     requireGeolocation: true,
     dailyDigest: true,
     returnAlerts: true,
+    requireEmployeeAssetAcknowledgement: false,
   );
 
   /// Default geofence radius for newly created branches.
@@ -32,6 +34,7 @@ class OrganizationSettings {
   final bool requireGeolocation;
   final bool dailyDigest;
   final bool returnAlerts;
+  final bool requireEmployeeAssetAcknowledgement;
   final String? operationsEmail;
   final String? emergencyPhone;
 
@@ -42,6 +45,7 @@ class OrganizationSettings {
     bool? requireGeolocation,
     bool? dailyDigest,
     bool? returnAlerts,
+    bool? requireEmployeeAssetAcknowledgement,
     String? operationsEmail,
     String? emergencyPhone,
   }) => OrganizationSettings(
@@ -51,6 +55,9 @@ class OrganizationSettings {
     requireGeolocation: requireGeolocation ?? this.requireGeolocation,
     dailyDigest: dailyDigest ?? this.dailyDigest,
     returnAlerts: returnAlerts ?? this.returnAlerts,
+    requireEmployeeAssetAcknowledgement:
+        requireEmployeeAssetAcknowledgement ??
+        this.requireEmployeeAssetAcknowledgement,
     operationsEmail: operationsEmail ?? this.operationsEmail,
     emergencyPhone: emergencyPhone ?? this.emergencyPhone,
   );
@@ -64,6 +71,8 @@ class OrganizationSettings {
       other.requireGeolocation == requireGeolocation &&
       other.dailyDigest == dailyDigest &&
       other.returnAlerts == returnAlerts &&
+      other.requireEmployeeAssetAcknowledgement ==
+          requireEmployeeAssetAcknowledgement &&
       other.operationsEmail == operationsEmail &&
       other.emergencyPhone == emergencyPhone;
 
@@ -75,6 +84,7 @@ class OrganizationSettings {
     requireGeolocation,
     dailyDigest,
     returnAlerts,
+    requireEmployeeAssetAcknowledgement,
     operationsEmail,
     emergencyPhone,
   );

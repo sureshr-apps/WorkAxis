@@ -67,6 +67,8 @@ class FirestoreSettingsRepository implements SettingsRepository {
         'requireGeolocation': settings.requireGeolocation,
         'dailyDigest': settings.dailyDigest,
         'returnAlerts': settings.returnAlerts,
+        'requireEmployeeAssetAcknowledgement':
+            settings.requireEmployeeAssetAcknowledgement,
         'operationsEmail': _blankToNull(settings.operationsEmail),
         'emergencyPhone': _blankToNull(settings.emergencyPhone),
         'updatedBy': access.user.id,
@@ -128,6 +130,9 @@ class FirestoreSettingsRepository implements SettingsRepository {
           data['requireGeolocation'] as bool? ?? d.requireGeolocation,
       dailyDigest: data['dailyDigest'] as bool? ?? d.dailyDigest,
       returnAlerts: data['returnAlerts'] as bool? ?? d.returnAlerts,
+      requireEmployeeAssetAcknowledgement:
+          data['requireEmployeeAssetAcknowledgement'] as bool? ??
+          d.requireEmployeeAssetAcknowledgement,
       operationsEmail: data['operationsEmail'] as String?,
       emergencyPhone: data['emergencyPhone'] as String?,
     );

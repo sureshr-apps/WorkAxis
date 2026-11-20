@@ -13,7 +13,15 @@ const manager: Actor = { uid: "m1", role: "branchManager", organizationId: "o1",
 const employee: Actor = { uid: "e1", role: "employee", organizationId: "o1", branchIds: ["b1"] };
 
 function run(db: FakeDb, actor: Actor, op: string, vars: Record<string, unknown> = {}) {
-  return runOperation(operations, { db, actor }, { op, vars });
+  return runOperation(
+    operations,
+    {
+      db,
+      actor,
+      requireEmployeeAssetAcknowledgement: async () => false,
+    },
+    { op, vars },
+  );
 }
 
 const denies = (p: Promise<unknown>) =>
