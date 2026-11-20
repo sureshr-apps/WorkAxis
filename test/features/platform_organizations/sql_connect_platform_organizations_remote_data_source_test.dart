@@ -142,7 +142,7 @@ void main() {
     expect(gateway.singleVarsOf('GetOrganizationStats'), {'orgId': 'org1'});
     expect(gateway.singleVarsOf('ListMembersByOrgPaged'), {
       'orgId': 'org1',
-      'limit': 50,
+      'limit': 100,
       'offset': 0,
       'role': 'orgAdmin',
     });

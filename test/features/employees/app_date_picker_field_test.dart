@@ -82,7 +82,7 @@ void main() {
 
         final dobFinder = find.byType(AppDatePickerField);
         final genderDropdownFinder = find.byType(
-          DropdownButtonFormField<String?>,
+          DropdownButtonFormField<String>,
         );
 
         expect(dobFinder, findsOneWidget);

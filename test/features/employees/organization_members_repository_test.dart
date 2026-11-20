@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/core/backend/account_callables.dart';
@@ -235,59 +234,71 @@ void main() {
       },
     );
 
-    test(
-      'a denied employee_private read leaves salary and Aadhaar null',
-      () async {
-        final fakeFirestore = _DenyPrivateFirestore();
-        await fakeFirestore.collection('users').doc('user-emp-02').set({
-          'designation': 'Cashier',
-          // Legacy docs may still carry the values; they are never read from here.
-          'salary': 1.0,
-          'aadhaarNumber': '999999999999',
-        });
-        final managerRepo = SqlConnectOrganizationMembersRepository(
-          dataSource: FakeMembersDataSource(server),
-          accounts: AccountCallables(server),
-          firestore: fakeFirestore,
-        );
-
-        final member = await managerRepo.getMember(
-          access: orgAdminAccess(),
-          memberId: 'user-emp-02',
-        );
-        expect(member!.designation, 'Cashier');
-        expect(member.salary, isNull);
-        expect(member.aadhaarNumber, isNull);
-        expect(member.aadhaarPhotoUrl, isNull);
-
-        final page = await managerRepo.getMembersPage(access: orgAdminAccess());
-        final listed = page.items.firstWhere((m) => m.id == 'user-emp-02');
-        expect(listed.designation, 'Cashier');
-        expect(listed.salary, isNull);
-      },
-    );
-
-    test('editing without private access sends no salary or Aadhaar', () async {
+    test('a branch manager reads private HR details for an employee in the active branch', () async {
+      final fakeFirestore = FakeFirebaseFirestore();
+      await fakeFirestore.collection('users').doc('user-emp-02').set({
+        'organizationId': 'org-acme',
+        'role': 'employee',
+        'branchIds': ['br-01'],
+        'designation': 'Cashier',
+      });
+      await fakeFirestore.collection('employee_private').doc('user-emp-02').set(
+        {
+          'organizationId': 'org-acme',
+          'salary': 75000.0,
+          'aadhaarNumber': '123456789012',
+          'aadhaarPhotoUrl': 'https://example.com/aadhaar.jpg',
+        },
+      );
       final managerRepo = SqlConnectOrganizationMembersRepository(
         dataSource: FakeMembersDataSource(server),
         accounts: AccountCallables(server),
-        firestore: _DenyPrivateFirestore(),
+        firestore: fakeFirestore,
       );
-      final loaded = await managerRepo.getMember(
-        access: orgAdminAccess(),
+      final access = branchManagerAccess(activeBranchId: 'br-01');
+
+      final member = await managerRepo.getMember(
+        access: access,
         memberId: 'user-emp-02',
+        activeBranchId: 'br-01',
       );
-      await managerRepo.saveMember(
-        access: orgAdminAccess(),
-        member: loaded!.copyWith(fullName: 'Renamed'),
-        initialPassword: '',
+      expect(member, isNotNull);
+      expect(member!.designation, 'Cashier');
+      expect(member.salary, 75000.0);
+      expect(member.aadhaarNumber, '123456789012');
+      expect(member.aadhaarPhotoUrl, 'https://example.com/aadhaar.jpg');
+
+      final page = await managerRepo.getMembersPage(
+        access: access,
+        activeBranchId: 'br-01',
       );
-      final payload = server.callsTo('updateUserAccount').single.payload;
-      expect(payload.containsKey('salary'), isFalse);
-      expect(payload.containsKey('aadhaarNumber'), isFalse);
-      expect(payload.containsKey('aadhaarPhotoUrl'), isFalse);
-      expect(payload.containsKey('employeeCode'), isFalse);
+      final listed = page.items.firstWhere((m) => m.id == 'user-emp-02');
+      expect(listed.salary, 75000.0);
     });
+
+    test(
+      'editing when private data is not loaded sends no salary or Aadhaar',
+      () async {
+        final managerRepo = SqlConnectOrganizationMembersRepository(
+          dataSource: FakeMembersDataSource(server),
+          accounts: AccountCallables(server),
+        );
+        final loaded = await managerRepo.getMember(
+          access: orgAdminAccess(),
+          memberId: 'user-emp-02',
+        );
+        await managerRepo.saveMember(
+          access: orgAdminAccess(),
+          member: loaded!.copyWith(fullName: 'Renamed'),
+          initialPassword: '',
+        );
+        final payload = server.callsTo('updateUserAccount').single.payload;
+        expect(payload.containsKey('salary'), isFalse);
+        expect(payload.containsKey('aadhaarNumber'), isFalse);
+        expect(payload.containsKey('aadhaarPhotoUrl'), isFalse);
+        expect(payload.containsKey('employeeCode'), isFalse);
+      },
+    );
 
     test(
       'create without an employee ID carries the server-assigned one',
@@ -321,20 +332,6 @@ void main() {
       expect(member!.dailyWorkHours, 8.0);
     });
   });
-}
-
-/// Firestore whose `employee_private` reads are rejected, like a Branch Manager.
-class _DenyPrivateFirestore extends FakeFirebaseFirestore {
-  @override
-  CollectionReference<Map<String, dynamic>> collection(String path) {
-    if (path == 'employee_private') {
-      throw FirebaseException(
-        plugin: 'cloud_firestore',
-        code: 'permission-denied',
-      );
-    }
-    return super.collection(path);
-  }
 }
 
 /// Returns [orphanId] without an auth uid, like a seed row never provisioned.

@@ -267,7 +267,9 @@ describe("UpdateLicensePlan", () => {
 
 describe("ChangeLicensePlanStatus and DeleteLicensePlan", () => {
   it("changes status and returns null for a missing plan", async () => {
-    const db = new FakeDb().when("set status", [{ id: "p1", status: "inactive" }]);
+    const db = new FakeDb()
+      .when("for update", [{ id: "p1" }])
+      .when("set status", [{ id: "p1", status: "inactive" }]);
     assert.deepEqual(
       await run(db, platform, "ChangeLicensePlanStatus", { id: "p1", status: "inactive" }),
       { licensePlan_update: { id: "p1", status: "inactive" } },

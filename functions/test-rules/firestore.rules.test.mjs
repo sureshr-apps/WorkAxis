@@ -116,16 +116,19 @@ describe("employee_private", () => {
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "employee_private/emp"), { organizationId: "o1", salary: 1000, aadhaarNumber: "123412341234" });
+      await setDoc(doc(ctx.firestore(), "employee_private/emp2"), { organizationId: "o1", salary: 2000, aadhaarNumber: "987698769876" });
     });
   });
 
-  it("lets the active org admin of that org and the employee read it", async () => {
+  it("lets the active org admin, in-scope branch manager and employee read it", async () => {
     await assertSucceeds(getDoc(doc(db("orgAdmin"), "employee_private/emp")));
+    await assertSucceeds(getDoc(doc(db("bm"), "employee_private/emp")));
     await assertSucceeds(getDoc(doc(db("emp"), "employee_private/emp")));
   });
 
-  it("denies branch managers, platform roles, other orgs, suspended admins and anonymous", async () => {
-    for (const who of ["bm", "owner", "padmin", "orgAdmin2", "suspendedAdmin"]) {
+  it("denies out-of-scope branch managers, platform roles, other orgs, suspended admins and anonymous", async () => {
+    await assertFails(getDoc(doc(db("bm"), "employee_private/emp2")));
+    for (const who of ["owner", "padmin", "orgAdmin2", "suspendedAdmin"]) {
       await assertFails(getDoc(doc(db(who), "employee_private/emp")));
     }
     await assertFails(getDoc(doc(anon(), "employee_private/emp")));
