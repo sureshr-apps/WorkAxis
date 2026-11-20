@@ -52,6 +52,9 @@ class OrganizationContactFields extends StatelessWidget {
               hintText: 'operations@example.com',
               errorText: emailError,
               keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.none,
             ),
             AppTextField(
               controller: form.contactPhone,

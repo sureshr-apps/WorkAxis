@@ -17,7 +17,8 @@ rules_version = '2';
 //   users/{uid}      read-only profile projection              clients read only
 //   employee_private/{uid} = { organizationId, salary?, aadhaarNumber?,
 //       aadhaarPhotoUrl?, updatedAt }  sensitive HR data; read by the active Org Admin
-//       of that org and by the employee themself; platform and branch roles denied
+//       of that org, an assigned Branch Manager for employees in their branches,
+//       and by the employee themself; platform roles denied
 //   attendance_entries/{entryId}   employees' punches are written by the
 //       recordAttendancePunch / recordGroupAttendance callables; managers
 //       may only review existing entries in their scope
@@ -64,6 +65,17 @@ service cloud.firestore {
       return isActive() && role() == 'branchManager' &&
         claimOrg() != '' && claimOrg() == orgId &&
         branchId in claimBranches();
+    }
+
+    function isBranchManagerOfEmployee(orgId, userId) {
+      let employeeProfile = get(
+        /databases/$(database)/documents/users/$(userId)
+      ).data;
+      return isActive() && role() == 'branchManager' &&
+        claimOrg() != '' && claimOrg() == orgId &&
+        employeeProfile.get('organizationId', '') == orgId &&
+        employeeProfile.get('role', '') == 'employee' &&
+        employeeProfile.get('branchIds', []).hasAny(claimBranches());
     }
 
     // Org Admin of the org, or Branch Manager of the branch.
@@ -150,12 +162,16 @@ service cloud.firestore {
 
     // ---------------------------------------------------------------
     // 2b. Employee private HR data (salary, Aadhaar). Written only by
-    //     trusted functions. Branch managers and platform roles are denied.
+    //     trusted functions. A Branch Manager may read it only for an employee
+    //     assigned to one of their branches in the same organization.
     // ---------------------------------------------------------------
     match /employee_private/{userId} {
       allow get: if isActive() && (
         request.auth.uid == userId ||
-        isOrgAdminOf(resource.data.get('organizationId', ''))
+        isOrgAdminOf(resource.data.get('organizationId', '')) ||
+        isBranchManagerOfEmployee(
+          resource.data.get('organizationId', ''), userId
+        )
       );
       allow list, write: if false;
     }

@@ -317,8 +317,8 @@ class OrganizationMemberPolicy {
     }
   }
 
-  /// Validates a status change (suspend / restore) or password reset target.
-  static void assertCanChangeCredentialsOrStatus({
+  /// Validates a status change (suspend / restore) target.
+  static void assertCanChangeStatus({
     required UserAccessContext access,
     required OrganizationMember existing,
     String? activeBranchId,
@@ -329,8 +329,25 @@ class OrganizationMemberPolicy {
     }
     _assertCanManage(access, existing, activeBranchId);
     if (_isSelf(access, existing)) {
+      throw ValidationException('You cannot suspend your own account here.');
+    }
+  }
+
+  /// Validates a password reset. Organization Admins may reset their own
+  /// password from the member directory; self-status changes stay prohibited.
+  static void assertCanResetPassword({
+    required UserAccessContext access,
+    required OrganizationMember existing,
+    String? activeBranchId,
+  }) {
+    final orgId = requireOrganizationId(access);
+    if (existing.organizationId != orgId) {
+      throw ValidationException('This account is outside your organization.');
+    }
+    _assertCanManage(access, existing, activeBranchId);
+    if (_isSelf(access, existing) && access.user.role != UserRole.orgAdmin) {
       throw ValidationException(
-        'You cannot suspend or reset the password of your own account here.',
+        'You cannot reset the password of your own account here.',
       );
     }
   }

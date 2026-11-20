@@ -262,6 +262,8 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = plan.isActive;
+    final assignedPlanCannotBeDeactivated =
+        isActive && plan.assignedOrganizations > 0;
     return Row(
       children: [
         Expanded(
@@ -283,13 +285,15 @@ class _Footer extends StatelessWidget {
           onPressed: onEdit,
         ),
         AppIconButton(
-          tooltip: isActive
+          tooltip: assignedPlanCannotBeDeactivated
+              ? 'Cannot deactivate while organizations use this plan'
+              : isActive
               ? 'Deactivate ${plan.name}'
               : 'Activate ${plan.name}',
-          icon: isActive ? Icons.archive_outlined : Icons.unarchive_outlined,
-          color: AppColors.secondary,
+          icon: isActive ? Icons.toggle_off_outlined : Icons.toggle_on_outlined,
+          color: isActive ? AppColors.statusUrgentText : AppColors.kpiPositive,
           constraints: _actionTouchTarget,
-          onPressed: onToggleStatus,
+          onPressed: assignedPlanCannotBeDeactivated ? null : onToggleStatus,
         ),
         AppIconButton(
           tooltip: 'Delete ${plan.name}',

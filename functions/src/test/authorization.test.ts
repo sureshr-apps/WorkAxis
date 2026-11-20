@@ -155,15 +155,17 @@ describe("assertCanDeletePlatformAdministrator", () => {
 });
 
 describe("assertCanDeleteOrganizationAdmin", () => {
-  it("lets platform staff delete an organization administrator", () => {
+  it("lets platform staff and peer organization admins delete an administrator", () => {
     allowed(() => assertCanDeleteOrganizationAdmin(owner, t("orgAdmin", "o1", [], "other")));
     allowed(() => assertCanDeleteOrganizationAdmin(padmin, t("orgAdmin", "o1", [], "other")));
+    allowed(() => assertCanDeleteOrganizationAdmin(orgAdmin, t("orgAdmin", "o1", [], "other")));
   });
 
   it("refuses customer roles and non-administrator targets", () => {
-    for (const a of [orgAdmin, bm, emp]) {
+    for (const a of [bm, emp]) {
       forbidden(() => assertCanDeleteOrganizationAdmin(a, t("orgAdmin", "o1", [], "other")));
     }
+    forbidden(() => assertCanDeleteOrganizationAdmin(orgAdmin, t("orgAdmin", "o2", [], "other")));
     forbidden(() => assertCanDeleteOrganizationAdmin(owner, t("branchManager", "o1", ["b1"], "other")));
     forbidden(() => assertCanDeleteOrganizationAdmin(owner, t("platformAdmin", undefined, [], "other")));
   });

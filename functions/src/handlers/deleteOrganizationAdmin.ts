@@ -12,7 +12,8 @@ import { deleteMemberByAuthUid, listMembersOfOrganization } from "../sql/members
 import { asBag, reqString } from "../util/input";
 
 /**
- * deleteOrganizationAdmin (callable, asia-south1) - platform staff only.
+ * deleteOrganizationAdmin (callable, asia-south1) - platform staff or a peer
+ * Organization Admin in the same organization.
  * Request:  { targetUid }
  * Response: { uid, deleted }
  * Refuses to remove an organization's only active administrator. Removes the

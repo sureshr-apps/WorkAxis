@@ -26,6 +26,8 @@ class AppTextField extends StatelessWidget {
     this.maxLength,
     this.counterText,
     this.textCapitalization = TextCapitalization.none,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
     this.inputFormatters,
     this.enabled = true,
     this.autofocus = false,
@@ -72,6 +74,8 @@ class AppTextField extends StatelessWidget {
   final int? maxLength;
   final String? counterText;
   final TextCapitalization textCapitalization;
+  final bool autocorrect;
+  final bool enableSuggestions;
   final List<TextInputFormatter>? inputFormatters;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
@@ -146,6 +150,8 @@ class AppTextField extends StatelessWidget {
             minLines: minLines,
             maxLength: maxLength,
             textCapitalization: textCapitalization,
+            autocorrect: autocorrect,
+            enableSuggestions: enableSuggestions,
             inputFormatters: inputFormatters,
             keyboardType: keyboardType,
             textInputAction: textInputAction,

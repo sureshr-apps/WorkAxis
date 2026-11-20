@@ -6,6 +6,7 @@ import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/attachment_image.dart';
 import 'package:workaxis/core/widgets/kpi/app_kpi_card.dart';
 import 'package:workaxis/core/widgets/kpi/responsive_kpi_section.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
@@ -46,7 +47,10 @@ class OrganizationOverviewTab extends StatelessWidget {
                   children: [
                     _OrganizationMetrics(organization: organization),
                     const SizedBox(height: AppSpacing.md),
-                    _BrandingCard(onUpload: onUpload),
+                    _BrandingCard(
+                      logoUrl: organization.logoUrl,
+                      onUpload: onUpload,
+                    ),
                   ],
                 ),
               ),
@@ -64,7 +68,7 @@ class OrganizationOverviewTab extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             _OrganizationMetrics(organization: organization),
             const SizedBox(height: AppSpacing.md),
-            _BrandingCard(onUpload: onUpload),
+            _BrandingCard(logoUrl: organization.logoUrl, onUpload: onUpload),
           ],
         );
       },
@@ -367,8 +371,9 @@ class _OrganizationMetrics extends StatelessWidget {
 }
 
 class _BrandingCard extends StatelessWidget {
-  const _BrandingCard({required this.onUpload});
+  const _BrandingCard({required this.logoUrl, required this.onUpload});
 
+  final String? logoUrl;
   final FutureOr<void> Function() onUpload;
 
   @override
@@ -383,7 +388,7 @@ class _BrandingCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _LogoUploadCard(onUpload: onUpload),
+                _LogoUploadCard(logoUrl: logoUrl, onUpload: onUpload),
                 const SizedBox(height: AppSpacing.md),
                 const _PrinterNote(),
               ],
@@ -443,8 +448,9 @@ class _BrandingHeader extends StatelessWidget {
 }
 
 class _LogoUploadCard extends StatelessWidget {
-  const _LogoUploadCard({required this.onUpload});
+  const _LogoUploadCard({required this.logoUrl, required this.onUpload});
 
+  final String? logoUrl;
   final FutureOr<void> Function() onUpload;
 
   @override
@@ -517,7 +523,7 @@ class _LogoUploadCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _LogoPreview(),
+              _LogoPreview(logoUrl: logoUrl),
               const SizedBox(width: AppSpacing.md),
               Expanded(child: details),
             ],
@@ -551,12 +557,30 @@ class _RequiredBadge extends StatelessWidget {
   }
 }
 
-/// Dashed placeholder where the logo preview will appear.
+/// Organization logo preview, with a placeholder before the first upload.
 class _LogoPreview extends StatelessWidget {
-  const _LogoPreview();
+  const _LogoPreview({required this.logoUrl});
+
+  final String? logoUrl;
 
   @override
   Widget build(BuildContext context) {
+    final reference = logoUrl?.trim();
+    if (reference != null && reference.isNotEmpty) {
+      return Container(
+        width: 104,
+        height: 104,
+        padding: const EdgeInsets.all(AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          border: Border.all(color: AppColors.outlineVariant),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: AttachmentImage(reference: reference, fit: BoxFit.contain),
+      );
+    }
+
     return CustomPaint(
       painter: const _DashedRoundedRectPainter(
         color: AppColors.outlineVariant,

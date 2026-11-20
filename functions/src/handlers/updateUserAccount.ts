@@ -138,7 +138,6 @@ export const updateUserAccount = onCall(callableOptions, (request) =>
               );
             },
             complete: async () => {
-              await job.delete();
               // Patch semantics: value = set, null = delete the field, omitted = keep.
               const updates: Record<string, unknown> = {
                 updatedAt: FieldValue.serverTimestamp(),
@@ -151,6 +150,7 @@ export const updateUserAccount = onCall(callableOptions, (request) =>
               await usersCol()
                 .doc(targetUid)
                 .set({ ...updates, ...privateKeyScrub() }, { merge: true });
+              await job.delete();
             },
             recordRecoveryFailure: (error) =>
               logger.error("Account update recovery pending", {

@@ -177,7 +177,13 @@ class AccountCallables {
       );
       payload[field.name] = null;
     }
-    await _functions.call('updateUserAccount', payload);
+    final response = await _functions.call('updateUserAccount', payload);
+    if (response['projectionPending'] == true) {
+      throw const DatabaseException(
+        'Employee profile projection is pending.',
+        userMessage: 'The account was updated, but some profile details could not be synced. Save again to retry.',
+      );
+    }
   }
 
   Future<void> resetPassword({

@@ -81,7 +81,7 @@ const LICENSE_HISTORY_SQL = `SELECT h.id, h.event_type AS "eventType", h.event_a
 
 async function findPlan(tx: SqlExecutor, planId: string): Promise<PlanRow | null> {
   const rows = await tx.query<PlanRow>(
-    `SELECT id, level, status FROM license_plan WHERE id = $1`,
+    `SELECT id, level, status FROM license_plan WHERE id = $1 FOR UPDATE`,
     [planId],
   );
   return rows[0] ?? null;

@@ -100,11 +100,15 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
     final canManage =
         access != null &&
         OrganizationMemberPolicy.canManage(access, member, _activeBranchId);
-    // Nobody suspends, resets or deletes their own account here.
+    // The signed-in Organization Admin can reset their own password, but
+    // cannot suspend or delete their own account.
     final isSelf =
         access != null &&
         (member.id == access.user.id || member.authUid == access.user.id);
     final canAct = canManage && !isSelf;
+    final canResetPassword =
+        canAct ||
+        (canManage && isSelf && access.user.role == UserRole.orgAdmin);
     final branchNames = memberBranchNames(member, access);
 
     return Scaffold(
@@ -143,7 +147,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
                   inactiveMessage:
                       'This employee cannot sign in while access is suspended.',
                   deleteTooltip: 'Delete ${member.fullName}',
-                  onReset: canAct
+                  onReset: canResetPassword
                       ? () {
                           _resetPassword(access, member);
                         }
@@ -157,6 +161,10 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
                       ? () {
                           _delete(access, member);
                         }
+                      : null,
+                  showDisabledToggleActive: canManage && isSelf,
+                  toggleTooltip: isSelf
+                      ? 'You cannot suspend or restore your own account.'
                       : null,
                 ),
                 const SizedBox(height: AppSpacing.md),

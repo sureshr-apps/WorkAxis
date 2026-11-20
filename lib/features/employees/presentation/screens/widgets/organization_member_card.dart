@@ -24,18 +24,22 @@ class OrganizationMemberCard extends StatelessWidget {
     this.onResetPassword,
     this.onToggleStatus,
     this.onDelete,
+    this.showDisabledStatusAction = false,
+    this.statusActionTooltip,
   });
 
   final OrganizationMember member;
   final List<String> branchNames;
   final VoidCallback onOpen;
 
-  /// Management actions. Each is null, and hidden, when the caller may not
-  /// perform it on this account.
+  /// Management actions are hidden when unavailable, except the status action
+  /// which may be shown disabled for the signed-in administrator.
   final FutureOr<void> Function()? onEdit;
   final FutureOr<void> Function()? onResetPassword;
   final FutureOr<void> Function()? onToggleStatus;
   final FutureOr<void> Function()? onDelete;
+  final bool showDisabledStatusAction;
+  final String? statusActionTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -90,19 +94,21 @@ class OrganizationMemberCard extends StatelessWidget {
           color: AppColors.secondary,
           onPressed: onResetPassword!,
         ),
-      if (onToggleStatus != null)
+      if (onToggleStatus != null || showDisabledStatusAction)
         isActive
             ? AccountCardAction(
+                tooltip: statusActionTooltip ?? 'Suspend ${member.fullName}',
                 label: 'Suspend',
                 icon: Icons.person_off_outlined,
                 color: AppColors.statusUrgentText,
-                onPressed: onToggleStatus!,
+                onPressed: onToggleStatus,
               )
             : AccountCardAction(
+                tooltip: statusActionTooltip ?? 'Restore ${member.fullName}',
                 label: 'Restore',
                 icon: Icons.how_to_reg_outlined,
                 color: AppColors.kpiPositive,
-                onPressed: onToggleStatus!,
+                onPressed: onToggleStatus,
               ),
       if (onDelete != null)
         AccountCardAction(

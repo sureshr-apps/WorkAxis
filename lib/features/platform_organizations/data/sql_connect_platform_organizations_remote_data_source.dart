@@ -75,18 +75,13 @@ class SqlConnectPlatformOrganizationsRemoteDataSource
 
   @override
   Future<CustomerOrganization?> getById(String id) async {
-    final (org, stats, admins) = await (
+    final (org, stats) = await (
       _gateway.call('GetOrganizationById', {'id': id}),
       _gateway.call('GetOrganizationStats', {'orgId': id}),
-      _gateway.call('ListMembersByOrgPaged', {
-        'orgId': id,
-        'limit': 50,
-        'offset': 0,
-        'role': 'orgAdmin',
-      }),
     ).wait;
     final o = org.optObject('organization');
     if (o == null) return null;
+    final admins = await _organizationAdministrators(id);
     return CustomerOrganization(
       id: o.string('id'),
       name: o.string('name'),
@@ -103,19 +98,45 @@ class SqlConnectPlatformOrganizationsRemoteDataSource
       address: _blankToNull(o.optString('address')),
       taxIdentification: _blankToNull(o.optString('taxIdentification')),
       logoUrl: _blankToNull(o.optString('logoUrl')),
-      admins: [
-        for (final m in admins.objects('organizationMembers'))
-          OrganizationAdminUser(
-            id: m.string('id'),
-            name: m.string('fullName'),
-            email: LoginEmail.displayable(m.string('email')),
-            phone: m.optString('phone') ?? '',
-            username: m.string('username'),
-            authUid: m.optString('authUid'),
-            status: OrganizationAdminStatus.fromAccountName(m.string('status')),
-          ),
-      ],
+      admins: admins,
     );
+  }
+
+  Future<List<OrganizationAdminUser>> _organizationAdministrators(
+    String organizationId,
+  ) async {
+    const pageSize = 100;
+    var offset = 0;
+    var total = 1;
+    final administrators = <OrganizationAdminUser>[];
+
+    while (offset < total) {
+      final data = await _gateway.call('ListMembersByOrgPaged', {
+        'orgId': organizationId,
+        'limit': pageSize,
+        'offset': offset,
+        'role': 'orgAdmin',
+      });
+      final members = data.objects('organizationMembers');
+      administrators.addAll([
+        for (final member in members)
+          OrganizationAdminUser(
+            id: member.string('id'),
+            name: member.string('fullName'),
+            email: LoginEmail.displayable(member.string('email')),
+            phone: member.optString('phone') ?? '',
+            username: member.string('username'),
+            authUid: member.optString('authUid'),
+            status: OrganizationAdminStatus.fromAccountName(
+              member.string('status'),
+            ),
+          ),
+      ]);
+      total = data.countOf('total');
+      if (members.isEmpty) break;
+      offset += members.length;
+    }
+    return administrators;
   }
 
   @override

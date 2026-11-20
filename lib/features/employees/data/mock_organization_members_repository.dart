@@ -186,7 +186,7 @@ class MockOrganizationMembersRepository
       _ensureUnique(next);
       var updated = next;
       if (member.status != existing.status) {
-        OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+        OrganizationMemberPolicy.assertCanChangeStatus(
           access: access,
           existing: existing,
           activeBranchId: activeBranchId,
@@ -207,7 +207,7 @@ class MockOrganizationMembersRepository
     String? activeBranchId,
   }) async {
     final existing = _requireExisting(access, member.id);
-    OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+    OrganizationMemberPolicy.assertCanChangeStatus(
       access: access,
       existing: existing,
       activeBranchId: activeBranchId,
@@ -225,7 +225,7 @@ class MockOrganizationMembersRepository
     String? activeBranchId,
   }) async {
     final existing = _requireExisting(access, member.id);
-    OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+    OrganizationMemberPolicy.assertCanResetPassword(
       access: access,
       existing: existing,
       activeBranchId: activeBranchId,

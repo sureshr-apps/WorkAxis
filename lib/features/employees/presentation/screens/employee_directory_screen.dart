@@ -297,17 +297,21 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     final canManage =
         access != null &&
         OrganizationMemberPolicy.canManage(access, member, branchId);
-    // Nobody suspends, resets or deletes their own account here.
+    // The signed-in Organization Admin can reset their own password, but
+    // cannot suspend or delete their own account.
     final isSelf =
         access != null &&
         (member.id == access.user.id || member.authUid == access.user.id);
     final canAct = canManage && !isSelf;
+    final canResetPassword =
+        canAct ||
+        (canManage && isSelf && access.user.role == UserRole.orgAdmin);
     return OrganizationMemberCard(
       member: member,
       branchNames: memberBranchNames(member, access),
       onOpen: () => _openDetails(member, access),
       onEdit: canManage ? () => _openEditor(access, member: member) : null,
-      onResetPassword: canAct
+      onResetPassword: canResetPassword
           ? () {
               resetMemberPassword(
                 context,
@@ -316,6 +320,10 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                 activeBranchId: _activeBranchId,
               );
             }
+          : null,
+      showDisabledStatusAction: canManage && isSelf,
+      statusActionTooltip: isSelf
+          ? 'You cannot suspend or restore your own account.'
           : null,
       onToggleStatus: canAct
           ? () {

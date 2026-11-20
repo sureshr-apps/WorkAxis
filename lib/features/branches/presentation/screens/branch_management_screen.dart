@@ -135,16 +135,6 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                   icon: Icons.store_outlined,
                   title: hasQuery ? 'No matches found' : 'No branches yet',
                   message: hasQuery ? 'Try a different branch name or code.' : 'Add a branch to configure its location and operations.',
-                  action: !hasQuery && access != null
-                      ? AppButton.secondary(
-                          text: 'Add Branch',
-                          iconData: Icons.add,
-                          isFullWidth: false,
-                          onPressed: () {
-                            _openEditor();
-                          },
-                        )
-                      : null,
                 ),
               )
             else

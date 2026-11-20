@@ -12,7 +12,8 @@ import 'package:workaxis/core/widgets/status_chip.dart';
 
 /// The Account access panel of a user's details page. The sign-in status and a
 /// delete icon sit at the top right; below them are the status message and the
-/// Reset and Suspend or Restore actions. Pass null to leave an action out.
+/// Reset and Suspend or Restore actions. Pass null to leave an action out;
+/// [showDisabledToggleActive] keeps the status action visible but disabled.
 class AccountStatusPanel extends StatelessWidget {
   const AccountStatusPanel({
     super.key,
@@ -23,6 +24,8 @@ class AccountStatusPanel extends StatelessWidget {
     this.onReset,
     this.onToggleActive,
     this.onDelete,
+    this.showDisabledToggleActive = false,
+    this.toggleTooltip,
     this.deleteTooltip = 'Delete',
   });
 
@@ -39,6 +42,8 @@ class AccountStatusPanel extends StatelessWidget {
   final FutureOr<void> Function()? onReset;
   final FutureOr<void> Function()? onToggleActive;
   final FutureOr<void> Function()? onDelete;
+  final bool showDisabledToggleActive;
+  final String? toggleTooltip;
   final String deleteTooltip;
 
   @override
@@ -72,6 +77,23 @@ class AccountStatusPanel extends StatelessWidget {
       ],
     );
 
+    final toggleButton = isActive
+        ? AppButton.outlined(
+            text: 'Suspend',
+            iconData: Icons.block_outlined,
+            isFullWidth: isCompact,
+            onPressed: isUpdating ? null : onToggleActive,
+          )
+        : AppButton.secondary(
+            text: 'Restore',
+            iconData: Icons.check_circle_outline,
+            isFullWidth: isCompact,
+            onPressed: isUpdating ? null : onToggleActive,
+          );
+    final statusButton = toggleTooltip == null
+        ? toggleButton
+        : Tooltip(message: toggleTooltip!, child: toggleButton);
+
     final buttons = [
       if (onReset != null)
         AppButton.outlined(
@@ -80,20 +102,7 @@ class AccountStatusPanel extends StatelessWidget {
           isFullWidth: isCompact,
           onPressed: isUpdating ? null : onReset,
         ),
-      if (onToggleActive != null)
-        isActive
-            ? AppButton.outlined(
-                text: 'Suspend',
-                iconData: Icons.block_outlined,
-                isFullWidth: isCompact,
-                onPressed: isUpdating ? null : onToggleActive,
-              )
-            : AppButton.secondary(
-                text: 'Restore',
-                iconData: Icons.check_circle_outline,
-                isFullWidth: isCompact,
-                onPressed: isUpdating ? null : onToggleActive,
-              ),
+      if (onToggleActive != null || showDisabledToggleActive) statusButton,
     ];
 
     return AccessPanel(

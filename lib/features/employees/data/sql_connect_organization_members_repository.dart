@@ -85,7 +85,11 @@ class SqlConnectOrganizationMembersRepository
           role: scopedRole,
         );
       }
-      final enriched = await _enrichWithProfiles(page.items);
+      final enriched = await _enrichWithProfiles(
+        access,
+        page.items,
+        activeBranchId: branchId,
+      );
       return PageResult(
         items: enriched,
         total: page.total,
@@ -114,7 +118,11 @@ class SqlConnectOrganizationMembersRepository
         );
         if (!member.branchIds.contains(branch)) return null;
       }
-      return await _enrichSingle(member);
+      return await _enrichSingle(
+        access,
+        member,
+        activeBranchId: activeBranchId,
+      );
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -172,8 +180,12 @@ class SqlConnectOrganizationMembersRepository
     String? activeBranchId,
   }) async {
     try {
-      final existing = await _loadExisting(access, member.id);
-      OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+      final existing = await _loadExisting(
+        access,
+        member.id,
+        activeBranchId: activeBranchId,
+      );
+      OrganizationMemberPolicy.assertCanChangeStatus(
         access: access,
         existing: existing,
         activeBranchId: activeBranchId,
@@ -182,7 +194,7 @@ class SqlConnectOrganizationMembersRepository
         targetUid: _requireUid(existing),
         status: status,
       );
-      return await _reload(existing.id);
+      return await _reload(access, existing.id, activeBranchId: activeBranchId);
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -195,13 +207,22 @@ class SqlConnectOrganizationMembersRepository
     String? activeBranchId,
   }) async {
     try {
-      final existing = await _loadExisting(access, member.id);
+      final existing = await _loadExisting(
+        access,
+        member.id,
+        activeBranchId: activeBranchId,
+      );
       OrganizationMemberPolicy.assertCanDelete(
         access: access,
         existing: existing,
         activeBranchId: activeBranchId,
       );
-      await accounts.deleteOrganizationMember(targetUid: _requireUid(existing));
+      final uid = _requireUid(existing);
+      if (existing.role == UserRole.orgAdmin) {
+        await accounts.deleteOrganizationAdmin(targetUid: uid);
+      } else {
+        await accounts.deleteOrganizationMember(targetUid: uid);
+      }
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -217,8 +238,12 @@ class SqlConnectOrganizationMembersRepository
     try {
       final passwordError = ContactValidators.password(newPassword);
       if (passwordError != null) throw ValidationException(passwordError);
-      final existing = await _loadExisting(access, member.id);
-      OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+      final existing = await _loadExisting(
+        access,
+        member.id,
+        activeBranchId: activeBranchId,
+      );
+      OrganizationMemberPolicy.assertCanResetPassword(
         access: access,
         existing: existing,
         activeBranchId: activeBranchId,
@@ -286,7 +311,11 @@ class SqlConnectOrganizationMembersRepository
     OrganizationMember draft,
     String? activeBranchId,
   ) async {
-    final existing = await _loadExisting(access, draft.id);
+    final existing = await _loadExisting(
+      access,
+      draft.id,
+      activeBranchId: activeBranchId,
+    );
     final next = OrganizationMemberPolicy.prepareUpdate(
       access: access,
       existing: existing,
@@ -350,19 +379,19 @@ class SqlConnectOrganizationMembersRepository
           : null,
     );
     if (draft.status != existing.status) {
-      OrganizationMemberPolicy.assertCanChangeCredentialsOrStatus(
+      OrganizationMemberPolicy.assertCanChangeStatus(
         access: access,
         existing: existing,
         activeBranchId: activeBranchId,
       );
       await accounts.setStatus(targetUid: uid, status: draft.status);
     }
-    return _reload(existing.id);
+    return _reload(access, existing.id, activeBranchId: activeBranchId);
   }
 
   /// Optional fields the user emptied. A clear is sent only when the stored
-  /// value was known and non-empty: values the caller could not read (for
-  /// example salary/Aadhaar for a Branch Manager) load as null, so they stay
+  /// value was known and non-empty: values the caller could not read (such as
+  /// private data outside a Branch Manager's branch) load as null, so they stay
   /// omitted instead of being wiped.
   Set<ClearableProfileField> _clearedFields(
     OrganizationMember existing,
@@ -397,65 +426,106 @@ class SqlConnectOrganizationMembersRepository
 
   Future<OrganizationMember> _loadExisting(
     UserAccessContext access,
-    String memberId,
-  ) async {
+    String memberId, {
+    String? activeBranchId,
+  }) async {
     final orgId = OrganizationMemberPolicy.requireOrganizationId(access);
     final existing = await dataSource.getById(memberId);
     if (existing == null || existing.organizationId != orgId) {
       throw const NotFoundException('Member not found in caller organization');
     }
-    return await _enrichSingle(existing);
+    return _enrichSingle(access, existing, activeBranchId: activeBranchId);
   }
 
-  Future<OrganizationMember> _reload(String id) async {
+  Future<OrganizationMember> _reload(
+    UserAccessContext access,
+    String id, {
+    String? activeBranchId,
+  }) async {
     final saved = await dataSource.getById(id);
     if (saved == null) throw const NotFoundException('Member not found');
-    return await _enrichSingle(saved);
+    return await _enrichSingle(access, saved, activeBranchId: activeBranchId);
   }
 
   Future<List<OrganizationMember>> _enrichWithProfiles(
-    List<OrganizationMember> members,
-  ) async {
+    UserAccessContext access,
+    List<OrganizationMember> members, {
+    String? activeBranchId,
+  }) async {
     final db = firestore;
     if (db == null || members.isEmpty) return members;
-    try {
-      final futures = members.map((m) async {
-        final uid = m.authUid;
-        if (uid == null || uid.isEmpty) return m;
-        try {
-          return await _enrichOne(db, m, uid);
-        } catch (_) {
-          return m;
-        }
-      });
-      return await Future.wait(futures);
-    } catch (_) {
-      return members;
-    }
+    return Future.wait(
+      members.map((member) {
+        final uid = member.authUid;
+        if (uid == null || uid.isEmpty) return Future.value(member);
+        return _enrichOne(
+          db,
+          member,
+          uid,
+          canReadPrivate: _canReadPrivate(
+            access,
+            member,
+            activeBranchId: activeBranchId,
+          ),
+        );
+      }),
+    );
   }
 
-  Future<OrganizationMember> _enrichSingle(OrganizationMember member) async {
+  Future<OrganizationMember> _enrichSingle(
+    UserAccessContext access,
+    OrganizationMember member, {
+    String? activeBranchId,
+  }) async {
     final db = firestore;
     final uid = member.authUid;
     if (db == null || uid == null || uid.isEmpty) return member;
-    try {
-      return await _enrichOne(db, member, uid);
-    } catch (_) {
-      return member;
+    return _enrichOne(
+      db,
+      member,
+      uid,
+      canReadPrivate: _canReadPrivate(
+        access,
+        member,
+        activeBranchId: activeBranchId,
+      ),
+    );
+  }
+
+  bool _canReadPrivate(
+    UserAccessContext access,
+    OrganizationMember member, {
+    String? activeBranchId,
+  }) {
+    if (member.organizationId != access.organization?.id) return false;
+    if (access.user.role == UserRole.orgAdmin ||
+        member.authUid == access.user.id ||
+        member.id == access.user.id) {
+      return true;
     }
+    if (access.user.role != UserRole.branchManager ||
+        member.role != UserRole.employee ||
+        activeBranchId == null ||
+        !member.branchIds.contains(activeBranchId)) {
+      return false;
+    }
+    return access.assignedBranches.any(
+      (branch) => branch.id == activeBranchId && branch.isActive,
+    );
   }
 
   Future<OrganizationMember> _enrichOne(
     FirebaseFirestore db,
     OrganizationMember member,
-    String uid,
-  ) async {
-    final results = await Future.wait([
-      db.collection('users').doc(uid).get(),
-      _readPrivate(db, uid),
-    ]);
-    final profile = results[0] as DocumentSnapshot<Map<String, dynamic>>;
-    final private = results[1] as Map<String, dynamic>?;
+    String uid, {
+    required bool canReadPrivate,
+  }) async {
+    final profileFuture = db.collection('users').doc(uid).get();
+    final privateFuture = canReadPrivate
+        ? _readPrivate(db, uid)
+        : Future<Map<String, dynamic>?>.value(null);
+    final profile = await profileFuture;
+    final private = await privateFuture;
     var enriched = member;
     final data = profile.data();
     if (profile.exists && data != null) {
@@ -464,18 +534,14 @@ class SqlConnectOrganizationMembersRepository
     return private == null ? enriched : _applyPrivateData(enriched, private);
   }
 
-  /// Sensitive HR data (salary, Aadhaar). Only the employee and their Org Admin
-  /// may read it; a denied or missing doc leaves those fields null.
+  /// Sensitive HR data (salary, Aadhaar). The employee, their Org Admin, and
+  /// the active Branch Manager for an assigned employee branch may read it.
   Future<Map<String, dynamic>?> _readPrivate(
     FirebaseFirestore db,
     String uid,
   ) async {
-    try {
-      final snap = await db.collection('employee_private').doc(uid).get();
-      return snap.exists ? snap.data() : null;
-    } catch (_) {
-      return null;
-    }
+    final snap = await db.collection('employee_private').doc(uid).get();
+    return snap.exists ? snap.data() : null;
   }
 
   OrganizationMember _applyPrivateData(

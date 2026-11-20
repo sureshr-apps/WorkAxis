@@ -12,6 +12,8 @@ const PLAN_STATUSES = ["active", "inactive"] as const;
 const PLAN_CODE_ATTEMPTS = 5;
 const REFERENCED_MESSAGE =
   "This plan is referenced by existing licenses or history and cannot be deleted. Deactivate it instead.";
+const ASSIGNED_PLAN_CANNOT_BE_DEACTIVATED =
+  "This plan cannot be deactivated while organizations are using it.";
 
 const PLAN_COLUMNS = `p.id, p.plan_code AS "planCode", p.name, p.description, p.level,
   p.max_stores AS "maxStores", p.max_users AS "maxUsers", p.status`;
@@ -156,13 +158,34 @@ export const licensePlanOps: OperationRegistry = {
     requirePlatform(actor);
     const id = reqId(vars, "id");
     const status = reqEnum(vars, "status", PLAN_STATUSES);
-    const rows = await db.query<{ id: string; status: string }>(
-      `UPDATE license_plan SET status = $2, updated_at = now()
-        WHERE id = $1
-        RETURNING id, status`,
-      [id, status],
-    );
-    return { licensePlan_update: rows[0] ?? null };
+    return db.transaction(async (tx) => {
+      const plan = await tx.query<{ id: string }>(
+        `SELECT id FROM license_plan WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      if (plan.length === 0) return { licensePlan_update: null };
+
+      if (status === "inactive") {
+        const assigned = await selectOne<{ count: number }>(
+          tx,
+          `SELECT count(*)::int AS count
+             FROM organization_license
+            WHERE plan_id = $1`,
+          [id],
+        );
+        if ((assigned?.count ?? 0) > 0) {
+          throw precondition(ASSIGNED_PLAN_CANNOT_BE_DEACTIVATED);
+        }
+      }
+
+      const rows = await tx.query<{ id: string; status: string }>(
+        `UPDATE license_plan SET status = $2, updated_at = now()
+          WHERE id = $1
+          RETURNING id, status`,
+        [id, status],
+      );
+      return { licensePlan_update: rows[0] ?? null };
+    });
   },
 
   DeleteLicensePlan: async ({ db, actor }, vars) => {

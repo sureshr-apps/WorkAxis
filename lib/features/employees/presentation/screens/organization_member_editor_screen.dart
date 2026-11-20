@@ -165,7 +165,12 @@ class _OrganizationMemberEditorScreenState
     _aadhaarPhotoPath = member?.aadhaarPhotoUrl;
     _profilePhotoPath = member?.profilePhotoUrl;
     _dateOfBirth = member?.dateOfBirth;
-    _gender = member?.gender;
+    _gender = switch (member?.gender) {
+      'Male' => 'Male',
+      'Female' => 'Female',
+      'Other' => 'Other',
+      _ => 'Male',
+    };
 
     _designation = TextEditingController(text: member?.designation ?? '');
     _salary = TextEditingController(
@@ -351,6 +356,9 @@ class _OrganizationMemberEditorScreenState
                   errorText: feedback.errorFor(MemberField.username),
                   hintText: 'e.g. john.doe',
                   enabled: !_editing,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.none,
                   prefixIcon: const Icon(Icons.alternate_email, size: 20),
                 ),
               ),
@@ -381,6 +389,9 @@ class _OrganizationMemberEditorScreenState
             errorText: feedback.errorFor(MemberField.email),
             hintText: 'name@company.com',
             keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            enableSuggestions: false,
+            textCapitalization: TextCapitalization.none,
             prefixIcon: const Icon(Icons.mail_outline, size: 20),
           ),
         ),

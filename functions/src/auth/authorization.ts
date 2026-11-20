@@ -125,16 +125,20 @@ export function assertCanDeletePlatformAdministrator(actor: Actor, target: Targe
 }
 
 /**
- * Organization Administrators are removed by platform staff only. The rule
- * covers only organization administrator accounts; customer roles and platform
- * accounts are removed through their own flows.
+ * Organization Administrators are removed by platform staff or another
+ * administrator in the same organization. Customer roles and platform accounts
+ * are removed through their own flows.
  */
 export function assertCanDeleteOrganizationAdmin(actor: Actor, target: Target): void {
-  if (!isPlatformRole(actor.role)) {
-    throw denied("Only platform staff can delete organization administrators.");
-  }
   if (target.role !== "orgAdmin") {
     throw denied("Only Organization Administrator accounts can be deleted here.");
+  }
+  const isSameOrganizationAdmin =
+    actor.role === "orgAdmin" && sameOrg(actor, target);
+  if (!isPlatformRole(actor.role) && !isSameOrganizationAdmin) {
+    throw denied(
+      "Only platform staff or an Organization Admin in the same organization can delete an administrator.",
+    );
   }
   if (target.uid !== undefined && target.uid === actor.uid) {
     throw denied("You cannot delete your own account.");

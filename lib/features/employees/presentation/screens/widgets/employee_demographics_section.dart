@@ -148,19 +148,14 @@ class EmployeeDemographicsSection extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
-                  DropdownButtonFormField<String?>(
-                    initialValue: gender,
+                  DropdownButtonFormField<String>(
+                    initialValue: gender ?? 'Male',
                     isExpanded: true,
                     decoration: const InputDecoration(
                       hintText: 'Select Gender',
                       prefixIcon: Icon(Icons.person_outline, size: 20),
                     ),
                     items: const [
-                      // Selecting this clears the stored gender.
-                      DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Not specified'),
-                      ),
                       DropdownMenuItem(value: 'Male', child: Text('Male')),
                       DropdownMenuItem(value: 'Female', child: Text('Female')),
                       DropdownMenuItem(value: 'Other', child: Text('Other')),

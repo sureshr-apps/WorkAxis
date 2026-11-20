@@ -177,6 +177,9 @@ class _OrganizationSettingsScreenState
                   label: 'Operations Contact Email',
                   errorText: errors[SettingsField.operationsEmail],
                   keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.none,
                   onChanged: (_) => _edited(),
                 ),
                 second: AppTextField(

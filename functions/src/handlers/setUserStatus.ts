@@ -1,10 +1,17 @@
 import { onCall } from "firebase-functions/v2/https";
 import { refreshProjection, loadTarget } from "../accounts/target";
 import { resolveActor } from "../auth/actor";
-import { assertCanManage } from "../auth/authorization";
+import {
+  assertCanManage,
+  assertOrganizationKeepsActiveAdmin,
+} from "../auth/authorization";
 import { callableOptions } from "../config";
 import { guarded } from "../errors";
-import { getMemberByAuthUid, updateMember } from "../sql/members";
+import {
+  getMemberByAuthUid,
+  listMembersOfOrganization,
+  updateMember,
+} from "../sql/members";
 import { asBag, reqEnum, reqString } from "../util/input";
 
 /**
@@ -23,6 +30,16 @@ export const setUserStatus = onCall(callableOptions, (request) =>
 
     const { member, target } = await loadTarget(targetUid);
     assertCanManage(actor, target, "setStatus");
+    if (
+      status === "suspended" &&
+      member.role === "orgAdmin" &&
+      member.organizationId
+    ) {
+      assertOrganizationKeepsActiveAdmin(
+        member,
+        await listMembersOfOrganization(member.organizationId),
+      );
+    }
 
     await updateMember(member.id, { status });
     const updated = (await getMemberByAuthUid(targetUid)) ?? { ...member, status };

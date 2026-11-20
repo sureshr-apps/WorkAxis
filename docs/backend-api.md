@@ -71,9 +71,9 @@ Errors are `HttpsError` codes; internal details are never returned:
 | `provisionUser` | `{requestId, fullName, username, email?, phone?, password, role, organizationId?, branchIds?}` | `{uid, memberId, username, loginEmail}` | see matrix |
 | `updateUserAccount` | `{targetUid, fullName?, email?, phone? (null clears), role?, branchIds?}` | `{uid}` | see matrix |
 | `resetUserPassword` | `{targetUid, newPassword}` | `{uid}` | see matrix |
-| `setUserStatus` | `{targetUid, status: 'active'\|'suspended'}` | `{uid, status}` | see matrix |
+| `setUserStatus` | `{targetUid, status: 'active'\|'suspended'}` | `{uid, status}` | see matrix; refuses to suspend an organization's only active administrator |
 | `deletePlatformAdministrator` | `{targetUid}` | `{uid, deleted}` | Platform Owner only; not self; platform administrators only |
-| `deleteOrganizationAdmin` | `{targetUid}` | `{uid, deleted}` | Platform staff only; organization administrators only; refused for the organization's only active administrator |
+| `deleteOrganizationAdmin` | `{targetUid}` | `{uid, deleted}` | Platform staff or an Organization Admin deleting a peer in the same organization; refused for self or the organization's only active administrator |
 | `deleteOrganizationMember` | `{targetUid}` | `{uid, deleted}` | Employees and branch managers; by their organization admin or branch manager; refused while the account has returns, leave, or attendance |
 | `setOrganizationStatus` | `{organizationId, status}` | `{organizationId, status, membersUpdated, membersFailed}` | platform roles |
 | `resolveLoginIdentifier` | `{identifier}` | `{email}` | unauthenticated |
@@ -88,7 +88,7 @@ Errors are `HttpsError` codes; internal details are never returned:
 - explicit **`null`**: clear the stored value (`FieldValue.delete()`; `salary`, `aadhaarNumber` and `aadhaarPhotoUrl` are removed from `employee_private/{uid}`, the rest from `users/{uid}`);
 - a value: set it (validated as before).
 
-`dailyWorkHours`, `shiftHours` and `employeeCode` can never be cleared (`null` is rejected with `invalid-argument`). Clearing an employment-control field counts as editing it, so `assertNoSelfEmploymentEdit` denies it on one's own account. The client sends `null` only for a field the user emptied whose stored value was known and non-empty; values the caller cannot read (e.g. salary/Aadhaar for a Branch Manager) are never cleared. `provisionUser` ignores `null`s. It also rejects creating an `employee` without `aadhaarNumber`, `aadhaarPhotoUrl`, `designation`, `salary`, `dailyWorkHours` and `shiftHours` (same rule as `OrganizationMemberPolicy.requiredFields`).
+`dailyWorkHours`, `shiftHours` and `employeeCode` can never be cleared (`null` is rejected with `invalid-argument`). Clearing an employment-control field counts as editing it, so `assertNoSelfEmploymentEdit` denies it on one's own account. The client sends `null` only for a field the user emptied whose stored value was known and non-empty; private values outside a Branch Manager's active branch scope remain unknown and are never cleared. `provisionUser` ignores `null`. It also rejects creating an `employee` without `aadhaarNumber`, `aadhaarPhotoUrl`, `designation`, `salary`, `dailyWorkHours` and `shiftHours` (same rule as `OrganizationMemberPolicy.requiredFields`).
 
 Authorization matrix (`functions/src/auth/authorization.ts`, unit-tested):
 
@@ -332,11 +332,14 @@ Changing, modifying or renewing an organization without a license is
   Never holds salary or Aadhaar data (see `employee_private`).
 - `employee_private/{uid}` = `{ organizationId, salary?, aadhaarNumber?,
   aadhaarPhotoUrl?, updatedAt }`: sensitive HR data written only by trusted
-  functions (`writeProfile` / `updateUserAccount`). `get` is allowed only for
-  the active Org Admin of that doc's organization and for the employee
-  themself; Branch Managers and platform roles are denied; `list` and every
-  write are denied. Existing `users/{uid}` docs are scrubbed of these keys the
-  next time their profile is refreshed (no separate migration step).
+  functions (`writeProfile` / `updateUserAccount`). `get` is allowed to the
+  active Org Admin of that organization, the employee themself, and a Branch
+  Manager when the employee's `users/{uid}` projection shares one of the
+  manager's assigned branches in the same organization. Branch Managers see
+  details in their active branch scope; platform roles are denied. `list` and
+  every client write are denied. Existing `users/{uid}` docs are scrubbed of
+  these keys the next time their profile is refreshed (no separate migration
+  step).
 - Employee IDs: SQL `organization_member.employee_code` is authoritative
   (unique per organization). `provisionUser` allocates `EMP-<n>` from
   `organization.employee_code_seq` in the member-insert transaction when none is
