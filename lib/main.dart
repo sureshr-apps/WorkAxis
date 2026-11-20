@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/app.dart';
@@ -19,5 +21,12 @@ Future<void> main() async {
     );
   }
 
-  runApp(WorkAxisApp(repositories: BackendFactory.createRepositories()));
+  final repositories = BackendConfig.isFirebase
+      ? BackendFactory.createRepositories(
+          auth: FirebaseAuth.instance,
+          firestore: FirebaseFirestore.instance,
+        )
+      : BackendFactory.createRepositories();
+
+  runApp(WorkAxisApp(repositories: repositories));
 }
