@@ -47,14 +47,18 @@ class AttendanceSelfieEvidence extends StatelessWidget {
     final events = <_AttendanceEvent>[];
     if (entry.checkInAt != null) {
       events.add(
-        _AttendanceEvent('Check-in', entry.checkInAt!, entry.checkInSelfiePath),
+        _AttendanceEvent(
+          'Check-in punch',
+          entry.checkInAt!,
+          entry.checkInSelfiePath,
+        ),
       );
     }
     for (var index = 0; index < entry.breaks.length; index++) {
       final record = entry.breaks[index];
       events.add(
         _AttendanceEvent(
-          'Break ${index + 1} started',
+          'Break ${index + 1} start punch',
           record.startAt,
           record.startSelfiePath,
         ),
@@ -62,7 +66,7 @@ class AttendanceSelfieEvidence extends StatelessWidget {
       if (record.endAt != null) {
         events.add(
           _AttendanceEvent(
-            'Break ${index + 1} ended',
+            'Break ${index + 1} resume punch',
             record.endAt!,
             record.endSelfiePath,
           ),
@@ -72,7 +76,7 @@ class AttendanceSelfieEvidence extends StatelessWidget {
     if (entry.checkOutAt != null) {
       events.add(
         _AttendanceEvent(
-          'Check-out',
+          'Check-out punch',
           entry.checkOutAt!,
           entry.checkOutSelfiePath,
         ),

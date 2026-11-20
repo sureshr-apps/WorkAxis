@@ -9,7 +9,7 @@ import {
 
 afterEach(() => setDbForTests(undefined));
 
-it("runs the nine delete steps in order, each scoped to the organization", async () => {
+it("runs the ten delete steps in order, each scoped to the organization", async () => {
   const db = new FakeDb();
   setDbForTests(db);
   await deleteOrganizationSql("o1");
@@ -26,6 +26,7 @@ it("runs the nine delete steps in order, each scoped to the organization", async
     "user_branch_assignment",
     "return_record",
     "leave_request",
+    "off_site_work_assignment",
     "license_history",
     "organization_license",
     "branch",
@@ -41,5 +42,5 @@ it("stops and rethrows when a step fails", async () => {
   });
   setDbForTests(db);
   await assert.rejects(deleteOrganizationSql("o1"), /boom/);
-  assert.equal(db.calls.length, 7);
+  assert.equal(db.calls.length, 8);
 });
