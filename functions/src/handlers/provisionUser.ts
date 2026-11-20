@@ -49,7 +49,11 @@ export const provisionUser = onCall(callableOptions, (request) =>
       await assertOrgAndBranchesValid(target.organizationId, target.branchIds);
     }
 
-    const claim = await claimRequest(actor.uid, requestId);
+    const claim = await claimRequest(
+      actor.uid,
+      requestId,
+      target.organizationId,
+    );
     if (claim.kind === "done") return claim.result;
 
     const {

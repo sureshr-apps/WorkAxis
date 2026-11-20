@@ -36,7 +36,13 @@ export async function syncIdentityWithinLock(
   priorAliasKeys: string[] = [],
 ) {
   const member = await getMemberByAuthUid(uid);
-  if (!member) throw new Error("Identity sync target is missing.");
+  if (!member) {
+    // A prior account deletion may have removed the SQL member before its old
+    // retry job was purged. Release its queued aliases and let the scheduler
+    // remove the now-unneeded job instead of retrying it forever.
+    await releaseAliases(priorAliasKeys, uid);
+    return;
+  }
   const identity = normalizeIdentity({
     username: member.username,
     email: member.email.endsWith(".invalid") ? undefined : member.email,
@@ -75,7 +81,11 @@ export const reconcileIdentitySync = onSchedule(
       try {
         await syncIdentity(
           data.uid as string,
-          (data.aliasKeys ?? []) as string[],
+          Array.isArray(data.aliasKeys)
+            ? data.aliasKeys.filter(
+                (key): key is string => typeof key === "string",
+              )
+            : [],
         );
         await job.ref.delete();
       } catch (error) {
@@ -83,7 +93,12 @@ export const reconcileIdentitySync = onSchedule(
           jobId: job.id,
           errorType: error instanceof Error ? error.name : "unknown",
         });
-        await job.ref.update({
+        // Organization deletion may remove this job after the scheduler has
+        // read its page. Do not recreate retry metadata for an already-purged
+        // identity job.
+        const currentJob = await job.ref.get();
+        if (!currentJob.exists) continue;
+        await currentJob.ref.update({
           attempts: FieldValue.increment(1),
           notBefore: Timestamp.fromMillis(Date.now() + 300_000),
         });

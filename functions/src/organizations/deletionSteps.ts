@@ -1,48 +1,28 @@
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
+import { withIdentityLocks } from "../accounts/identityLocks";
 import { normalizeIdentity } from "../auth/aliasKeys";
 import { deleteProfile, releaseAliases } from "../firestore/userStore";
 import {
   deleteOrganizationSql,
   setOrganizationStatusSql,
 } from "../sql/branches";
-import type { MemberRecord } from "../sql/members";
+import {
+  getMemberByAuthUid,
+  listMembersOfOrganization,
+  type MemberRecord,
+} from "../sql/members";
+import {
+  deleteIdentitySyncJobs,
+  deleteOrganizationFirestoreData,
+  deleteProvisioningRequestsForMember,
+} from "./organizationDeletionFirestore";
+import { markOrganizationDeleting } from "./organizationLifecycle";
 import type { OrganizationDeleteSteps } from "./deletionWorkflow";
-
-/** Collections whose documents carry an `organizationId` field. */
-export const ORGANIZATION_SCOPED_COLLECTIONS = [
-  "attendance_entries",
-  "group_attendance_batches",
-  "kiosk_pairing_tokens",
-  // Defensive: a no-op when the collection holds nothing for the org.
-  "employee_private",
-] as const;
 
 /** Runtime-only setting, so plain process.env is enough (no deploy-time param). */
 export function attachmentsBucketName(): string {
   return process.env.ATTACHMENTS_BUCKET || "workaxis-app-attachments";
-}
-
-async function deleteFirestoreData(organizationId: string): Promise<void> {
-  const db = getFirestore();
-  const writer = db.bulkWriter();
-  let failure: unknown;
-  writer.onWriteError((error) => {
-    failure ??= error;
-    return false;
-  });
-  for (const name of ORGANIZATION_SCOPED_COLLECTIONS) {
-    const snap = await db
-      .collection(name)
-      .where("organizationId", "==", organizationId)
-      .select()
-      .get();
-    snap.docs.forEach((doc) => void writer.delete(doc.ref));
-  }
-  void writer.delete(db.collection("organization_settings").doc(organizationId));
-  await writer.close();
-  if (failure) throw failure;
 }
 
 async function deleteStorageObjects(organizationId: string): Promise<void> {
@@ -58,25 +38,47 @@ export function isAuthUserNotFound(error: unknown): boolean {
 
 /** Removes a member's login aliases, profile and Auth user. Idempotent. */
 export async function deleteMemberIdentity(member: MemberRecord): Promise<void> {
-  // Alias doc ids are normalized; synthetic login emails are never aliases.
-  const email = member.email?.endsWith(".invalid") ? undefined : member.email;
-  const { aliasKeys } = normalizeIdentity({
-    username: member.username,
-    email: email ?? undefined,
-    phone: member.phone ?? undefined,
+  const uid = member.authUid;
+  await withIdentityLocks([uid], async () => {
+    // Account edits use the same lock. Read after acquiring it so alias cleanup
+    // uses the committed identity even if an edit started before suspension.
+    const currentMember = (await getMemberByAuthUid(uid)) ?? member;
+
+    // Alias doc ids are normalized; synthetic login emails are never aliases.
+    const email = currentMember.email?.endsWith(".invalid")
+      ? undefined
+      : currentMember.email;
+    const { aliasKeys } = normalizeIdentity({
+      username: currentMember.username,
+      email: email ?? undefined,
+      phone: currentMember.phone ?? undefined,
+    });
+
+    await deleteProvisioningRequestsForMember(uid);
+
+    // A reconciliation worker may already have read a job. The identity lock
+    // lets an in-flight projection finish before cleanup, and deleting Auth
+    // before releasing the lock makes a waiting worker fail before reprojection.
+    await deleteIdentitySyncJobs(uid, (queuedAliasKeys) =>
+      releaseAliases([...new Set([...aliasKeys, ...queuedAliasKeys])], uid),
+    );
+    await deleteProfile(uid);
+    try {
+      await getAuth().deleteUser(uid);
+    } catch (error) {
+      if (!isAuthUserNotFound(error)) throw error;
+    }
   });
-  await releaseAliases(aliasKeys, member.authUid);
-  await deleteProfile(member.authUid);
-  try {
-    await getAuth().deleteUser(member.authUid);
-  } catch (error) {
-    if (!isAuthUserNotFound(error)) throw error;
-  }
 }
 
 export const productionOrganizationDeleteSteps: OrganizationDeleteSteps = {
-  suspend: (id) => setOrganizationStatusSql(id, "suspended"),
-  deleteFirestoreData,
+  suspend: async (id) => {
+    await setOrganizationStatusSql(id, "suspended");
+    await markOrganizationDeleting(id);
+  },
+  listMembers: listMembersOfOrganization,
+  deleteFirestoreData: (id, members) =>
+    deleteOrganizationFirestoreData(id, members),
   deleteStorageObjects,
   deleteMemberIdentity,
   deleteSql: deleteOrganizationSql,

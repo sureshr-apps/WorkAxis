@@ -9,7 +9,11 @@ import type { MemberRecord } from "../sql/members";
 export interface OrganizationDeleteSteps {
   /** Locks members out (resolveActor treats a suspended org as suspended). */
   suspend(organizationId: string): Promise<void>;
-  deleteFirestoreData(organizationId: string): Promise<void>;
+  listMembers(organizationId: string): Promise<MemberRecord[]>;
+  deleteFirestoreData(
+    organizationId: string,
+    members: readonly MemberRecord[],
+  ): Promise<void>;
   deleteStorageObjects(organizationId: string): Promise<void>;
   deleteMemberIdentity(member: MemberRecord): Promise<void>;
   /** Final step: removes the organization, its members and branches. */
@@ -34,17 +38,19 @@ async function named<T>(
 }
 
 /**
- * Order: suspend, Firestore data, Storage, member identities, SQL last. A
- * failure anywhere before SQL leaves the member list intact for a retry.
+ * Order: suspend, read members, Firestore data, Storage, member identities,
+ * SQL last. A failure before SQL leaves relational data available for retry.
  */
 export async function runOrganizationDeletion(
   organizationId: string,
-  members: readonly MemberRecord[],
   steps: OrganizationDeleteSteps,
 ): Promise<OrganizationDeleteResult> {
   await named("suspend", organizationId, () => steps.suspend(organizationId));
+  const members = await named("list members", organizationId, () =>
+    steps.listMembers(organizationId),
+  );
   await named("firestore data", organizationId, () =>
-    steps.deleteFirestoreData(organizationId),
+    steps.deleteFirestoreData(organizationId, members),
   );
   await named("storage objects", organizationId, () =>
     steps.deleteStorageObjects(organizationId),

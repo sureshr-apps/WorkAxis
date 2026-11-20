@@ -30,6 +30,7 @@ class OrganizationAdminFormRoute extends StatefulWidget {
 
 class _OrganizationAdminFormRouteState
     extends State<OrganizationAdminFormRoute> {
+  late final PlatformOrganizationsController _controller;
   CustomerOrganization? _organization;
   OrganizationAdminUser? _administrator;
   bool _loading = true;
@@ -38,18 +39,26 @@ class _OrganizationAdminFormRouteState
   @override
   void initState() {
     super.initState();
+    _controller = context.read<PlatformOrganizationsController>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _load();
     });
   }
+
+  @override
+  void dispose() {
+    _clearActionError();
+    super.dispose();
+  }
+
+  void _clearActionError() => _controller.clearActionError();
 
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _notFound = false;
     });
-    final controller = context.read<PlatformOrganizationsController>()
-      ..clearActionError();
+    final controller = _controller..clearActionError();
     final selected = controller.selectedOrganization;
     final organization = selected?.id == widget.organizationId
         ? selected
@@ -72,6 +81,7 @@ class _OrganizationAdminFormRouteState
   }
 
   void _leave() {
+    _clearActionError();
     if (context.canPop()) {
       context.pop();
     } else {
@@ -82,7 +92,7 @@ class _OrganizationAdminFormRouteState
   }
 
   Future<String?> _submit(OrganizationAdminDraft draft) async {
-    final controller = context.read<PlatformOrganizationsController>();
+    final controller = _controller;
     final administrator = _administrator;
     final organizationId = widget.organizationId;
     if (administrator == null) {
@@ -121,27 +131,36 @@ class _OrganizationAdminFormRouteState
 
   @override
   Widget build(BuildContext context) {
+    final Widget page;
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      page = const Scaffold(body: Center(child: CircularProgressIndicator()));
+    } else {
+      final organization = _organization;
+      if (_notFound || organization == null) {
+        page = RecordNotFoundPage(
+          backLabel: 'Organizations',
+          currentLabel: 'Administrator',
+          onBack: _leave,
+          message: organization == null
+              ? 'This organization could not be found.'
+              : 'This administrator could not be found.',
+          onRetry: _load,
+        );
+      } else {
+        page = OrganizationAdminFormPage(
+          backLabel: organization.name,
+          existingAdministrator: _administrator,
+          onSubmit: _submit,
+          onClose: _leave,
+          onSaved: _saved,
+        );
+      }
     }
-    final organization = _organization;
-    if (_notFound || organization == null) {
-      return RecordNotFoundPage(
-        backLabel: 'Organizations',
-        currentLabel: 'Administrator',
-        onBack: _leave,
-        message: organization == null
-            ? 'This organization could not be found.'
-            : 'This administrator could not be found.',
-        onRetry: _load,
-      );
-    }
-    return OrganizationAdminFormPage(
-      backLabel: organization.name,
-      existingAdministrator: _administrator,
-      onSubmit: _submit,
-      onClose: _leave,
-      onSaved: _saved,
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _clearActionError();
+      },
+      child: page,
     );
   }
 }

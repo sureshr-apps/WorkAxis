@@ -1,5 +1,5 @@
 import { getDb, isUniqueViolation, type SqlExecutor } from "../db";
-import { conflict } from "../errors";
+import { conflict, precondition } from "../errors";
 import { LICENSE_TODAY_SQL } from "../licenses/licenseStatus";
 import { validateEmployeeCode } from "../util/employeeProfile";
 import type { AccountStatus, Role } from "../auth/roles";
@@ -219,6 +219,22 @@ async function insertAssignments(
   );
 }
 
+async function requireActiveOrganizationForProvision(
+  tx: SqlExecutor,
+  organizationId: string,
+): Promise<void> {
+  // Serialize member creation against organization suspension. If creation
+  // acquires this lock first, deletion waits and then lists the committed user;
+  // if deletion suspends first, this transaction observes it and aborts.
+  const [organization] = await tx.query<{ status: string }>(
+    `SELECT status FROM organization WHERE id = $1 FOR UPDATE`,
+    [organizationId],
+  );
+  if (!organization || organization.status !== "active") {
+    throw precondition("Organization is not active.");
+  }
+}
+
 /**
  * Inserts the member and its branch assignments in one SQL transaction.
  * Returns the employee code stored for the member (allocated when none was
@@ -236,8 +252,11 @@ export async function insertMember(
   const db = await getDb();
   try {
     return await db.transaction(async (tx) => {
-      // Adding an active member is refused at the plan's user limit, under the license row lock.
-      if (member.organizationId) await assertMemberAllowed(tx, member.organizationId, null);
+      if (member.organizationId) {
+        await requireActiveOrganizationForProvision(tx, member.organizationId);
+        // Adding an active member is refused at the plan's user limit, under the license row lock.
+        await assertMemberAllowed(tx, member.organizationId, null);
+      }
       const employeeCode =
         manualCode ??
         (member.organizationId ? await allocateEmployeeCode(tx, member.organizationId) : undefined);

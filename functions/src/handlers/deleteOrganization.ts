@@ -6,7 +6,6 @@ import { denied, guarded, notFound } from "../errors";
 import { productionOrganizationDeleteSteps } from "../organizations/deletionSteps";
 import { runOrganizationDeletion } from "../organizations/deletionWorkflow";
 import { getOrganization } from "../sql/branches";
-import { listMembersOfOrganization } from "../sql/members";
 import { asBag, reqString } from "../util/input";
 
 /**
@@ -24,11 +23,8 @@ export const deleteOrganization = onCall(callableOptions, (request) =>
       throw notFound("Organization not found.");
     }
 
-    // Read members before any step: they are needed for Auth/alias cleanup.
-    const members = await listMembersOfOrganization(organizationId);
     const { membersCleaned } = await runOrganizationDeletion(
       organizationId,
-      members,
       productionOrganizationDeleteSteps,
     );
     return { organizationId, deleted: true, membersCleaned };

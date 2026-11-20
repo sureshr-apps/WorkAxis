@@ -180,21 +180,22 @@ it("insertMember allocates the employee code in the same transaction as the inse
   );
   assert.equal(code, "EMP-10007");
   assert.equal(db.transactions, 1);
-  assert.equal(db.calls.length, 6);
+  assert.equal(db.calls.length, 7);
+  assert.match(db.calls[0].sql, /FROM organization WHERE id = \$1 FOR UPDATE/);
   // The license row is locked and the active count read before any allocation or insert.
-  assert.match(db.calls[0].sql, /FOR UPDATE OF ol/);
-  assert.match(db.calls[1].sql, /FROM organization_member/);
+  assert.match(db.calls[1].sql, /FOR UPDATE OF ol/);
+  assert.match(db.calls[2].sql, /FROM organization_member/);
   assert.match(
-    norm(db.calls[2].sql),
+    norm(db.calls[3].sql),
     /^UPDATE organization SET employee_code_seq = employee_code_seq \+ 1 WHERE id = \$1 RETURNING/,
   );
-  assert.deepEqual(db.calls[2].params, ["o1"]);
-  assert.match(db.calls[3].sql, /SELECT 1 FROM organization_member/);
+  assert.deepEqual(db.calls[3].params, ["o1"]);
+  assert.match(db.calls[4].sql, /SELECT 1 FROM organization_member/);
   assert.match(
-    norm(db.calls[4].sql),
+    norm(db.calls[5].sql),
     /^INSERT INTO organization_member \(id, auth_uid, organization_id, full_name, username, email, role, employee_code, status, created_at\)/,
   );
-  assert.deepEqual(db.calls[4].params, [
+  assert.deepEqual(db.calls[5].params, [
     "m1",
     "u1",
     "o1",
@@ -204,8 +205,8 @@ it("insertMember allocates the employee code in the same transaction as the inse
     "branchManager",
     "EMP-10007",
   ]);
-  assert.match(db.calls[5].sql, /INSERT INTO user_branch_assignment \(member_id, branch_id, assigned_at\)/);
-  assert.deepEqual(db.calls[5].params, ["m1", ["b1", "b2"]]);
+  assert.match(db.calls[6].sql, /INSERT INTO user_branch_assignment \(member_id, branch_id, assigned_at\)/);
+  assert.deepEqual(db.calls[6].params, ["m1", ["b1", "b2"]]);
 });
 
 it("insertMember without branches skips the assignment insert", async () => {

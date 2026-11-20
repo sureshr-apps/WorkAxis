@@ -175,15 +175,28 @@ describe("member capacity", () => {
     assert.equal(db.transactions, 1);
   });
 
+  it("refuses to create a member after the organization is suspended", async () => {
+    const db = new FakeDb().when("SELECT status FROM organization", [
+      { status: "suspended" },
+    ]);
+    setDbForTests(db);
+    await refusedWith(insertMember(newMember, []), "Organization is not active.");
+    assert.equal(sqlOf(db).length, 1);
+    assert.ok(!sqlOf(db).some((s) => s.startsWith("INSERT INTO organization_member")));
+  });
+
   it("adds a member below the limit, counting active members under the license lock", async () => {
     const db = capacityDb({ activeMembers: 9 }).when("set employee_code_seq", [{ employee_code_seq: 10001 }]);
     setDbForTests(db);
     assert.equal(await insertMember(newMember, []), "EMP-10001");
     const order = sqlOf(db);
+    const organizationLock = order.findIndex((s) =>
+      s.includes("SELECT status FROM organization") && s.includes("FOR UPDATE"),
+    );
     const lock = order.findIndex((s) => s.includes("FOR UPDATE OF ol"));
     const count = order.findIndex((s) => s.includes('"activeCount" FROM organization_member'));
     const insert = order.findIndex((s) => s.startsWith("INSERT INTO organization_member"));
-    assert.ok(lock >= 0 && lock < count && count < insert);
+    assert.ok(organizationLock >= 0 && organizationLock < lock && lock < count && count < insert);
   });
 
   it("refuses when the organization has no license", async () => {

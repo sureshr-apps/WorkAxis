@@ -33,7 +33,9 @@ export function capacityDb(
   } = {},
 ): FakeDb {
   const license = opts.license === undefined ? usableLicense() : opts.license;
-  const db = new FakeDb();
+  const db = new FakeDb().when("SELECT status FROM organization", [
+    { status: "active" },
+  ]);
   if (license) db.when(LICENSE_LOCK, [license]);
   return db
     .when('"activecount" from branch', [{ activeCount: opts.activeBranches ?? 0 }])
