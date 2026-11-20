@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 
 /// Compact icon action in a list tile's footer, with a full 48dp touch target.
 /// The tooltip doubles as the accessible label, so it names the record.
@@ -15,7 +18,7 @@ class CardActionIcon extends StatelessWidget {
   final String tooltip;
   final IconData icon;
   final Color color;
-  final VoidCallback onPressed;
+  final FutureOr<void> Function() onPressed;
 
   static const BoxConstraints _touchTarget = BoxConstraints(
     minWidth: AppSpacing.minTouchTarget,
@@ -24,9 +27,10 @@ class CardActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
+    return AppIconButton(
       tooltip: tooltip,
-      icon: Icon(icon, size: 18, color: color),
+      icon: icon,
+      color: color,
       constraints: _touchTarget,
       onPressed: onPressed,
     );

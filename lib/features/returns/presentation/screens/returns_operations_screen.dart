@@ -67,7 +67,9 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
   }
 
   /// Only branch managers record returns from this list.
-  void _openSubmit() => context.push(AppRoutes.branchManagerReturnAddPath);
+  void _openSubmit() {
+    context.push(AppRoutes.branchManagerReturnAddPath);
+  }
 
   bool get _isManager =>
       context.read<AccessController>().accessContext?.user.role ==

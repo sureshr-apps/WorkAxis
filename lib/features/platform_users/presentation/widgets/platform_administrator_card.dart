@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/core/time/clock.dart';
@@ -22,7 +24,7 @@ class PlatformAdministratorCard extends StatelessWidget {
 
   final PlatformAdministrator administrator;
   final VoidCallback onTap;
-  final ValueChanged<PlatformAdministratorAction> onAction;
+  final FutureOr<void> Function(PlatformAdministratorAction) onAction;
 
   /// Clock used for the relative "last active" text.
   final Now now;

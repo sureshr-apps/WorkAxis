@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+
+import 'dart:async';
+
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/organization_metrics_row.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 
@@ -30,8 +34,8 @@ class OrganizationCardItem extends StatelessWidget {
 
   final CustomerOrganization organization;
   final VoidCallback onTap;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function()? onEdit;
+  final FutureOr<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -102,24 +106,18 @@ class OrganizationCardItem extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       if (onEdit != null)
-                        IconButton(
+                        AppIconButton(
                           tooltip: 'Edit ${organization.name}',
-                          icon: const Icon(
-                            Icons.edit_outlined,
-                            size: 18,
-                            color: AppColors.secondary,
-                          ),
+                          icon: Icons.edit_outlined,
+                          color: AppColors.secondary,
                           constraints: _touchTarget,
                           onPressed: onEdit,
                         ),
                       if (onDelete != null)
-                        IconButton(
+                        AppIconButton(
                           tooltip: 'Delete ${organization.name}',
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            size: 18,
-                            color: AppColors.statusUrgentText,
-                          ),
+                          icon: Icons.delete_outline,
+                          color: AppColors.statusUrgentText,
                           constraints: _touchTarget,
                           onPressed: onDelete,
                         ),

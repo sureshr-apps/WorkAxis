@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -5,6 +7,7 @@ import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/access_panel.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/branches/domain/models/branch_record.dart';
 
@@ -23,9 +26,9 @@ class BranchAccessPanel extends StatelessWidget {
 
   final BranchRecord branch;
   final bool isUpdating;
-  final VoidCallback onEdit;
-  final VoidCallback onToggleActive;
-  final VoidCallback onDelete;
+  final FutureOr<void> Function() onEdit;
+  final FutureOr<void> Function() onToggleActive;
+  final FutureOr<void> Function() onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -66,12 +69,10 @@ class BranchAccessPanel extends StatelessWidget {
       children: [
         StatusChip.fromStatus(isActive ? 'Active' : 'Inactive'),
         const SizedBox(width: AppSpacing.xs),
-        IconButton(
+        AppIconButton(
           tooltip: 'Delete ${branch.name}',
-          icon: const Icon(
-            Icons.delete_outline,
-            color: AppColors.statusUrgentText,
-          ),
+          icon: Icons.delete_outline,
+          color: AppColors.statusUrgentText,
           constraints: const BoxConstraints(
             minWidth: AppSpacing.minTouchTarget,
             minHeight: AppSpacing.minTouchTarget,

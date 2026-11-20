@@ -48,10 +48,13 @@ class _EmployeeReturnsScreenState extends State<EmployeeReturnsScreen> {
     await context.read<ReturnsController>().loadReturns(access: access);
   }
 
-  void _openSubmit() => context.push(AppRoutes.employeeReturnAddPath);
+  void _openSubmit() {
+    context.push(AppRoutes.employeeReturnAddPath);
+  }
 
-  void _openDetails(ReturnItem item) =>
-      context.push(AppRoutes.employeeReturnDetailsPath(item.id));
+  void _openDetails(ReturnItem item) {
+    context.push(AppRoutes.employeeReturnDetailsPath(item.id));
+  }
 
   @override
   Widget build(BuildContext context) {

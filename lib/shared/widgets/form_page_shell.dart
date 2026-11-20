@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -45,7 +47,7 @@ class FormPageShell extends StatelessWidget {
   final VoidCallback onClose;
 
   /// Null leaves the submit action disabled.
-  final VoidCallback? onSubmit;
+  final FutureOr<void> Function()? onSubmit;
 
   final bool submitEnabled;
   final bool isBusy;

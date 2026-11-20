@@ -341,13 +341,16 @@ class _PlatformUsersListScreenState extends State<PlatformUsersListScreen> {
       context,
       administrator: administrator,
       nextStatus: nextStatus,
+      onConfirm: () async {
+        controller.clearActionError();
+        return await controller.updateStatus(administrator.id, nextStatus) !=
+            null;
+      },
+      failureMessage: () => controller.actionErrorMessage,
     );
     if (!confirmed || !mounted) return;
-    controller.clearActionError();
-    final updated = await controller.updateStatus(administrator.id, nextStatus);
-    if (!mounted) return;
     _showResult(
-      success: updated != null,
+      success: true,
       message: nextStatus == AccountStatus.suspended
           ? '${administrator.fullName} access suspended.'
           : '${administrator.fullName} access restored.',

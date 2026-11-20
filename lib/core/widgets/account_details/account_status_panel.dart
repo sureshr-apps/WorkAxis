@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -5,6 +7,7 @@ import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/access_panel.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 
 /// The Account access panel of a user's details page. The sign-in status and a
@@ -33,9 +36,9 @@ class AccountStatusPanel extends StatelessWidget {
 
   /// Disables the actions while a change is being saved.
   final bool isUpdating;
-  final VoidCallback? onReset;
-  final VoidCallback? onToggleActive;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function()? onReset;
+  final FutureOr<void> Function()? onToggleActive;
+  final FutureOr<void> Function()? onDelete;
   final String deleteTooltip;
 
   @override
@@ -55,12 +58,10 @@ class AccountStatusPanel extends StatelessWidget {
         StatusChip.fromStatus(isActive ? 'Active' : 'Suspended'),
         if (onDelete != null) ...[
           const SizedBox(width: AppSpacing.xs),
-          IconButton(
+          AppIconButton(
             tooltip: deleteTooltip,
-            icon: const Icon(
-              Icons.delete_outline,
-              color: AppColors.statusUrgentText,
-            ),
+            icon: Icons.delete_outline,
+            color: AppColors.statusUrgentText,
             constraints: const BoxConstraints(
               minWidth: AppSpacing.minTouchTarget,
               minHeight: AppSpacing.minTouchTarget,

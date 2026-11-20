@@ -8,6 +8,7 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_container.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
@@ -70,9 +71,9 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
           style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w600),
         ),
         actions: [
-          IconButton(
+          AppIconButton(
             tooltip: 'Sign Out',
-            icon: const Icon(Icons.logout_rounded),
+            icon: Icons.logout_rounded,
             onPressed: _handleSignOut,
           ),
         ],

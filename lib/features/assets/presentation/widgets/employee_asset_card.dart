@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -5,6 +7,7 @@ import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/time/business_time.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/assets/domain/models/employee_asset.dart';
 
@@ -26,9 +29,9 @@ class EmployeeAssetCard extends StatelessWidget {
   final bool isEmployeeView;
   final bool canAcknowledge;
   final bool isAcknowledging;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
-  final VoidCallback? onAcknowledge;
+  final FutureOr<void> Function()? onEdit;
+  final FutureOr<void> Function()? onDelete;
+  final FutureOr<void> Function()? onAcknowledge;
 
   @override
   Widget build(BuildContext context) {
@@ -93,15 +96,15 @@ class EmployeeAssetCard extends StatelessWidget {
                   ),
                 ),
                 if (canEdit) ...[
-                  IconButton(
+                  AppIconButton(
                     tooltip: 'Edit asset',
                     onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined),
+                    icon: Icons.edit_outlined,
                   ),
-                  IconButton(
+                  AppIconButton(
                     tooltip: 'Delete asset',
                     onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline),
+                    icon: Icons.delete_outline,
                   ),
                 ],
               ],

@@ -156,8 +156,9 @@ class _AttendanceOperationsScreenState
                     text: 'Group Check-In',
                     iconData: Icons.group_add_outlined,
                     isFullWidth: false,
-                    onPressed: () =>
-                        context.push(_groupCheckInPath(access.user.role)),
+                    onPressed: () {
+                      context.push(_groupCheckInPath(access.user.role));
+                    },
                   ),
                 ]
               : null,
@@ -275,7 +276,9 @@ class _AttendanceOperationsScreenState
       canReview: canReview,
       isSaving: controller.isSaving,
       onReview: canReview
-          ? (entry, decision) => _review(entry, access!, decision)
+          ? (entry, decision) {
+              _review(entry, access!, decision);
+            }
           : null,
       onDetails: (entry) {
         final role = access?.user.role;
@@ -324,33 +327,28 @@ class _AttendanceOperationsScreenState
     UserAccessContext access,
     AttendanceReviewDecision decision,
   ) async {
+    final controller = context.read<AttendanceController>();
     final confirmed = await confirmAttendanceReview(
       context,
       entry: entry,
       decision: decision,
+      onConfirm: () async {
+        controller.clearActionError();
+        return await controller.reviewException(
+          access: access,
+          entryId: entry.id,
+          activeBranchId: entry.branchId,
+          decision: decision,
+        );
+      },
+      failureMessage: () => controller.actionErrorMessage,
     );
     if (!confirmed || !mounted) return;
-    final controller = context.read<AttendanceController>();
-    final ok = await controller.reviewException(
-      access: access,
-      entryId: entry.id,
-      activeBranchId: entry.branchId,
-      decision: decision,
+    _showSnack(
+      decision == AttendanceReviewDecision.verify
+          ? 'Attendance verified.'
+          : 'Exception dismissed.',
+      isError: false,
     );
-    if (!mounted) return;
-    if (ok) {
-      _showSnack(
-        decision == AttendanceReviewDecision.verify
-            ? 'Attendance verified.'
-            : 'Exception dismissed.',
-        isError: false,
-      );
-    } else {
-      _showSnack(
-        controller.actionErrorMessage ??
-            'This attendance item could not be reviewed.',
-        isError: true,
-      );
-    }
   }
 }

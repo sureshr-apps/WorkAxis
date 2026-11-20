@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/async_confirmation_dialog.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 
 /// Asks the reviewer to confirm a verify/dismiss decision. Resolves true only
@@ -10,35 +10,26 @@ Future<bool> confirmAttendanceReview(
   BuildContext context, {
   required AttendanceEntry entry,
   required AttendanceReviewDecision decision,
-}) async {
+  required Future<bool> Function() onConfirm,
+  String? Function()? failureMessage,
+}) {
   final isVerify = decision == AttendanceReviewDecision.verify;
-  final confirmed = await showDialog<bool>(
+  final title = isVerify ? 'Verify attendance?' : 'Dismiss exception?';
+  return showAsyncConfirmationDialog(
     context: context,
-    builder: (context) => _DialogShell(
-      title: isVerify ? 'Verify attendance?' : 'Dismiss exception?',
-      actions: [
-        AppButton.outlined(
-          text: 'Cancel',
-          isFullWidth: false,
-          onPressed: () => Navigator.of(context).pop(false),
-        ),
-        AppButton.primary(
-          text: 'Continue',
-          isFullWidth: false,
-          onPressed: () => Navigator.of(context).pop(true),
-        ),
-      ],
-      children: [
-        Text(
-          isVerify
-              ? 'Confirm the attendance record for ${entry.employeeName}.'
-              : 'Mark the exception for ${entry.employeeName} as reviewed without verification.',
-          style: AppTypography.bodyMedium,
-        ),
-      ],
+    title: title,
+    content: Text(
+      isVerify
+          ? 'Confirm the attendance record for ${entry.employeeName}.'
+          : 'Mark the exception for ${entry.employeeName} as reviewed without verification.',
+      style: AppTypography.bodyMedium,
     ),
+    confirmLabel: 'Continue',
+    onConfirm: onConfirm,
+    failureMessage: failureMessage,
+    dialogBuilder: (context, content, actions) =>
+        _DialogShell(title: title, actions: actions, children: [content]),
   );
-  return confirmed == true;
 }
 
 /// Bounded, scrollable dialog frame. A plain [Dialog] is used instead of

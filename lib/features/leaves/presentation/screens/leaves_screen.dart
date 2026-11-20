@@ -90,43 +90,41 @@ class _LeavesScreenState extends State<LeavesScreen> {
             ? _currentBranchId
             : access.activeAssignedBranches.firstOrNull?.id ??
                   access.activeBranch?.branchId);
-    final result = await showLeaveRequestFormDialog(
+    final controller = context.read<LeavesController>()..clearActionError();
+    final saved = await showLeaveRequestFormDialog(
       context: context,
       branches: branches,
       initialBranchId: initialBranchId,
       branchLocked: manager,
       request: request,
+      onSubmit: (result) async {
+        controller.clearActionError();
+        return request == null
+            ? controller.submitLeaveRequest(
+                access: access,
+                branchId: result.branchId,
+                activeBranchId: manager ? _currentBranchId : null,
+                draft: result.draft,
+              )
+            : controller.updatePendingLeaveRequest(
+                access: access,
+                activeBranchId: manager ? _currentBranchId : null,
+                request: request,
+                draft: result.draft,
+              );
+      },
+      failureMessage: () => controller.actionErrorMessage,
     );
-    if (!mounted || result == null) return;
-
-    final controller = context.read<LeavesController>();
-    final saved = request == null
-        ? await controller.submitLeaveRequest(
-            access: access,
-            branchId: result.branchId,
-            activeBranchId: manager ? _currentBranchId : null,
-            draft: result.draft,
-          )
-        : await controller.updatePendingLeaveRequest(
-            access: access,
-            activeBranchId: manager ? _currentBranchId : null,
-            request: request,
-            draft: result.draft,
-          );
-    if (!mounted) return;
-    if (saved) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            request == null
-                ? 'Leave request submitted for review.'
-                : 'Pending leave request updated.',
-          ),
+    if (!mounted || !saved) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          request == null
+              ? 'Leave request submitted for review.'
+              : 'Pending leave request updated.',
         ),
-      );
-    } else {
-      _showActionError(controller.actionErrorMessage);
-    }
+      ),
+    );
   }
 
   Future<void> _review(
@@ -134,42 +132,33 @@ class _LeavesScreenState extends State<LeavesScreen> {
     LeaveRequest request,
     LeaveStatus decision,
   ) async {
-    final result = await showLeaveReviewDialog(
+    final controller = context.read<LeavesController>()..clearActionError();
+    final saved = await showLeaveReviewDialog(
       context: context,
       request: request,
       decision: decision,
+      onSubmit: (notes) async {
+        controller.clearActionError();
+        return controller.reviewLeaveRequest(
+          access: access,
+          activeBranchId: access.user.role == UserRole.branchManager
+              ? _currentBranchId
+              : null,
+          request: request,
+          decision: decision,
+          reviewerNotes: notes,
+        );
+      },
+      failureMessage: () => controller.actionErrorMessage,
     );
-    if (!mounted || result == null) return;
-    final controller = context.read<LeavesController>();
-    final saved = await controller.reviewLeaveRequest(
-      access: access,
-      activeBranchId: access.user.role == UserRole.branchManager
-          ? _currentBranchId
-          : null,
-      request: request,
-      decision: result.status,
-      reviewerNotes: result.notes,
-    );
-    if (!mounted) return;
-    if (!saved) {
-      _showActionError(controller.actionErrorMessage);
-      return;
-    }
+    if (!mounted || !saved) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          result.status == LeaveStatus.approved
+          decision == LeaveStatus.approved
               ? 'Leave request approved.'
               : 'Leave request rejected.',
         ),
-      ),
-    );
-  }
-
-  void _showActionError(String? message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message ?? 'The leave action could not be saved.'),
       ),
     );
   }
@@ -235,7 +224,9 @@ class _LeavesScreenState extends State<LeavesScreen> {
                         iconData: Icons.add,
                         onPressed: controller.isSaving
                             ? null
-                            : () => _openForm(access),
+                            : () {
+                                _openForm(access);
+                              },
                       )
                     : null,
               ),
@@ -293,7 +284,11 @@ class _LeavesScreenState extends State<LeavesScreen> {
                 child: _EmptyLeavesState(
                   title: _emptyTitle(isEmployee, isManager),
                   subtitle: _emptySubtitle(isEmployee, isManager),
-                  onApply: canApply ? () => _openForm(access) : null,
+                  onApply: canApply
+                      ? () {
+                          _openForm(access);
+                        }
+                      : null,
                 ),
               )
             else
@@ -324,14 +319,17 @@ class _LeavesScreenState extends State<LeavesScreen> {
                           ownPending &&
                               (!isManager ||
                                   request.branchId == _currentBranchId)
-                          ? () => _openForm(access, request: request)
+                          ? () {
+                              _openForm(access, request: request);
+                            }
                           : null,
                       showBranch:
                           role == UserRole.orgAdmin ||
                           (isManager && request.applicantUid == access.user.id),
                       onReview: canReview
-                          ? (decision) =>
-                                unawaited(_review(access, request, decision))
+                          ? (decision) {
+                              _review(access, request, decision);
+                            }
                           : null,
                     );
                   },
@@ -417,7 +415,7 @@ class _EmptyLeavesState extends StatelessWidget {
 
   final String title;
   final String subtitle;
-  final VoidCallback? onApply;
+  final FutureOr<void> Function()? onApply;
 
   @override
   Widget build(BuildContext context) => Padding(

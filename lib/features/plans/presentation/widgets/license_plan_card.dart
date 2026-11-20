@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/plans/domain/models/license_plan.dart';
 import 'package:workaxis/features/plans/presentation/widgets/license_plan_accent.dart';
@@ -24,9 +27,9 @@ class LicensePlanCard extends StatelessWidget {
   });
 
   final LicensePlan plan;
-  final VoidCallback onEdit;
-  final VoidCallback onToggleStatus;
-  final VoidCallback onDelete;
+  final FutureOr<void> Function() onEdit;
+  final FutureOr<void> Function() onToggleStatus;
+  final FutureOr<void> Function() onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -252,9 +255,9 @@ class _Footer extends StatelessWidget {
   });
 
   final LicensePlan plan;
-  final VoidCallback onEdit;
-  final VoidCallback onToggleStatus;
-  final VoidCallback onDelete;
+  final FutureOr<void> Function() onEdit;
+  final FutureOr<void> Function() onToggleStatus;
+  final FutureOr<void> Function() onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -272,35 +275,26 @@ class _Footer extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        IconButton(
+        AppIconButton(
           tooltip: 'Edit ${plan.name}',
-          icon: const Icon(
-            Icons.edit_outlined,
-            size: 18,
-            color: AppColors.secondary,
-          ),
+          icon: Icons.edit_outlined,
+          color: AppColors.secondary,
           constraints: _actionTouchTarget,
           onPressed: onEdit,
         ),
-        IconButton(
+        AppIconButton(
           tooltip: isActive
               ? 'Deactivate ${plan.name}'
               : 'Activate ${plan.name}',
-          icon: Icon(
-            isActive ? Icons.archive_outlined : Icons.unarchive_outlined,
-            size: 18,
-            color: AppColors.secondary,
-          ),
+          icon: isActive ? Icons.archive_outlined : Icons.unarchive_outlined,
+          color: AppColors.secondary,
           constraints: _actionTouchTarget,
           onPressed: onToggleStatus,
         ),
-        IconButton(
+        AppIconButton(
           tooltip: 'Delete ${plan.name}',
-          icon: const Icon(
-            Icons.delete_outline,
-            size: 18,
-            color: AppColors.statusUrgentText,
-          ),
+          icon: Icons.delete_outline,
+          color: AppColors.statusUrgentText,
           constraints: _actionTouchTarget,
           onPressed: onDelete,
         ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/shell/widgets/shell_labels.dart';
@@ -26,7 +28,7 @@ class TopConsoleBar extends StatelessWidget {
   final UserRole? role;
   final OrganizationSummary? organization;
   final String? userName;
-  final VoidCallback onSignOut;
+  final FutureOr<void> Function() onSignOut;
 
   @override
   Widget build(BuildContext context) {

@@ -308,28 +308,34 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
       onOpen: () => _openDetails(member, access),
       onEdit: canManage ? () => _openEditor(access, member: member) : null,
       onResetPassword: canAct
-          ? () => resetMemberPassword(
-              context,
-              access: access,
-              member: member,
-              activeBranchId: _activeBranchId,
-            )
+          ? () {
+              resetMemberPassword(
+                context,
+                access: access,
+                member: member,
+                activeBranchId: _activeBranchId,
+              );
+            }
           : null,
       onToggleStatus: canAct
-          ? () => toggleMemberStatus(
-              context,
-              access: access,
-              member: member,
-              activeBranchId: _activeBranchId,
-            )
+          ? () {
+              toggleMemberStatus(
+                context,
+                access: access,
+                member: member,
+                activeBranchId: _activeBranchId,
+              );
+            }
           : null,
       onDelete: canAct
-          ? () => deleteMember(
-              context,
-              access: access,
-              member: member,
-              activeBranchId: _activeBranchId,
-            )
+          ? () {
+              deleteMember(
+                context,
+                access: access,
+                member: member,
+                activeBranchId: _activeBranchId,
+              );
+            }
           : null,
     );
   }
@@ -357,10 +363,11 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   }
 
   /// Add and edit are routed pages; the directory reloads when it is shown again.
-  void _openEditor(UserAccessContext access, {OrganizationMember? member}) =>
-      context.push(
-        member == null ? _addPath(access) : _editPath(access, member.id),
-      );
+  void _openEditor(UserAccessContext access, {OrganizationMember? member}) {
+    context.push(
+      member == null ? _addPath(access) : _editPath(access, member.id),
+    );
+  }
 
   String _addPath(UserAccessContext access) =>
       access.user.role == UserRole.branchManager

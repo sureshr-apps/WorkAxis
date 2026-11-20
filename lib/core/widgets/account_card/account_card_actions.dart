@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -17,7 +19,7 @@ class AccountCardAction {
   final Color color;
 
   /// Null disables the action.
-  final VoidCallback? onPressed;
+  final FutureOr<void> Function()? onPressed;
 
   /// Explains the action, for example why a disabled one is unavailable.
   final String? tooltip;
@@ -43,16 +45,45 @@ class AccountCardActions extends StatelessWidget {
   );
 }
 
-class _LabelledAction extends StatelessWidget {
+class _LabelledAction extends StatefulWidget {
   const _LabelledAction({required this.action});
 
   final AccountCardAction action;
 
   @override
+  State<_LabelledAction> createState() => _LabelledActionState();
+}
+
+class _LabelledActionState extends State<_LabelledAction> {
+  bool _isLoading = false;
+
+  Future<void> _handlePressed() async {
+    if (_isLoading) return;
+    final action = widget.action.onPressed;
+    if (action == null) return;
+    setState(() => _isLoading = true);
+    try {
+      await Future<void>.sync(action);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final action = widget.action;
     final button = TextButton.icon(
-      onPressed: action.onPressed,
-      icon: Icon(action.icon, size: 18, color: action.color),
+      onPressed: _isLoading || action.onPressed == null ? null : _handlePressed,
+      icon: _isLoading
+          ? SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: action.color,
+              ),
+            )
+          : Icon(action.icon, size: 18, color: action.color),
       label: Text(
         action.label,
         style: AppTypography.labelMedium.copyWith(

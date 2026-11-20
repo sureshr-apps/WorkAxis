@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
@@ -5,6 +7,7 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/geofence_real_map_view.dart';
 
@@ -18,7 +21,7 @@ class ActiveGeofenceCard extends StatelessWidget {
   });
 
   final EmployeeHomeSummary summary;
-  final VoidCallback? onRefreshLocation;
+  final FutureOr<void> Function()? onRefreshLocation;
 
   static bool _has(String value) =>
       value.isNotEmpty && value != EmployeeHomeSummary.unavailable;
@@ -103,9 +106,10 @@ class ActiveGeofenceCard extends StatelessWidget {
             ),
             if (onRefreshLocation != null) ...[
               const SizedBox(width: AppSpacing.xs),
-              IconButton(
-                icon: const Icon(Icons.refresh, size: 18),
+              AppIconButton(
+                icon: Icons.refresh,
                 tooltip: 'Recheck geofence',
+                color: AppColors.secondary,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 onPressed: onRefreshLocation,

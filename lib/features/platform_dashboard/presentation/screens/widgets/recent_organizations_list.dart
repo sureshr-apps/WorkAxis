@@ -70,8 +70,9 @@ class _RecentOrganizationsListState extends State<RecentOrganizationsList> {
     widget.onSearchChanged(_query, _status);
   }
 
-  void _openDetails(CustomerOrganization org) =>
-      context.push(AppRoutes.platformOrganizationDetailsPath(org.id));
+  void _openDetails(CustomerOrganization org) {
+    context.push(AppRoutes.platformOrganizationDetailsPath(org.id));
+  }
 
   @override
   Widget build(BuildContext context) {

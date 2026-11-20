@@ -118,9 +118,13 @@ class _BranchDetailsScreenState extends State<BranchDetailsScreen> {
                   BranchAccessPanel(
                     branch: branch,
                     isUpdating: _isSaving,
-                    onEdit: () => _editBranch(branch),
+                    onEdit: () {
+                      _editBranch(branch);
+                    },
                     onToggleActive: () => _toggleActive(branch),
-                    onDelete: () => _deleteBranch(branch),
+                    onDelete: () {
+                      _deleteBranch(branch);
+                    },
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
@@ -182,22 +186,21 @@ class _BranchDetailsScreenState extends State<BranchDetailsScreen> {
   Future<void> _deleteBranch(BranchRecord branch) async {
     final access = _access;
     if (access == null) return;
-    final confirmed = await confirmBranchDelete(context, branch);
-    if (!confirmed || !mounted) return;
     final controller = context.read<BranchManagementController>()
       ..clearActionError();
-    final deleted = await controller.deleteBranch(
-      access: access,
-      branchId: branch.id,
+    final deleted = await confirmBranchDelete(
+      context,
+      branch,
+      onConfirm: () async {
+        controller.clearActionError();
+        return await controller.deleteBranch(
+          access: access,
+          branchId: branch.id,
+        );
+      },
+      failureMessage: () => controller.actionErrorMessage,
     );
-    if (!mounted) return;
-    if (!deleted) {
-      _toast(
-        controller.actionErrorMessage ??
-            'The branch could not be deleted. Try again.',
-      );
-      return;
-    }
+    if (!deleted || !mounted) return;
     await context.read<AccessController>().refreshAccess();
     if (!mounted) return;
     _toast('${branch.name} deleted.');

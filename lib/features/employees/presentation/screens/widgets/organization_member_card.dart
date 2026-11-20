@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/core/widgets/account_card/account_card.dart';
@@ -30,10 +32,10 @@ class OrganizationMemberCard extends StatelessWidget {
 
   /// Management actions. Each is null, and hidden, when the caller may not
   /// perform it on this account.
-  final VoidCallback? onEdit;
-  final VoidCallback? onResetPassword;
-  final VoidCallback? onToggleStatus;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function()? onEdit;
+  final FutureOr<void> Function()? onResetPassword;
+  final FutureOr<void> Function()? onToggleStatus;
+  final FutureOr<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {

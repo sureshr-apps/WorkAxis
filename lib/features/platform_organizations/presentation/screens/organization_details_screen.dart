@@ -126,10 +126,16 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
                       AppRoutes.platformOrganizationEditPath(organization.id),
                     );
                   },
-                  onToggleStatus: () => organization.isActive
-                      ? _confirmSuspend(organization, controller)
-                      : _confirmReactivate(organization, controller),
-                  onDelete: () => _confirmDelete(organization, controller),
+                  onToggleStatus: () {
+                    if (organization.isActive) {
+                      _confirmSuspend(organization, controller);
+                    } else {
+                      _confirmReactivate(organization, controller);
+                    }
+                  },
+                  onDelete: () {
+                    _confirmDelete(organization, controller);
+                  },
                   onCopyCode: () => _copyOrganizationCode(organization.code),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -170,20 +176,25 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
           enabled: !controller.isActionLoading,
           canSuspend: (admin) =>
               !controller.isLastActiveAdministrator(admin.id),
-          onAddAdministrator: () => flow.add(context),
-          onAdministratorAction: (admin, action) =>
-              flow.dispatch(context, admin, action),
+          onAddAdministrator: () {
+            flow.add(context);
+          },
+          onAdministratorAction: (admin, action) {
+            flow.dispatch(context, admin, action);
+          },
         );
       case OrganizationDetailsTab.license:
         return OrganizationLicenseTab(
           organization: organization,
           controller: controller.license,
-          onAction: (action) => context.push(
-            AppRoutes.platformOrganizationLicensePath(
-              organization.id,
-              action.routeSegment,
-            ),
-          ),
+          onAction: (action) {
+            context.push(
+              AppRoutes.platformOrganizationLicensePath(
+                organization.id,
+                action.routeSegment,
+              ),
+            );
+          },
         );
     }
   }
@@ -220,66 +231,58 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
     );
   }
 
-  void _confirmSuspend(
+  Future<void> _confirmSuspend(
     CustomerOrganization organization,
     PlatformOrganizationsController controller,
-  ) {
+  ) async {
     controller.clearActionError();
     final messenger = ScaffoldMessenger.of(context);
-    showDialog<bool>(
+    final updated = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => SuspendOrganizationDialog(
         organization: organization,
         failureMessage: () => controller.actionErrorMessage,
-        onConfirm: () async {
-          final ok = await controller.updateStatus(
-            organization.id,
-            OrganizationStatus.suspended,
-          );
-          if (ok) {
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text('${organization.name} marked as Suspended.'),
-                backgroundColor: AppColors.statusUrgent,
-              ),
-            );
-          }
-          return ok;
-        },
+        onConfirm: () => controller.updateStatus(
+          organization.id,
+          OrganizationStatus.suspended,
+        ),
       ),
     );
+    if (updated == true && mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${organization.name} marked as Suspended.'),
+          backgroundColor: AppColors.statusUrgent,
+        ),
+      );
+    }
   }
 
-  void _confirmReactivate(
+  Future<void> _confirmReactivate(
     CustomerOrganization organization,
     PlatformOrganizationsController controller,
-  ) {
+  ) async {
     controller.clearActionError();
     final messenger = ScaffoldMessenger.of(context);
-    showDialog<bool>(
+    final updated = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => ReactivateOrganizationDialog(
         organization: organization,
         failureMessage: () => controller.actionErrorMessage,
-        onConfirm: () async {
-          final ok = await controller.updateStatus(
-            organization.id,
-            OrganizationStatus.active,
-          );
-          if (ok) {
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text('${organization.name} successfully reactivated.'),
-                backgroundColor: AppColors.statusActive,
-              ),
-            );
-          }
-          return ok;
-        },
+        onConfirm: () =>
+            controller.updateStatus(organization.id, OrganizationStatus.active),
       ),
     );
+    if (updated == true && mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${organization.name} successfully reactivated.'),
+          backgroundColor: AppColors.statusActive,
+        ),
+      );
+    }
   }
 
   Future<void> _confirmDelete(
@@ -295,22 +298,19 @@ class _OrganizationDetailsScreenState extends State<OrganizationDetailsScreen> {
       builder: (_) => DeleteOrganizationDialog(
         organization: organization,
         failureMessage: () => controller.actionErrorMessage,
-        onConfirm: () async {
-          final ok = await controller.deleteOrganization(organization.id);
-          if (ok) {
-            if (mounted) setState(() => _deleted = true);
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text('${organization.name} permanently deleted.'),
-                backgroundColor: AppColors.statusUrgent,
-              ),
-            );
-          }
-          return ok;
-        },
+        onConfirm: () => controller.deleteOrganization(organization.id),
       ),
     );
-    if (deleted == true) router.go(AppRoutes.platformOrganizations);
+    if (deleted == true && mounted) {
+      setState(() => _deleted = true);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${organization.name} permanently deleted.'),
+          backgroundColor: AppColors.statusUrgent,
+        ),
+      );
+      router.go(AppRoutes.platformOrganizations);
+    }
   }
 }
 

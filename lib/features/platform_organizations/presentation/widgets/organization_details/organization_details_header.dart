@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
@@ -7,6 +9,7 @@ import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
 
@@ -32,9 +35,9 @@ class OrganizationDetailsHeader extends StatelessWidget {
   final String? planName;
   final bool isActionLoading;
   final VoidCallback onEdit;
-  final VoidCallback onToggleStatus;
-  final VoidCallback onCopyCode;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function() onToggleStatus;
+  final FutureOr<void> Function() onCopyCode;
+  final FutureOr<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -100,9 +103,9 @@ class _StackedHeader extends StatelessWidget {
   final String? planName;
   final bool isActionLoading;
   final VoidCallback onEdit;
-  final VoidCallback onToggleStatus;
-  final VoidCallback onCopyCode;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function() onToggleStatus;
+  final FutureOr<void> Function() onCopyCode;
+  final FutureOr<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -188,18 +191,15 @@ class _DeleteIconButton extends StatelessWidget {
   });
 
   final String organizationName;
-  final VoidCallback? onPressed;
+  final FutureOr<void> Function()? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
+    return AppIconButton(
       tooltip: 'Delete $organizationName',
       onPressed: onPressed,
-      icon: const Icon(
-        Icons.delete_outline,
-        color: AppColors.statusUrgentText,
-        size: 22,
-      ),
+      icon: Icons.delete_outline,
+      color: AppColors.statusUrgentText,
       constraints: const BoxConstraints(
         minWidth: AppSpacing.minTouchTarget,
         minHeight: AppSpacing.minTouchTarget,
@@ -255,7 +255,7 @@ class _CopyableCode extends StatelessWidget {
   const _CopyableCode({required this.code, required this.onCopy});
 
   final String code;
-  final VoidCallback onCopy;
+  final FutureOr<void> Function() onCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -332,7 +332,7 @@ class _Identity extends StatelessWidget {
 
   final CustomerOrganization organization;
   final String? planName;
-  final VoidCallback onCopyCode;
+  final FutureOr<void> Function() onCopyCode;
 
   @override
   Widget build(BuildContext context) {
@@ -398,8 +398,8 @@ class _Actions extends StatelessWidget {
   final CustomerOrganization organization;
   final bool isActionLoading;
   final VoidCallback onEdit;
-  final VoidCallback onToggleStatus;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function() onToggleStatus;
+  final FutureOr<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -418,13 +418,10 @@ class _Actions extends StatelessWidget {
       isFullWidth: false,
     );
     final delete = onDelete != null
-        ? IconButton(
+        ? AppIconButton(
             tooltip: 'Delete ${organization.name}',
-            icon: const Icon(
-              Icons.delete_outline,
-              color: AppColors.statusUrgentText,
-              size: 20,
-            ),
+            icon: Icons.delete_outline,
+            color: AppColors.statusUrgentText,
             constraints: const BoxConstraints(
               minWidth: AppSpacing.minTouchTarget,
               minHeight: AppSpacing.minTouchTarget,
@@ -473,7 +470,7 @@ class _CodeBadge extends StatelessWidget {
   const _CodeBadge({required this.code, this.onCopy});
 
   final String code;
-  final VoidCallback? onCopy;
+  final FutureOr<void> Function()? onCopy;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -501,14 +498,11 @@ class _CodeBadge extends StatelessWidget {
         ),
       ),
       if (onCopy != null)
-        IconButton(
+        AppIconButton(
           tooltip: 'Copy organization code',
           onPressed: onCopy,
-          icon: const Icon(
-            Icons.copy_outlined,
-            size: 16,
-            color: AppColors.secondary,
-          ),
+          icon: Icons.copy_outlined,
+          color: AppColors.secondary,
           constraints: const BoxConstraints(
             minWidth: AppSpacing.minTouchTarget,
             minHeight: AppSpacing.minTouchTarget,

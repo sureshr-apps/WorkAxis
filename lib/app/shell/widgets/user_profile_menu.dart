@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
@@ -8,7 +10,7 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 /// [userName] and [roleLabel] are null until the access context resolves; the
 /// menu does not show a placeholder identity. Compact layouts keep Sign Out in
 /// this menu; expanded layouts provide it at the bottom of the sidebar.
-class UserProfileMenu extends StatelessWidget {
+class UserProfileMenu extends StatefulWidget {
   const UserProfileMenu({
     super.key,
     required this.onSignOut,
@@ -22,13 +24,20 @@ class UserProfileMenu extends StatelessWidget {
   final String? roleLabel;
   final bool showNameAndRole;
   final bool showSignOut;
-  final VoidCallback onSignOut;
+  final FutureOr<void> Function() onSignOut;
+
+  @override
+  State<UserProfileMenu> createState() => _UserProfileMenuState();
+}
+
+class _UserProfileMenuState extends State<UserProfileMenu> {
+  bool _isSigningOut = false;
 
   String? get _displayName {
-    final name = userName?.trim();
+    final name = widget.userName?.trim();
     if (name == null || name.isEmpty) return null;
 
-    final role = roleLabel?.trim();
+    final role = widget.roleLabel?.trim();
     if (role != null &&
         role.isNotEmpty &&
         name.toLowerCase() == role.toLowerCase()) {
@@ -38,7 +47,7 @@ class UserProfileMenu extends StatelessWidget {
   }
 
   String? get _displayRole {
-    final role = roleLabel?.trim();
+    final role = widget.roleLabel?.trim();
     if (role == null || role.isEmpty) return null;
 
     return _displayName?.toLowerCase() == role.toLowerCase() ? null : role;
@@ -60,7 +69,7 @@ class UserProfileMenu extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.end,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            if (showNameAndRole && displayName != null) ...[
+            if (widget.showNameAndRole && displayName != null) ...[
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 150),
                 child: Column(
@@ -102,8 +111,17 @@ class UserProfileMenu extends StatelessWidget {
                 color: AppColors.primaryDark,
                 shape: BoxShape.circle,
               ),
-              child: const Center(
-                child: Icon(Icons.person, size: 18, color: Colors.white),
+              child: Center(
+                child: _isSigningOut
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.person, size: 18, color: Colors.white),
               ),
             ),
           ],
@@ -111,7 +129,7 @@ class UserProfileMenu extends StatelessWidget {
       ),
     );
 
-    if (!showSignOut && displayName == null) {
+    if (!widget.showSignOut && displayName == null) {
       return Tooltip(message: 'User Profile & Actions', child: avatar);
     }
 
@@ -122,9 +140,7 @@ class UserProfileMenu extends StatelessWidget {
         borderRadius: AppSpacing.roundedSm,
         side: const BorderSide(color: AppColors.outlineSubtle),
       ),
-      onSelected: (value) {
-        if (value == 'sign_out') onSignOut();
-      },
+      onSelected: _onSelected,
       itemBuilder: (context) => [
         if (displayName != null) ...[
           PopupMenuItem<String>(
@@ -153,7 +169,7 @@ class UserProfileMenu extends StatelessWidget {
           ),
           const PopupMenuDivider(),
         ],
-        if (showSignOut)
+        if (widget.showSignOut)
           PopupMenuItem<String>(
             value: 'sign_out',
             child: Row(
@@ -178,5 +194,19 @@ class UserProfileMenu extends StatelessWidget {
       ],
       child: avatar,
     );
+  }
+
+  void _onSelected(String value) {
+    if (value == 'sign_out') unawaited(_signOut());
+  }
+
+  Future<void> _signOut() async {
+    if (_isSigningOut) return;
+    setState(() => _isSigningOut = true);
+    try {
+      await Future<void>.sync(widget.onSignOut);
+    } finally {
+      if (mounted) setState(() => _isSigningOut = false);
+    }
   }
 }

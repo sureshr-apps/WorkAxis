@@ -142,16 +142,22 @@ class _PlatformAdministratorDetailsScreenState
                   inactiveMessage: 'This administrator cannot sign in while access is suspended.',
                   isUpdating: controller.isSaving,
                   deleteTooltip: 'Delete administrator',
-                  onReset: () => context.push(
-                    AppRoutes.platformUserResetPasswordPath(administrator.id),
-                  ),
-                  onToggleActive: () => _changeStatus(
-                    administrator,
-                    administrator.status == AccountStatus.active
-                        ? AccountStatus.suspended
-                        : AccountStatus.active,
-                  ),
-                  onDelete: () => _deleteAdministrator(administrator),
+                  onReset: () {
+                    context.push(
+                      AppRoutes.platformUserResetPasswordPath(administrator.id),
+                    );
+                  },
+                  onToggleActive: () {
+                    _changeStatus(
+                      administrator,
+                      administrator.status == AccountStatus.active
+                          ? AccountStatus.suspended
+                          : AccountStatus.active,
+                    );
+                  },
+                  onDelete: () {
+                    _deleteAdministrator(administrator);
+                  },
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AccountDetailsPanel(
@@ -195,16 +201,16 @@ class _PlatformAdministratorDetailsScreenState
       context,
       administrator: administrator,
       nextStatus: nextStatus,
+      onConfirm: () async {
+        controller.clearActionError();
+        return await controller.updateStatus(administrator.id, nextStatus) !=
+            null;
+      },
+      failureMessage: () => controller.actionErrorMessage,
     );
     if (!confirmed || !mounted) return;
-    controller.clearActionError();
-    final updated = await controller.updateStatus(administrator.id, nextStatus);
-    if (!mounted) return;
     _toast(
-      updated == null
-          ? controller.actionErrorMessage ??
-                'The change could not be completed. Try again.'
-          : nextStatus == AccountStatus.suspended
+      nextStatus == AccountStatus.suspended
           ? '${administrator.fullName} access suspended.'
           : '${administrator.fullName} access restored.',
     );

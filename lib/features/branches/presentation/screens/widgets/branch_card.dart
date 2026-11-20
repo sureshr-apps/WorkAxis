@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
@@ -26,9 +28,9 @@ class BranchCard extends StatelessWidget {
   final VoidCallback onOpen;
 
   /// Management actions; each is shown only when its callback is given.
-  final VoidCallback? onEdit;
-  final VoidCallback? onToggleActive;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function()? onEdit;
+  final FutureOr<void> Function()? onToggleActive;
+  final FutureOr<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -133,9 +135,9 @@ class _Footer extends StatelessWidget {
   });
 
   final BranchRecord branch;
-  final VoidCallback? onEdit;
-  final VoidCallback? onToggleActive;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function()? onEdit;
+  final FutureOr<void> Function()? onToggleActive;
+  final FutureOr<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {

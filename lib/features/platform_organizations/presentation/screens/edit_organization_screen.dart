@@ -265,7 +265,9 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                       submitLabel: 'Save Changes',
                       submitIcon: Icons.check,
                       isLoading: controller.isActionLoading,
-                      onCancel: () => _handleCancel(org),
+                      onCancel: () {
+                        _handleCancel(org);
+                      },
                       onSubmit: () => _handleSubmit(org),
                     ),
                     const SizedBox(height: AppSpacing.xxl),

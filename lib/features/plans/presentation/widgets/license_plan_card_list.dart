@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/features/plans/domain/models/license_plan.dart';
@@ -17,9 +19,9 @@ class LicensePlanCardList extends StatelessWidget {
 
   final List<LicensePlan> plans;
   final int columns;
-  final ValueChanged<LicensePlan> onEdit;
-  final ValueChanged<LicensePlan> onToggleStatus;
-  final ValueChanged<LicensePlan> onDelete;
+  final FutureOr<void> Function(LicensePlan) onEdit;
+  final FutureOr<void> Function(LicensePlan) onToggleStatus;
+  final FutureOr<void> Function(LicensePlan) onDelete;
 
   @override
   Widget build(BuildContext context) {

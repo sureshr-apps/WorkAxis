@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -23,7 +25,7 @@ class OrganizationFormFooter extends StatelessWidget {
   final IconData submitIcon;
   final bool isLoading;
   final VoidCallback onCancel;
-  final VoidCallback onSubmit;
+  final FutureOr<void> Function() onSubmit;
 
   @override
   Widget build(BuildContext context) {

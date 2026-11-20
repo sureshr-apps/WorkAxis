@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/shell/nav_destination.dart';
 import 'package:workaxis/app/shell/widgets/branch_context_card.dart';
@@ -27,7 +29,7 @@ class ShellSidebar extends StatelessWidget {
   final List<AppNavDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
-  final VoidCallback onSignOut;
+  final FutureOr<void> Function() onSignOut;
   final UserRole? role;
   final String? organizationName;
   final ActiveBranchContext? activeBranch;

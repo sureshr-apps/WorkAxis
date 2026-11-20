@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
@@ -23,7 +25,10 @@ class AttendanceTable extends StatelessWidget {
   final String Function(String branchId) getBranchName;
   final bool canReview;
   final bool isSaving;
-  final void Function(AttendanceEntry entry, AttendanceReviewDecision decision)?
+  final FutureOr<void> Function(
+    AttendanceEntry entry,
+    AttendanceReviewDecision decision,
+  )?
   onReview;
   final ValueChanged<AttendanceEntry> onDetails;
 

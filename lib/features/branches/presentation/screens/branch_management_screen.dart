@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -138,7 +140,9 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                           text: 'Add Branch',
                           iconData: Icons.add,
                           isFullWidth: false,
-                          onPressed: () => _openEditor(),
+                          onPressed: () {
+                            _openEditor();
+                          },
                         )
                       : null,
                 ),
@@ -155,7 +159,9 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                     : (branch) => _toggleActive(access, branch),
                 onDelete: access == null
                     ? null
-                    : (branch) => _confirmDelete(access, branch),
+                    : (branch) {
+                        _confirmDelete(access, branch);
+                      },
               ),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
           ],
@@ -169,11 +175,13 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
           .showSnackBar(SnackBar(content: Text(message)));
 
   /// Add and edit are routed pages; the list reloads when it is shown again.
-  void _openEditor({BranchRecord? branch}) => context.push(
-    branch == null
-        ? AppRoutes.orgAdminBranchAddPath
-        : AppRoutes.orgAdminBranchEditPath(branch.id),
-  );
+  void _openEditor({BranchRecord? branch}) {
+    context.push(
+      branch == null
+          ? AppRoutes.orgAdminBranchAddPath
+          : AppRoutes.orgAdminBranchEditPath(branch.id),
+    );
+  }
 
   /// Suspends an active branch or reactivates a suspended one.
   Future<void> _toggleActive(
@@ -203,29 +211,29 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     UserAccessContext access,
     BranchRecord branch,
   ) async {
-    final confirmed = await confirmBranchDelete(context, branch);
-    if (!confirmed || !mounted) return;
     final controller = context.read<BranchManagementController>()
       ..clearActionError();
-    final deleted = await controller.deleteBranch(
-      access: access,
-      branchId: branch.id,
+    final deleted = await confirmBranchDelete(
+      context,
+      branch,
+      onConfirm: () async {
+        controller.clearActionError();
+        return await controller.deleteBranch(
+          access: access,
+          branchId: branch.id,
+        );
+      },
+      failureMessage: () => controller.actionErrorMessage,
     );
+    if (!deleted || !mounted) return;
+    await context.read<AccessController>().refreshAccess();
     if (!mounted) return;
-    if (deleted) {
-      await context.read<AccessController>().refreshAccess();
-      if (!mounted) return;
-      _toast('${branch.name} deleted.');
-    } else {
-      _toast(
-        controller.actionErrorMessage ??
-            'The branch could not be deleted. Try again.',
-      );
-    }
+    _toast('${branch.name} deleted.');
   }
 
-  void _openDetails(BranchRecord branch) =>
-      context.push(AppRoutes.orgAdminBranchDetailsPath(branch.id));
+  void _openDetails(BranchRecord branch) {
+    context.push(AppRoutes.orgAdminBranchDetailsPath(branch.id));
+  }
 }
 
 /// Branch cards in one or more columns, sized to their content like the plan
@@ -241,9 +249,9 @@ class _BranchList extends StatelessWidget {
 
   final List<BranchRecord> branches;
   final void Function(BranchRecord branch) onOpen;
-  final void Function(BranchRecord branch)? onEdit;
-  final void Function(BranchRecord branch)? onToggleActive;
-  final void Function(BranchRecord branch)? onDelete;
+  final FutureOr<void> Function(BranchRecord branch)? onEdit;
+  final FutureOr<void> Function(BranchRecord branch)? onToggleActive;
+  final FutureOr<void> Function(BranchRecord branch)? onDelete;
 
   @override
   Widget build(BuildContext context) {

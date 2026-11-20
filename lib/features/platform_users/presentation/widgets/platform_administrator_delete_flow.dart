@@ -10,25 +10,18 @@ Future<bool> confirmAndDeleteAdministrator(
   PlatformUsersController controller,
   PlatformAdministrator administrator,
 ) async {
-  final confirmed = await confirmAdministratorDelete(
-    context,
-    administrator: administrator,
-  );
-  if (!confirmed || !context.mounted) return false;
   controller.clearActionError();
   final messenger = ScaffoldMessenger.of(context);
-  final deleted = await controller.deleteAdministrator(administrator.id);
-  if (!deleted) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          controller.actionErrorMessage ??
-              'The administrator could not be deleted. Try again.',
-        ),
-      ),
-    );
-    return false;
-  }
+  final deleted = await confirmAdministratorDelete(
+    context,
+    administrator: administrator,
+    onConfirm: () async {
+      controller.clearActionError();
+      return await controller.deleteAdministrator(administrator.id);
+    },
+    failureMessage: () => controller.actionErrorMessage,
+  );
+  if (!deleted || !context.mounted) return false;
   messenger.showSnackBar(
     SnackBar(content: Text('${administrator.fullName} deleted.')),
   );

@@ -63,11 +63,13 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
       ..setStatusFilter(null);
   }
 
-  void _openDetails(CustomerOrganization org) =>
-      context.push(AppRoutes.platformOrganizationDetailsPath(org.id));
+  void _openDetails(CustomerOrganization org) {
+    context.push(AppRoutes.platformOrganizationDetailsPath(org.id));
+  }
 
-  void _openEdit(CustomerOrganization org) =>
-      context.push(AppRoutes.platformOrganizationEditPath(org.id));
+  void _openEdit(CustomerOrganization org) {
+    context.push(AppRoutes.platformOrganizationEditPath(org.id));
+  }
 
   void _confirmDelete(
     CustomerOrganization org,
@@ -107,7 +109,9 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
         tooltip: 'Add Organization',
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.onPrimary,
-        onPressed: () => context.push(AppRoutes.platformOrganizationsAdd),
+        onPressed: () {
+          context.push(AppRoutes.platformOrganizationsAdd);
+        },
         child: const Icon(Icons.add),
       ),
       body: SafeArea(
@@ -201,8 +205,12 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
               return OrganizationsTable(
                 organizations: organizations,
                 onSelect: _openDetails,
-                onEdit: _openEdit,
-                onDelete: (org) => _confirmDelete(org, controller),
+                onEdit: (org) {
+                  _openEdit(org);
+                },
+                onDelete: (org) {
+                  _confirmDelete(org, controller);
+                },
                 hasMore: controller.hasMore,
                 isLoadingMore: controller.isLoadingMore,
                 onLoadMore: controller.loadMore,
@@ -214,8 +222,12 @@ class _OrganizationsListScreenState extends State<OrganizationsListScreen> {
                   organizations: organizations,
                   columns: width >= AppBreakpoints.mediumMin ? 2 : 1,
                   onSelect: _openDetails,
-                  onEdit: _openEdit,
-                  onDelete: (org) => _confirmDelete(org, controller),
+                  onEdit: (org) {
+                    _openEdit(org);
+                  },
+                  onDelete: (org) {
+                    _confirmDelete(org, controller);
+                  },
                 ),
                 if (controller.hasMore)
                   SliverToBoxAdapter(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -40,8 +42,8 @@ class SettingsPage extends StatelessWidget {
   /// Whether a settings value is available to edit.
   final bool hasLoaded;
   final String loadFallbackMessage;
-  final VoidCallback onRetry;
-  final VoidCallback onSave;
+  final FutureOr<void> Function() onRetry;
+  final FutureOr<void> Function() onSave;
 
   /// Section cards, shown once the settings have loaded.
   final List<Widget> children;

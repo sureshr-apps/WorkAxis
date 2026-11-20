@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -20,7 +22,7 @@ class AppNavigationDrawer extends StatelessWidget {
   final List<AppNavDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
-  final VoidCallback? onSignOut;
+  final FutureOr<void> Function()? onSignOut;
 
   const AppNavigationDrawer({
     super.key,

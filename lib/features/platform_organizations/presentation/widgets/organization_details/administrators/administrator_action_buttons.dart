@@ -1,13 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/widgets/account_card/account_card_actions.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
 import 'package:workaxis/features/platform_organizations/presentation/widgets/organization_details/administrators/administrator_parts.dart';
 
 /// Called when the user picks an action for an administrator.
-typedef AdministratorActionCallback = void Function(
+typedef AdministratorActionCallback = FutureOr<void> Function(
   OrganizationAdminUser administrator,
   OrganizationAdminAction action,
 );
@@ -106,10 +109,11 @@ class _IconAction extends StatelessWidget {
   final AccountCardAction spec;
 
   @override
-  Widget build(BuildContext context) => IconButton(
+  Widget build(BuildContext context) => AppIconButton(
     tooltip: spec.tooltip ?? spec.label,
     onPressed: spec.onPressed,
-    icon: Icon(spec.icon, size: 20, color: AppColors.secondary),
+    icon: spec.icon,
+    color: spec.color,
     constraints: const BoxConstraints(
       minWidth: AppSpacing.minTouchTarget,
       minHeight: AppSpacing.minTouchTarget,

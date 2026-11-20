@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -20,8 +22,8 @@ class LeaveRequestCard extends StatelessWidget {
   final LeaveRequest request;
   final bool showApplicant;
   final bool showBranch;
-  final VoidCallback? onEdit;
-  final ValueChanged<LeaveStatus>? onReview;
+  final FutureOr<void> Function()? onEdit;
+  final FutureOr<void> Function(LeaveStatus)? onReview;
   final bool isSaving;
 
   @override
@@ -143,6 +145,7 @@ class LeaveRequestCard extends StatelessWidget {
                     onPressed: isSaving
                         ? null
                         : () => onReview!(LeaveStatus.rejected),
+                    isLoading: isSaving,
                   ),
               ],
             ),

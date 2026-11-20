@@ -143,11 +143,21 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
                   inactiveMessage:
                       'This employee cannot sign in while access is suspended.',
                   deleteTooltip: 'Delete ${member.fullName}',
-                  onReset: canAct ? () => _resetPassword(access, member) : null,
-                  onToggleActive: canAct
-                      ? () => _toggleStatus(access, member)
+                  onReset: canAct
+                      ? () {
+                          _resetPassword(access, member);
+                        }
                       : null,
-                  onDelete: canAct ? () => _delete(access, member) : null,
+                  onToggleActive: canAct
+                      ? () {
+                          _toggleStatus(access, member);
+                        }
+                      : null,
+                  onDelete: canAct
+                      ? () {
+                          _delete(access, member);
+                        }
+                      : null,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AccountDetailsPanel(

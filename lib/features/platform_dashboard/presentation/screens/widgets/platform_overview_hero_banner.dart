@@ -132,7 +132,9 @@ class PlatformOverviewHeroBanner extends StatelessWidget {
     return AppButton.responsive(
       text: 'Add Organization',
       iconData: Icons.add_rounded,
-      onPressed: () => context.push(AppRoutes.platformOrganizationsAdd),
+      onPressed: () {
+        context.push(AppRoutes.platformOrganizationsAdd);
+      },
     );
   }
 }

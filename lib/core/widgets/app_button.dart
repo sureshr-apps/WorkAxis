@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
@@ -23,10 +25,13 @@ enum AppButtonVariant {
 /// - 48dp minimum touch target adhering to Material 3 accessibility guidelines.
 /// - Adaptive sizing: full-width on smartphone, auto/intrinsic-width on tablet and desktop.
 /// - Primary, Secondary (Tonal), Outlined, and Destructive variants.
-/// - Built-in loading indicator state.
-class AppButton extends StatelessWidget {
+/// - Automatically shows a loading indicator while an asynchronous action is
+///   running, preventing duplicate submissions.
+/// - Supports externally managed loading for operations whose progress is
+///   shared across multiple controls.
+class AppButton extends StatefulWidget {
   final String text;
-  final VoidCallback? onPressed;
+  final FutureOr<void> Function()? onPressed;
   final AppButtonVariant variant;
   final bool isLoading;
   final Widget? icon;
@@ -51,7 +56,7 @@ class AppButton extends StatelessWidget {
   factory AppButton.primary({
     Key? key,
     required String text,
-    required VoidCallback? onPressed,
+    required FutureOr<void> Function()? onPressed,
     bool isLoading = false,
     Widget? icon,
     IconData? iconData,
@@ -71,7 +76,7 @@ class AppButton extends StatelessWidget {
   factory AppButton.secondary({
     Key? key,
     required String text,
-    required VoidCallback? onPressed,
+    required FutureOr<void> Function()? onPressed,
     bool isLoading = false,
     Widget? icon,
     IconData? iconData,
@@ -91,7 +96,7 @@ class AppButton extends StatelessWidget {
   factory AppButton.outlined({
     Key? key,
     required String text,
-    required VoidCallback? onPressed,
+    required FutureOr<void> Function()? onPressed,
     bool isLoading = false,
     Widget? icon,
     IconData? iconData,
@@ -111,7 +116,7 @@ class AppButton extends StatelessWidget {
   factory AppButton.destructive({
     Key? key,
     required String text,
-    required VoidCallback? onPressed,
+    required FutureOr<void> Function()? onPressed,
     bool isLoading = false,
     Widget? icon,
     IconData? iconData,
@@ -131,7 +136,7 @@ class AppButton extends StatelessWidget {
   factory AppButton.link({
     Key? key,
     required String text,
-    required VoidCallback? onPressed,
+    required FutureOr<void> Function()? onPressed,
     Widget? icon,
     IconData? iconData,
   }) => AppButton(
@@ -149,7 +154,7 @@ class AppButton extends StatelessWidget {
   factory AppButton.responsive({
     Key? key,
     required String text,
-    required VoidCallback? onPressed,
+    required FutureOr<void> Function()? onPressed,
     AppButtonVariant variant = AppButtonVariant.primary,
     bool isLoading = false,
     Widget? icon,
@@ -166,8 +171,38 @@ class AppButton extends StatelessWidget {
   );
 
   @override
+  State<AppButton> createState() => _AppButtonState();
+}
+
+class _AppButtonState extends State<AppButton> {
+  bool _isActionInProgress = false;
+
+  String get text => widget.text;
+  FutureOr<void> Function()? get onPressed => widget.onPressed;
+  AppButtonVariant get variant => widget.variant;
+  bool get isLoading => widget.isLoading || _isActionInProgress;
+  Widget? get icon => widget.icon;
+  bool? get isFullWidth => widget.isFullWidth;
+  bool get isAdaptive => widget.isAdaptive;
+
+  void _handlePressed() {
+    if (isLoading) return;
+    final action = onPressed;
+    if (action == null) return;
+
+    setState(() => _isActionInProgress = true);
+    unawaited(
+      Future<void>.sync(action).whenComplete(() {
+        if (mounted) setState(() => _isActionInProgress = false);
+      }),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final effectiveOnPressed = isLoading ? null : onPressed;
+    final effectiveOnPressed = isLoading || onPressed == null
+        ? null
+        : _handlePressed;
     final foreground = _foregroundColor;
 
     final childContent = Row(

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+
+import 'dart:async';
+
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/core/widgets/table_header_cell.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
@@ -33,11 +37,11 @@ class OrganizationsTable extends StatelessWidget {
 
   final List<CustomerOrganization> organizations;
   final ValueChanged<CustomerOrganization> onSelect;
-  final ValueChanged<CustomerOrganization>? onEdit;
-  final ValueChanged<CustomerOrganization>? onDelete;
+  final FutureOr<void> Function(CustomerOrganization)? onEdit;
+  final FutureOr<void> Function(CustomerOrganization)? onDelete;
   final bool hasMore;
   final bool isLoadingMore;
-  final VoidCallback onLoadMore;
+  final FutureOr<void> Function() onLoadMore;
 
   @override
   Widget build(BuildContext context) {
@@ -119,8 +123,8 @@ class _OrganizationRow extends StatelessWidget {
 
   final CustomerOrganization organization;
   final VoidCallback onSelect;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function()? onEdit;
+  final FutureOr<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -192,23 +196,17 @@ class _OrganizationRow extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     if (onEdit != null)
-                      IconButton(
+                      AppIconButton(
                         tooltip: 'Edit ${org.name}',
-                        icon: const Icon(
-                          Icons.edit_outlined,
-                          size: 18,
-                          color: AppColors.secondary,
-                        ),
+                        icon: Icons.edit_outlined,
+                        color: AppColors.secondary,
                         onPressed: onEdit,
                       ),
                     if (onDelete != null)
-                      IconButton(
+                      AppIconButton(
                         tooltip: 'Delete ${org.name}',
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          size: 18,
-                          color: AppColors.statusUrgentText,
-                        ),
+                        icon: Icons.delete_outline,
+                        color: AppColors.statusUrgentText,
                         onPressed: onDelete,
                       ),
                     const Icon(
@@ -295,7 +293,7 @@ class _TableFooter extends StatelessWidget {
   final int loadedCount;
   final bool hasMore;
   final bool isLoadingMore;
-  final VoidCallback onLoadMore;
+  final FutureOr<void> Function() onLoadMore;
 
   @override
   Widget build(BuildContext context) {

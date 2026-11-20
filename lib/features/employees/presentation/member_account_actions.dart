@@ -19,27 +19,29 @@ Future<OrganizationMember?> toggleMemberStatus(
   String? activeBranchId,
 }) async {
   final suspend = member.status == AccountStatus.active;
+  final controller = context.read<OrganizationMembersController>()
+    ..clearActionError();
+  OrganizationMember? saved;
   final confirmed = await confirmMemberStatusChange(
     context,
     member: member,
     suspend: suspend,
+    onConfirm: () async {
+      controller.clearActionError();
+      saved = await controller.setMemberStatus(
+        access: access,
+        member: member,
+        status: suspend ? AccountStatus.suspended : AccountStatus.active,
+        activeBranchId: activeBranchId,
+      );
+      return saved != null;
+    },
+    failureMessage: () => controller.actionErrorMessage,
   );
   if (!confirmed || !context.mounted) return null;
-  final controller = context.read<OrganizationMembersController>()
-    ..clearActionError();
-  final saved = await controller.setMemberStatus(
-    access: access,
-    member: member,
-    status: suspend ? AccountStatus.suspended : AccountStatus.active,
-    activeBranchId: activeBranchId,
-  );
-  if (!context.mounted) return saved;
   showMemberMessage(
     context,
-    saved == null
-        ? controller.actionErrorMessage ??
-              'The account status could not be changed. Try again.'
-        : '${member.fullName} ${suspend ? 'suspended' : 'restored'}.',
+    '${member.fullName} ${suspend ? 'suspended' : 'restored'}.',
   );
   return saved;
 }
@@ -51,24 +53,24 @@ Future<bool> resetMemberPassword(
   required OrganizationMember member,
   String? activeBranchId,
 }) async {
-  final password = await showResetMemberPasswordDialog(context, member: member);
-  if (password == null || !context.mounted) return false;
   final controller = context.read<OrganizationMembersController>()
     ..clearActionError();
-  final ok = await controller.resetMemberPassword(
-    access: access,
+  final ok = await showResetMemberPasswordDialog(
+    context,
     member: member,
-    newPassword: password,
-    activeBranchId: activeBranchId,
+    onSubmit: (password) async {
+      controller.clearActionError();
+      return controller.resetMemberPassword(
+        access: access,
+        member: member,
+        newPassword: password,
+        activeBranchId: activeBranchId,
+      );
+    },
+    failureMessage: () => controller.actionErrorMessage,
   );
   if (!context.mounted) return ok;
-  showMemberMessage(
-    context,
-    ok
-        ? 'Password reset for ${member.fullName}.'
-        : controller.actionErrorMessage ??
-              'The password could not be reset. Try again.',
-  );
+  if (ok) showMemberMessage(context, 'Password reset for ${member.fullName}.');
   return ok;
 }
 
@@ -80,23 +82,23 @@ Future<bool> deleteMember(
   required OrganizationMember member,
   String? activeBranchId,
 }) async {
-  final confirmed = await confirmMemberDelete(context, member: member);
-  if (!confirmed || !context.mounted) return false;
   final controller = context.read<OrganizationMembersController>()
     ..clearActionError();
-  final deleted = await controller.deleteMember(
-    access: access,
+  final deleted = await confirmMemberDelete(
+    context,
     member: member,
-    activeBranchId: activeBranchId,
+    onConfirm: () async {
+      controller.clearActionError();
+      return controller.deleteMember(
+        access: access,
+        member: member,
+        activeBranchId: activeBranchId,
+      );
+    },
+    failureMessage: () => controller.actionErrorMessage,
   );
   if (!context.mounted) return deleted;
-  showMemberMessage(
-    context,
-    deleted
-        ? '${member.fullName} deleted.'
-        : controller.actionErrorMessage ??
-              'The account could not be deleted. Try again.',
-  );
+  if (deleted) showMemberMessage(context, '${member.fullName} deleted.');
   return deleted;
 }
 

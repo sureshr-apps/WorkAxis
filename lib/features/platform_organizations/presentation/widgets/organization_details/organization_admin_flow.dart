@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/async_confirmation_dialog.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_status.dart';
 import 'package:workaxis/features/platform_organizations/domain/organization_admin_rules.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/organization_admin_user.dart';
@@ -87,52 +87,44 @@ class OrganizationAdminFlow {
       );
       return;
     }
-    final confirmed = await _confirmDelete(context, administrator);
-    if (!confirmed) return;
-    final ok = await controller.deleteAdministrator(
-      organizationId,
-      administrator.id,
+    final deleted = await _confirmDelete(
+      context,
+      administrator,
+      onConfirm: () async {
+        controller.clearActionError();
+        return await controller.deleteAdministrator(
+          organizationId,
+          administrator.id,
+        );
+      },
     );
+    if (!deleted || !context.mounted) return;
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          ok
-              ? '${administrator.name} deleted.'
-              : _failure('The administrator could not be deleted.'),
-        ),
-      ),
+      SnackBar(content: Text('${administrator.name} deleted.')),
     );
   }
 
   Future<bool> _confirmDelete(
     BuildContext context,
-    OrganizationAdminUser administrator,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => PlatformDialogFrame(
-        title: 'Delete administrator?',
-        body: Text(
-          '${administrator.name} will be removed from this organization and '
-          'can no longer sign in. This cannot be undone.',
-        ),
-        actions: [
-          AppButton.outlined(
-            text: 'Cancel',
-            isFullWidth: false,
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-          ),
-          AppButton(
-            variant: AppButtonVariant.destructive,
-            text: 'Delete administrator',
-            isFullWidth: false,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-          ),
-        ],
-      ),
-    );
-    return confirmed == true;
-  }
+    OrganizationAdminUser administrator, {
+    required Future<bool> Function() onConfirm,
+  }) => showAsyncConfirmationDialog(
+    context: context,
+    title: 'Delete administrator?',
+    content: Text(
+      '${administrator.name} will be removed from this organization and '
+      'can no longer sign in. This cannot be undone.',
+    ),
+    confirmLabel: 'Delete administrator',
+    destructive: true,
+    onConfirm: onConfirm,
+    failureMessage: () => controller.actionErrorMessage,
+    dialogBuilder: (context, content, actions) => PlatformDialogFrame(
+      title: 'Delete administrator?',
+      body: content,
+      actions: actions,
+    ),
+  );
 
   Future<void> _open(BuildContext context, String location) async {
     await context.push<void>(location);
@@ -157,63 +149,53 @@ class OrganizationAdminFlow {
       );
       return;
     }
-    final confirmed = await _confirm(context, administrator, next);
-    if (!confirmed) return;
-    final ok = await controller.setAdministratorStatus(
-      organizationId,
-      administrator.id,
+    final confirmed = await _confirm(
+      context,
+      administrator,
       next,
+      onConfirm: () async {
+        controller.clearActionError();
+        return await controller.setAdministratorStatus(
+          organizationId,
+          administrator.id,
+          next,
+        );
+      },
     );
+    if (!confirmed || !context.mounted) return;
     final suspended = next == OrganizationAdminStatus.suspended;
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          ok
-              ? '${administrator.name} ${suspended ? 'suspended' : 'restored'}.'
-              : _failure(
-                  'The administrator could not be '
-                  '${suspended ? 'suspended' : 'restored'}.',
-                ),
+          '${administrator.name} ${suspended ? 'suspended' : 'restored'}.',
         ),
       ),
     );
   }
 
-  String _failure(String fallback) => controller.actionErrorMessage ?? fallback;
-
   Future<bool> _confirm(
     BuildContext context,
     OrganizationAdminUser administrator,
-    OrganizationAdminStatus next,
-  ) async {
+    OrganizationAdminStatus next, {
+    required Future<bool> Function() onConfirm,
+  }) {
     final suspend = next == OrganizationAdminStatus.suspended;
-    final confirmed = await showDialog<bool>(
+    final title = suspend ? 'Suspend administrator?' : 'Restore administrator?';
+    return showAsyncConfirmationDialog(
       context: context,
-      builder: (dialogContext) => PlatformDialogFrame(
-        title: suspend ? 'Suspend administrator?' : 'Restore administrator?',
-        body: Text(
-          suspend
-              ? '${administrator.name} will no longer be able to sign in. '
-                    'You can restore access later.'
-              : 'Allow ${administrator.name} to sign in to WorkAxis again?',
-        ),
-        actions: [
-          AppButton.outlined(
-            text: 'Cancel',
-            isFullWidth: false,
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-          ),
-          AppButton(
-            variant: suspend
-                ? AppButtonVariant.destructive
-                : AppButtonVariant.primary,
-            text: suspend ? 'Suspend' : 'Restore',
-            isFullWidth: false,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-          ),
-        ],
+      title: title,
+      content: Text(
+        suspend
+            ? '${administrator.name} will no longer be able to sign in. '
+                  'You can restore access later.'
+            : 'Allow ${administrator.name} to sign in to WorkAxis again?',
       ),
+      confirmLabel: suspend ? 'Suspend' : 'Restore',
+      destructive: suspend,
+      onConfirm: onConfirm,
+      failureMessage: () => controller.actionErrorMessage,
+      dialogBuilder: (context, content, actions) =>
+          PlatformDialogFrame(title: title, body: content, actions: actions),
     );
-    return confirmed == true;
   }
 }

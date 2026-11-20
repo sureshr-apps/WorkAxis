@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
@@ -17,7 +19,7 @@ class OrganizationOverviewTab extends StatelessWidget {
   });
 
   final CustomerOrganization organization;
-  final VoidCallback onUpload;
+  final FutureOr<void> Function() onUpload;
 
   @override
   Widget build(BuildContext context) {
@@ -367,7 +369,7 @@ class _OrganizationMetrics extends StatelessWidget {
 class _BrandingCard extends StatelessWidget {
   const _BrandingCard({required this.onUpload});
 
-  final VoidCallback onUpload;
+  final FutureOr<void> Function() onUpload;
 
   @override
   Widget build(BuildContext context) {
@@ -443,7 +445,7 @@ class _BrandingHeader extends StatelessWidget {
 class _LogoUploadCard extends StatelessWidget {
   const _LogoUploadCard({required this.onUpload});
 
-  final VoidCallback onUpload;
+  final FutureOr<void> Function() onUpload;
 
   @override
   Widget build(BuildContext context) {

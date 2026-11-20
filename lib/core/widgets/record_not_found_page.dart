@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -21,7 +23,7 @@ class RecordNotFoundPage extends StatelessWidget {
   final String currentLabel;
   final VoidCallback onBack;
   final String message;
-  final VoidCallback onRetry;
+  final FutureOr<void> Function() onRetry;
 
   @override
   Widget build(BuildContext context) {

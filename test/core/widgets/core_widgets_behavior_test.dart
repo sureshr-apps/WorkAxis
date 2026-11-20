@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/responsive/content_width_scope.dart';
+import 'package:workaxis/core/widgets/account_card/account_card_actions.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
+import 'package:workaxis/core/widgets/async_confirmation_dialog.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/core/widgets/kpi/app_kpi_card.dart';
@@ -105,6 +110,151 @@ void main() {
 
       await tester.tap(find.byType(FilledButton), warnIfMissed: false);
       expect(taps, 0);
+    });
+
+    testWidgets('shows progress until an async action finishes', (
+      tester,
+    ) async {
+      final completion = Completer<void>();
+      var taps = 0;
+      await tester.pumpWidget(
+        _host(
+          AppButton.primary(
+            text: 'Save',
+            onPressed: () {
+              taps++;
+              return completion.future;
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+
+      expect(taps, 1);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull,
+      );
+
+      await tester.tap(find.byType(FilledButton), warnIfMissed: false);
+      expect(taps, 1);
+
+      completion.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNotNull,
+      );
+    });
+  });
+
+  group('async action controls', () {
+    testWidgets('icon action shows progress and ignores repeat taps', (
+      tester,
+    ) async {
+      final completion = Completer<void>();
+      var taps = 0;
+      await tester.pumpWidget(
+        _host(
+          AppIconButton(
+            tooltip: 'Save asset',
+            icon: Icons.save_outlined,
+            onPressed: () {
+              taps++;
+              return completion.future;
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.byTooltip('Save asset'));
+      await tester.pump();
+      expect(taps, 1);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(
+        tester.widget<IconButton>(find.byType(IconButton)).onPressed,
+        isNull,
+      );
+
+      completion.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+
+    testWidgets('account-card action shows progress until it finishes', (
+      tester,
+    ) async {
+      final completion = Completer<void>();
+      await tester.pumpWidget(
+        _host(
+          AccountCardActions(
+            actions: [
+              AccountCardAction(
+                label: 'Suspend',
+                icon: Icons.person_off_outlined,
+                color: AppColors.statusUrgentText,
+                onPressed: () => completion.future,
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Suspend'));
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(
+        tester.widget<TextButton>(find.byType(TextButton)).onPressed,
+        isNull,
+      );
+
+      completion.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+
+    testWidgets('confirmation stays open while its request is pending', (
+      tester,
+    ) async {
+      final completion = Completer<bool>();
+      await tester.pumpWidget(
+        _host(
+          Builder(
+            builder: (context) => AppButton.primary(
+              text: 'Open confirmation',
+              onPressed: () => showAsyncConfirmationDialog(
+                context: context,
+                title: 'Suspend account?',
+                content: const Text('The account will lose access.'),
+                confirmLabel: 'Suspend',
+                onConfirm: () => completion.future,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open confirmation'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Suspend account?'), findsOneWidget);
+
+      await tester.tap(find.text('Suspend'));
+      await tester.pump();
+      expect(find.text('Suspend account?'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsWidgets);
+      expect(
+        tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+        isNull,
+      );
+
+      completion.complete(true);
+      await tester.pumpAndSettle();
+      expect(find.text('Suspend account?'), findsNothing);
     });
   });
 

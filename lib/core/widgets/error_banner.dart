@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -14,7 +16,7 @@ class ErrorBanner extends StatelessWidget {
 
   final String message;
   final VoidCallback? onDismiss;
-  final VoidCallback? onRetry;
+  final FutureOr<void> Function()? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -58,32 +60,7 @@ class ErrorBanner extends StatelessWidget {
             ),
             if (onRetry != null) ...[
               const SizedBox(width: AppSpacing.sm),
-              TextButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(
-                  Icons.refresh,
-                  size: 16,
-                  color: AppColors.statusUrgentText,
-                ),
-                label: const Text(
-                  'Retry',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.statusUrgentText,
-                  ),
-                ),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                  ),
-                  minimumSize: const Size(
-                    AppSpacing.minTouchTarget,
-                    AppSpacing.minTouchTarget,
-                  ),
-                  tapTargetSize: MaterialTapTargetSize.padded,
-                ),
-              ),
+              _RetryButton(onPressed: onRetry!),
             ],
             if (onDismiss != null)
               IconButton(
@@ -104,4 +81,62 @@ class ErrorBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RetryButton extends StatefulWidget {
+  const _RetryButton({required this.onPressed});
+
+  final FutureOr<void> Function() onPressed;
+
+  @override
+  State<_RetryButton> createState() => _RetryButtonState();
+}
+
+class _RetryButtonState extends State<_RetryButton> {
+  bool _isLoading = false;
+
+  Future<void> _retry() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      await Future<void>.sync(widget.onPressed);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => TextButton.icon(
+    onPressed: _isLoading ? null : _retry,
+    icon: _isLoading
+        ? const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.statusUrgentText,
+            ),
+          )
+        : const Icon(
+            Icons.refresh,
+            size: 16,
+            color: AppColors.statusUrgentText,
+          ),
+    label: const Text(
+      'Retry',
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        color: AppColors.statusUrgentText,
+      ),
+    ),
+    style: TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      minimumSize: const Size(
+        AppSpacing.minTouchTarget,
+        AppSpacing.minTouchTarget,
+      ),
+      tapTargetSize: MaterialTapTargetSize.padded,
+    ),
+  );
 }

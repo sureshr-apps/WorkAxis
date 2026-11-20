@@ -60,8 +60,9 @@ class _LicensePlansScreenState extends State<LicensePlansScreen> {
     controller.resetFilters();
   }
 
-  void _openEdit(LicensePlan plan) =>
-      context.push(AppRoutes.platformPlanEditPath(plan.id));
+  void _openEdit(LicensePlan plan) {
+    context.push(AppRoutes.platformPlanEditPath(plan.id));
+  }
 
   Future<void> _confirmToggleStatus(
     LicensePlan plan,
@@ -135,7 +136,9 @@ class _LicensePlansScreenState extends State<LicensePlansScreen> {
         tooltip: 'Add Plan',
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.onPrimary,
-        onPressed: () => context.push(AppRoutes.platformPlansAdd),
+        onPressed: () {
+          context.push(AppRoutes.platformPlansAdd);
+        },
         child: const Icon(Icons.add),
       ),
       body: SafeArea(
@@ -236,9 +239,15 @@ class _LicensePlansScreenState extends State<LicensePlansScreen> {
             return LicensePlanCardList(
               plans: plans,
               columns: columns,
-              onEdit: _openEdit,
-              onToggleStatus: (plan) => _confirmToggleStatus(plan, controller),
-              onDelete: (plan) => _confirmDelete(plan, controller),
+              onEdit: (plan) {
+                _openEdit(plan);
+              },
+              onToggleStatus: (plan) {
+                _confirmToggleStatus(plan, controller);
+              },
+              onDelete: (plan) {
+                _confirmDelete(plan, controller);
+              },
             );
           },
         ),

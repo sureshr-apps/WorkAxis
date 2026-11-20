@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_shadows.dart';
@@ -27,8 +29,8 @@ class HeroAttendanceCard extends StatelessWidget {
 
   /// The action being recorded; only its button shows progress.
   final AttendanceAction? processingAction;
-  final VoidCallback onPrimaryAction;
-  final VoidCallback? onCheckOut;
+  final FutureOr<void> Function() onPrimaryAction;
+  final FutureOr<void> Function()? onCheckOut;
 
   static bool _has(String? value) =>
       value != null &&

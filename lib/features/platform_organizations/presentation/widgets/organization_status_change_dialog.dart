@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
@@ -371,7 +373,7 @@ class _FailureAlert extends StatelessWidget {
   const _FailureAlert({required this.message, required this.onRetry});
 
   final String message;
-  final VoidCallback onRetry;
+  final FutureOr<void> Function() onRetry;
 
   @override
   Widget build(BuildContext context) {

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
+import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 import 'package:workaxis/features/attendance/presentation/attendance_presentation.dart';
@@ -37,7 +40,10 @@ class AttendanceTableRow extends StatelessWidget {
   final String branchName;
   final bool canReview;
   final bool isSaving;
-  final void Function(AttendanceEntry entry, AttendanceReviewDecision decision)?
+  final FutureOr<void> Function(
+    AttendanceEntry entry,
+    AttendanceReviewDecision decision,
+  )?
   onReview;
   final VoidCallback onDetails;
 
@@ -138,10 +144,11 @@ class AttendanceTableRow extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     if (showReviewActions) ...[
-                      IconButton(
-                        icon: const Icon(Icons.check_circle_rounded),
+                      AppIconButton(
+                        icon: Icons.check_circle_rounded,
                         color: AppColors.kpiPositiveAccent,
                         tooltip: 'Verify attendance',
+                        isLoading: isSaving,
                         onPressed: isSaving
                             ? null
                             : () => onReview!(
@@ -149,10 +156,11 @@ class AttendanceTableRow extends StatelessWidget {
                                 AttendanceReviewDecision.verify,
                               ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.cancel_outlined),
+                      AppIconButton(
+                        icon: Icons.cancel_outlined,
                         color: AppColors.kpiMuted,
                         tooltip: 'Dismiss exception',
+                        isLoading: isSaving,
                         onPressed: isSaving
                             ? null
                             : () => onReview!(

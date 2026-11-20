@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
@@ -19,8 +21,8 @@ class OrganizationCardList extends StatelessWidget {
   final List<CustomerOrganization> organizations;
   final int columns;
   final ValueChanged<CustomerOrganization> onSelect;
-  final ValueChanged<CustomerOrganization>? onEdit;
-  final ValueChanged<CustomerOrganization>? onDelete;
+  final FutureOr<void> Function(CustomerOrganization)? onEdit;
+  final FutureOr<void> Function(CustomerOrganization)? onDelete;
 
   @override
   Widget build(BuildContext context) {

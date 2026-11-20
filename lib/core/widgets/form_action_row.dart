@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
@@ -22,7 +24,7 @@ class FormActionRow extends StatelessWidget {
   final IconData? submitIcon;
 
   /// Null leaves the submit action disabled.
-  final VoidCallback? onSubmit;
+  final FutureOr<void> Function()? onSubmit;
   final VoidCallback onCancel;
 
   /// Disables Cancel and shows progress on the submit action.

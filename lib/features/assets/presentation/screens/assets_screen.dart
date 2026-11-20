@@ -7,6 +7,7 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
+import 'package:workaxis/core/widgets/async_confirmation_dialog.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/core/widgets/empty_state.dart';
@@ -95,31 +96,37 @@ class _AssetsScreenState extends State<AssetsScreen> {
       canAcknowledge: isEmployee,
       isAcknowledging: controller.isAcknowledging,
       onEdit: canEdit
-          ? () => _openEditor(
-              access: access,
-              controller: controller,
-              activeBranchId: activeBranchId,
-              asset: asset,
-            )
+          ? () {
+              _openEditor(
+                access: access,
+                controller: controller,
+                activeBranchId: activeBranchId,
+                asset: asset,
+              );
+            }
           : null,
       onDelete: canEdit
-          ? () => _confirmDelete(
-              access: access,
-              controller: controller,
-              activeBranchId: activeBranchId,
-              asset: asset,
-            )
+          ? () {
+              _confirmDelete(
+                access: access,
+                controller: controller,
+                activeBranchId: activeBranchId,
+                asset: asset,
+              );
+            }
           : null,
       onAcknowledge:
           isEmployee &&
               asset.status != AssetStatus.returned &&
               asset.acknowledgementRequired &&
               asset.acknowledgementStatus == AssetAcknowledgementStatus.pending
-          ? () => _confirmReceipt(
-              access: access,
-              controller: controller,
-              asset: asset,
-            )
+          ? () {
+              _confirmReceipt(
+                access: access,
+                controller: controller,
+                asset: asset,
+              );
+            }
           : null,
     );
 
@@ -145,11 +152,13 @@ class _AssetsScreenState extends State<AssetsScreen> {
                         ? AppButton.responsive(
                             text: 'Add asset',
                             iconData: Icons.add,
-                            onPressed: () => _openEditor(
-                              access: access,
-                              controller: controller,
-                              activeBranchId: activeBranchId,
-                            ),
+                            onPressed: () {
+                              _openEditor(
+                                access: access,
+                                controller: controller,
+                                activeBranchId: activeBranchId,
+                              );
+                            },
                           )
                         : null,
                   ),
@@ -305,38 +314,26 @@ class _AssetsScreenState extends State<AssetsScreen> {
     required String? activeBranchId,
     required EmployeeAsset asset,
   }) async {
-    final confirmed = await showDialog<bool>(
+    controller.clearActionError();
+    final deleted = await showAsyncConfirmationDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete asset?'),
-        content: Text(
-          'Remove ${asset.name} (${asset.assetTag}) from the asset register?',
-        ),
-        actions: [
-          AppButton.outlined(
-            text: 'Cancel',
-            isFullWidth: false,
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-          ),
-          AppButton.destructive(
-            text: 'Delete',
-            isFullWidth: false,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-          ),
-        ],
+      title: 'Delete asset?',
+      content: Text(
+        'Remove ${asset.name} (${asset.assetTag}) from the asset register?',
       ),
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () async {
+        controller.clearActionError();
+        return controller.deleteAsset(
+          access,
+          asset,
+          activeBranchId: activeBranchId,
+        );
+      },
+      failureMessage: () => controller.actionErrorMessage,
     );
-    if (confirmed != true || !mounted) return;
-    final deleted = await controller.deleteAsset(
-      access,
-      asset,
-      activeBranchId: activeBranchId,
-    );
-    if (!deleted && mounted && controller.actionErrorMessage != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(controller.actionErrorMessage!)));
-    }
+    if (!deleted || !mounted) return;
   }
 
   Future<void> _confirmReceipt({
@@ -344,37 +341,25 @@ class _AssetsScreenState extends State<AssetsScreen> {
     required AssetsController controller,
     required EmployeeAsset asset,
   }) async {
-    final confirmed = await showDialog<bool>(
+    controller.clearActionError();
+    final acknowledged = await showAsyncConfirmationDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Confirm asset receipt?'),
-        content: Text(
-          'Confirm that you received ${asset.name} (${asset.assetTag}). '
-          'Your acknowledgment will be recorded.',
-        ),
-        actions: [
-          AppButton.outlined(
-            text: 'Cancel',
-            isFullWidth: false,
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-          ),
-          AppButton.primary(
-            text: 'Confirm receipt',
-            isFullWidth: false,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-          ),
-        ],
+      title: 'Confirm asset receipt?',
+      content: Text(
+        'Confirm that you received ${asset.name} (${asset.assetTag}). '
+        'Your acknowledgment will be recorded.',
       ),
+      confirmLabel: 'Confirm receipt',
+      onConfirm: () async {
+        controller.clearActionError();
+        return controller.acknowledgeAsset(access, asset);
+      },
+      failureMessage: () => controller.actionErrorMessage,
     );
-    if (confirmed != true || !mounted) return;
-    final acknowledged = await controller.acknowledgeAsset(access, asset);
-    if (!mounted) return;
-    final message = acknowledged
-        ? 'Receipt acknowledged for ${asset.name}.'
-        : (controller.actionErrorMessage ??
-              'The asset receipt could not be acknowledged.');
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    if (!acknowledged || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Receipt acknowledged for ${asset.name}.')),
+    );
   }
 }
 
@@ -428,7 +413,7 @@ class _LoadError extends StatelessWidget {
   const _LoadError({required this.message, required this.onRetry});
 
   final String message;
-  final VoidCallback onRetry;
+  final FutureOr<void> Function() onRetry;
 
   @override
   Widget build(BuildContext context) => Padding(
