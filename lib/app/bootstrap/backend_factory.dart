@@ -282,6 +282,7 @@ class BackendFactory {
         members: organizationMembersRepository,
         isAcknowledgementRequired:
             settingsRepository.employeeAssetAcknowledgementRequired,
+        now: now,
       ),
       attendanceRepository: MockAttendanceRepository(),
       returnsRepository: delay == null

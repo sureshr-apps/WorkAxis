@@ -47,6 +47,12 @@ class EmployeeAsset {
     required this.status,
     this.acknowledgementRequired = false,
     this.acknowledgementStatus = AssetAcknowledgementStatus.notRequired,
+    this.assignedByUid,
+    this.assignedByName,
+    this.assignedAt,
+    this.acknowledgedByUid,
+    this.acknowledgedByName,
+    this.acknowledgedAt,
     this.serialNumber,
     this.notes,
   });
@@ -64,6 +70,12 @@ class EmployeeAsset {
   final AssetStatus status;
   final bool acknowledgementRequired;
   final AssetAcknowledgementStatus acknowledgementStatus;
+  final String? assignedByUid;
+  final String? assignedByName;
+  final DateTime? assignedAt;
+  final String? acknowledgedByUid;
+  final String? acknowledgedByName;
+  final DateTime? acknowledgedAt;
   final String? serialNumber;
   final String? notes;
 
@@ -75,6 +87,13 @@ class EmployeeAsset {
     AssetStatus? status,
     bool? acknowledgementRequired,
     AssetAcknowledgementStatus? acknowledgementStatus,
+    String? assignedByUid,
+    String? assignedByName,
+    DateTime? assignedAt,
+    String? acknowledgedByUid,
+    String? acknowledgedByName,
+    DateTime? acknowledgedAt,
+    bool clearAcknowledgementDetails = false,
   }) => EmployeeAsset(
     id: id,
     organizationId: organizationId,
@@ -89,6 +108,18 @@ class EmployeeAsset {
     acknowledgementRequired:
         acknowledgementRequired ?? this.acknowledgementRequired,
     acknowledgementStatus: acknowledgementStatus ?? this.acknowledgementStatus,
+    assignedByUid: assignedByUid ?? this.assignedByUid,
+    assignedByName: assignedByName ?? this.assignedByName,
+    assignedAt: assignedAt ?? this.assignedAt,
+    acknowledgedByUid: clearAcknowledgementDetails
+        ? null
+        : acknowledgedByUid ?? this.acknowledgedByUid,
+    acknowledgedByName: clearAcknowledgementDetails
+        ? null
+        : acknowledgedByName ?? this.acknowledgedByName,
+    acknowledgedAt: clearAcknowledgementDetails
+        ? null
+        : acknowledgedAt ?? this.acknowledgedAt,
     serialNumber: serialNumber,
     notes: notes,
   );

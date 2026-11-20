@@ -469,10 +469,11 @@ The instance is a shared `db-f1-micro`, so keep `DB_POOL_MAX` at 3 and
 ## Employee assets
 
 Apply `functions/db/migrations/004_employee_assets.sql` and
-`functions/db/migrations/006_asset_acknowledgement.sql` before deploying the
-asset screen and data operations. Assets are stored in PostgreSQL and linked
-to one organization, branch, and employee membership. Asset tags are unique
-within an organization.
+`functions/db/migrations/006_asset_acknowledgement.sql` and
+`functions/db/migrations/007_asset_assignment_details.sql` before deploying
+the asset screen and data operations. Assets are stored in PostgreSQL and
+linked to one organization, branch, and employee membership. Asset tags are
+unique within an organization.
 
 - `ListMyEmployeeAssets` resolves the signed-in Employee's membership from the
   authenticated UID and returns only that employee's assets.
@@ -492,10 +493,17 @@ within an organization.
   when the setting is toggled.
 - `AcknowledgeMyEmployeeAsset` accepts `{ assetId }` from the assigned Employee
   only and returns `{ employeeAsset }`. The server derives the employee from the
-  authenticated UID, stamps the acknowledgment time and UID in PostgreSQL, and
-  makes repeat acknowledgments idempotent. Employees cannot acknowledge an
-  asset assigned to another user, and managers cannot acknowledge on an
-  employee's behalf.
+  authenticated UID, stamps the acknowledgment time, UID, and employee name in
+  PostgreSQL, and makes repeat acknowledgments idempotent. Employees cannot
+  acknowledge an asset assigned to another user, and managers cannot
+  acknowledge on an employee's behalf.
+- Assignment writes snapshot the manager's UID and name plus the server
+  assignment time. Reassigning or reissuing an asset refreshes this snapshot;
+  ordinary metadata edits preserve it. Asset responses also include the
+  acknowledgment UID, employee name, and time, along with the asset's existing
+  serial number and notes. Older assignments have no reliable assignment audit
+  data, so their assigner and time remain null. Existing acknowledgment names
+  are backfilled only when the recorded UID matches the current employee.
 
 Run the SQL-facing tests locally (they use an in-memory `FakeDb`, no database
 or emulator needed) from the repository root:

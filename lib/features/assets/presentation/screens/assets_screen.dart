@@ -88,6 +88,40 @@ class _AssetsScreenState extends State<AssetsScreen> {
         : null;
     final visibleAssets = controller.filteredAssets;
     final padding = context.responsivePagePadding;
+    Widget buildAssetCard(EmployeeAsset asset) => EmployeeAssetCard(
+      asset: asset,
+      canEdit: canEdit,
+      isEmployeeView: isEmployee,
+      canAcknowledge: isEmployee,
+      isAcknowledging: controller.isAcknowledging,
+      onEdit: canEdit
+          ? () => _openEditor(
+              access: access,
+              controller: controller,
+              activeBranchId: activeBranchId,
+              asset: asset,
+            )
+          : null,
+      onDelete: canEdit
+          ? () => _confirmDelete(
+              access: access,
+              controller: controller,
+              activeBranchId: activeBranchId,
+              asset: asset,
+            )
+          : null,
+      onAcknowledge:
+          isEmployee &&
+              asset.status != AssetStatus.returned &&
+              asset.acknowledgementRequired &&
+              asset.acknowledgementStatus == AssetAcknowledgementStatus.pending
+          ? () => _confirmReceipt(
+              access: access,
+              controller: controller,
+              asset: asset,
+            )
+          : null,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -195,51 +229,32 @@ class _AssetsScreenState extends State<AssetsScreen> {
                   padding.right,
                   padding.bottom,
                 ),
-                sliver: SliverGrid(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final asset = visibleAssets[index];
-                    return EmployeeAssetCard(
-                      asset: asset,
-                      canEdit: canEdit,
-                      canAcknowledge: isEmployee,
-                      isAcknowledging: controller.isAcknowledging,
-                      onEdit: canEdit
-                          ? () => _openEditor(
-                              access: access,
-                              controller: controller,
-                              activeBranchId: activeBranchId,
-                              asset: asset,
-                            )
-                          : null,
-                      onDelete: canEdit
-                          ? () => _confirmDelete(
-                              access: access,
-                              controller: controller,
-                              activeBranchId: activeBranchId,
-                              asset: asset,
-                            )
-                          : null,
-                      onAcknowledge:
-                          isEmployee &&
-                              asset.status != AssetStatus.returned &&
-                              asset.acknowledgementRequired &&
-                              asset.acknowledgementStatus ==
-                                  AssetAcknowledgementStatus.pending
-                          ? () => _confirmReceipt(
-                              access: access,
-                              controller: controller,
-                              asset: asset,
-                            )
-                          : null,
-                    );
-                  }, childCount: visibleAssets.length),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 440,
-                    mainAxisExtent: 280,
-                    mainAxisSpacing: AppSpacing.md,
-                    crossAxisSpacing: AppSpacing.md,
-                  ),
-                ),
+                sliver: context.isExpanded
+                    ? SliverGrid(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) =>
+                              buildAssetCard(visibleAssets[index]),
+                          childCount: visibleAssets.length,
+                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 440,
+                              mainAxisExtent: 420,
+                              mainAxisSpacing: AppSpacing.md,
+                              crossAxisSpacing: AppSpacing.md,
+                            ),
+                      )
+                    : SliverList(
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final isLast = index == visibleAssets.length - 1;
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              bottom: isLast ? 0 : AppSpacing.md,
+                            ),
+                            child: buildAssetCard(visibleAssets[index]),
+                          );
+                        }, childCount: visibleAssets.length),
+                      ),
               ),
           ],
         ),
