@@ -13,6 +13,7 @@ class ReturnCardItem extends StatelessWidget {
   final ReturnItem item;
   final VoidCallback onTap;
   final bool showReviewAction;
+  final String? reviewerUid;
   final VoidCallback? onReview;
 
   const ReturnCardItem({
@@ -20,12 +21,17 @@ class ReturnCardItem extends StatelessWidget {
     required this.item,
     required this.onTap,
     this.showReviewAction = false,
+    this.reviewerUid,
     this.onReview,
   });
 
   @override
   Widget build(BuildContext context) {
-    final canReview = showReviewAction && item.status == ReturnStatus.pending;
+    final reviewerUid = this.reviewerUid;
+    final canReview =
+        showReviewAction &&
+        item.status == ReturnStatus.pending &&
+        (reviewerUid == null || !item.wasSubmittedBy(reviewerUid));
     return Card(
       elevation: 0,
       margin: EdgeInsets.zero,

@@ -101,7 +101,14 @@ class ReturnsScope {
         );
       }
     }
-    return _assigned(access, item.branchId);
+    final branch = _assigned(access, item.branchId);
+    if (role == UserRole.branchManager && item.wasSubmittedBy(access.user.id)) {
+      throw const AccessDeniedException(
+        'Branch Managers cannot review their own return requests.',
+        'Another Branch Manager or an Organization Admin must review this return.',
+      );
+    }
+    return branch;
   }
 
   String _requireOrganization(UserAccessContext access) {

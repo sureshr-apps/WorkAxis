@@ -8,6 +8,7 @@ import 'package:workaxis/core/widgets/record_not_found_page.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/presentation/controllers/returns_controller.dart';
 import 'package:workaxis/features/returns/presentation/screens/return_details_screen.dart';
@@ -151,10 +152,15 @@ class _ReturnDetailsRouteState extends State<ReturnDetailsRoute> {
       );
     }
     final role = access.user.role;
-    final canReview = canReviewReturns(role);
+    final isOwnBranchManagerReturn =
+        role == UserRole.branchManager && item.wasSubmittedBy(access.user.id);
+    final canReview = canReviewReturn(role, access.user.id, item);
     return ReturnDetailsScreen(
       item: item,
       eyebrow: returnsEyebrow(role),
+      subtitle: isOwnBranchManagerReturn && item.status == ReturnStatus.pending
+          ? 'You submitted this return. Another Branch Manager or an Organization Admin must review it.'
+          : null,
       backLabel: widget.listLabel,
       onClose: _leave,
       canReview: canReview,

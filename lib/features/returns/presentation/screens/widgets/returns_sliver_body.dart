@@ -18,6 +18,7 @@ class SliverReturnsBody extends StatelessWidget {
     required this.emptyTitle,
     required this.emptyMessage,
     this.showReviewAction = false,
+    this.reviewerUid,
   });
 
   final ReturnsController controller;
@@ -27,6 +28,7 @@ class SliverReturnsBody extends StatelessWidget {
   final String emptyTitle;
   final String emptyMessage;
   final bool showReviewAction;
+  final String? reviewerUid;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +61,7 @@ class SliverReturnsBody extends StatelessWidget {
       columns: columns,
       onOpen: onOpen,
       showReviewAction: showReviewAction,
+      reviewerUid: reviewerUid,
     );
   }
 }

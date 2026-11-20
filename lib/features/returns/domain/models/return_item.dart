@@ -101,6 +101,7 @@ class ReturnItem {
   final String branchName;
   final String employeeId;
   final String employeeName;
+  final String? submittedByUid;
   final String? billNumber;
   final String invoiceNumber;
   final DateTime returnDate;
@@ -122,6 +123,7 @@ class ReturnItem {
     required this.branchName,
     required this.employeeId,
     required this.employeeName,
+    this.submittedByUid,
     this.billNumber,
     required this.invoiceNumber,
     required this.returnDate,
@@ -137,6 +139,11 @@ class ReturnItem {
     this.reviewedBy,
   });
 
+  /// Whether the authenticated user created this return. Older rows may not
+  /// carry a separate submitter UID, so fall back to the legacy employee ID.
+  bool wasSubmittedBy(String uid) =>
+      submittedByUid == uid || (submittedByUid == null && employeeId == uid);
+
   ReturnItem copyWith({
     String? id,
     String? organizationId,
@@ -144,6 +151,7 @@ class ReturnItem {
     String? branchName,
     String? employeeId,
     String? employeeName,
+    String? submittedByUid,
     String? billNumber,
     String? invoiceNumber,
     DateTime? returnDate,
@@ -165,6 +173,7 @@ class ReturnItem {
       branchName: branchName ?? this.branchName,
       employeeId: employeeId ?? this.employeeId,
       employeeName: employeeName ?? this.employeeName,
+      submittedByUid: submittedByUid ?? this.submittedByUid,
       billNumber: billNumber ?? this.billNumber,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       returnDate: returnDate ?? this.returnDate,

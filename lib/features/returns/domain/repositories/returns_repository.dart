@@ -35,8 +35,9 @@ abstract interface class ReturnsRepository {
   });
 
   /// Approves or rejects a pending [returnItem]. Organization Admins of its
-  /// organization, or the Branch Manager whose active branch it belongs to.
-  /// The reviewer is derived server-side from the authenticated session.
+  /// organization, or another Branch Manager assigned to its branch, may review
+  /// it. A Branch Manager cannot review their own submission. The reviewer is
+  /// derived server-side from the authenticated session.
   Future<ReturnItem> reviewReturn({
     required UserAccessContext access,
     String? activeBranchId,

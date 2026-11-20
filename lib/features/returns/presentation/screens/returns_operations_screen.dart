@@ -167,6 +167,7 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
             SliverReturnsBody(
               controller: controller,
               showReviewAction: canReview,
+              reviewerUid: isManager ? access?.user.id : null,
               onOpen: _openDetails,
               onRetry: _loadData,
               emptyTitle: 'No return requests found',
@@ -180,6 +181,7 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
                 ReturnsTableColumn.status(),
                 ReturnsTableColumn.action(
                   canReview: canReview,
+                  reviewerUid: isManager ? access?.user.id : null,
                   onOpen: _openDetails,
                 ),
               ],

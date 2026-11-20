@@ -85,6 +85,7 @@ class MockReturnsRepository implements ReturnsRepository {
         branchName: branch.name,
         employeeId: access.user.id,
         employeeName: access.user.name,
+        submittedByUid: access.user.id,
         productTitle: line.productTitle,
         reason: line.reason,
         quantity: line.quantity,

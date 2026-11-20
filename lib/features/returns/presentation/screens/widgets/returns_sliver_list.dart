@@ -14,12 +14,14 @@ class SliverReturnsList extends StatelessWidget {
     required this.columns,
     required this.onOpen,
     this.showReviewAction = false,
+    this.reviewerUid,
   });
 
   final List<ReturnItem> items;
   final List<ReturnsTableColumn> columns;
   final void Function(ReturnItem item) onOpen;
   final bool showReviewAction;
+  final String? reviewerUid;
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +62,7 @@ class SliverReturnsList extends StatelessWidget {
   Widget _card(ReturnItem item) => ReturnCardItem(
     item: item,
     showReviewAction: showReviewAction,
+    reviewerUid: reviewerUid,
     onTap: () => onOpen(item),
     onReview: () => onOpen(item),
   );

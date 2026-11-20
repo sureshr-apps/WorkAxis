@@ -31,7 +31,6 @@ class AttentionItemsSection extends StatelessWidget {
   /// Invoked with an item and its destination route.
   final void Function(AttentionItem item, String route)? onItemAction;
 
-  static const double _compactCardWidth = 280;
   static const double _compactListHeight = 190;
 
   @override
@@ -53,16 +52,18 @@ class AttentionItemsSection extends StatelessWidget {
               title: 'No items currently require attention.',
             )
           else if (context.isCompact)
-            SizedBox(
-              height: _compactListHeight,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: items.length,
-                separatorBuilder: (_, _) =>
-                    const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (_, index) => SizedBox(
-                  width: _compactCardWidth,
-                  child: _card(items[index]),
+            LayoutBuilder(
+              builder: (context, constraints) => SizedBox(
+                height: _compactListHeight,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(width: AppSpacing.sm),
+                  itemBuilder: (_, index) => SizedBox(
+                    width: constraints.maxWidth,
+                    child: _card(items[index]),
+                  ),
                 ),
               ),
             )

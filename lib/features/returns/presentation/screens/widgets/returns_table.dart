@@ -123,17 +123,22 @@ class ReturnsTableColumn {
   static ReturnsTableColumn action({
     required void Function(ReturnItem item) onOpen,
     required bool canReview,
+    String? reviewerUid,
   }) => ReturnsTableColumn(
     title: 'Action',
     width: 128,
     alignRight: true,
-    cell: (context, item) => AppButton.outlined(
-      text: canReview && item.status == ReturnStatus.pending
-          ? 'Review'
-          : 'Details',
-      isFullWidth: false,
-      onPressed: () => onOpen(item),
-    ),
+    cell: (context, item) {
+      final canReviewItem =
+          canReview &&
+          item.status == ReturnStatus.pending &&
+          (reviewerUid == null || !item.wasSubmittedBy(reviewerUid));
+      return AppButton.outlined(
+        text: canReviewItem ? 'Review' : 'Details',
+        isFullWidth: false,
+        onPressed: () => onOpen(item),
+      );
+    },
   );
 }
 

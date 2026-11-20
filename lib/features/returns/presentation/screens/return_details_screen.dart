@@ -34,6 +34,7 @@ class ReturnDetailsScreen extends StatefulWidget {
     required this.eyebrow,
     required this.backLabel,
     required this.onClose,
+    this.subtitle,
     this.canReview = false,
     this.onReviewDecision,
     this.onReviewed,
@@ -41,6 +42,7 @@ class ReturnDetailsScreen extends StatefulWidget {
 
   final ReturnItem item;
   final String eyebrow;
+  final String? subtitle;
 
   /// Name of the list the page belongs to, shown in the breadcrumb.
   final String backLabel;
@@ -118,7 +120,7 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
                     AppPageHeader(
                       eyebrow: widget.eyebrow,
                       title: 'Return Details',
-                      subtitle: 'Proof of purchase, quantity, reason and decision for this return.',
+                      subtitle: widget.subtitle ?? 'Proof of purchase, quantity, reason and decision for this return.',
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     DashboardSurfaceCard(

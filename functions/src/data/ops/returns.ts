@@ -111,9 +111,19 @@ async function review(
   return db.transaction(async (tx) => {
     const reviewer = await findMe(tx, actor.uid);
     if (!reviewer) throw denied("Reviewer not found.");
-    const existing = await selectOne<{ status: string; organizationId: string; branchId: string }>(
+    const existing = await selectOne<{
+      status: string;
+      organizationId: string;
+      branchId: string;
+      employeeId: string | null;
+      submitterUid: string | null;
+    }>(
       tx,
-      `SELECT status, organization_id AS "organizationId", branch_id AS "branchId"
+      `SELECT status,
+              organization_id AS "organizationId",
+              branch_id AS "branchId",
+              employee_id AS "employeeId",
+              employee_uid AS "submitterUid"
          FROM return_record WHERE id = $1`,
       [id],
     );
@@ -121,7 +131,13 @@ async function review(
       existing !== null &&
       ((actor.role === "orgAdmin" && existing.organizationId === actor.organizationId) ||
         (actor.role === "branchManager" && actor.branchIds.includes(existing.branchId)));
-    if (!existing || existing.status !== "pending" || !inScope) {
+    const isOwnBranchManagerReturn =
+      actor.role === "branchManager" &&
+      existing !== null &&
+      (existing.submitterUid === actor.uid ||
+        existing.employeeId === actor.uid ||
+        existing.employeeId === reviewer.id);
+    if (!existing || existing.status !== "pending" || !inScope || isOwnBranchManagerReturn) {
       throw denied("Return not found, already reviewed, or access denied.");
     }
     const rows = await tx.query<{ id: string }>(
@@ -283,8 +299,8 @@ export const returnsOps: OperationRegistry = {
     });
   },
 
-  // Only an Org Admin of the org or a Branch Manager of the return's branch;
-  // only pending returns. Reviewer identity/time are stamped server-side.
+  // Only an Org Admin of the org or another Branch Manager assigned to the
+  // return's branch may review it. Only pending returns are reviewable.
   UpdateReturnRecordReview: (ctx, vars) => review(ctx, vars, true),
 
   // Legacy signature; same rules as UpdateReturnRecordReview, without notes.
