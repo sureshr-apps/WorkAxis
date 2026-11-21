@@ -8,6 +8,7 @@ import 'package:workaxis/core/state/safe_notifier.dart';
 import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
+import 'package:workaxis/features/employee_home/domain/models/employee_attendance_policy.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_simulator.dart';
@@ -105,6 +106,7 @@ class EmployeeHomeController extends ChangeNotifier
   /// Returns whether it was recorded; on failure [actionErrorMessage] is set.
   Future<bool> recordAttendanceAction(
     AttendanceAction action, {
+    EmployeeAttendancePolicy? policy,
     String? selfieLocalPath,
   }) async {
     final access = _access;
@@ -115,6 +117,7 @@ class EmployeeHomeController extends ChangeNotifier
       () => repository.recordAttendanceAction(
         access: access,
         action: action,
+        policy: policy,
         selfieLocalPath: selfieLocalPath,
       ),
       fallback: 'The attendance action could not be recorded. Try again.',
@@ -124,7 +127,7 @@ class EmployeeHomeController extends ChangeNotifier
 
   /// Reads the current organization policy immediately before a punch. A null
   /// result means the policy could not be verified.
-  Future<bool?> checkAttendanceSelfieRequirement() async {
+  Future<EmployeeAttendancePolicy?> checkAttendancePolicy() async {
     final access = _access;
     if (access == null) {
       _actionErrorMessage = 'Sign in again before recording attendance.';
@@ -135,11 +138,9 @@ class EmployeeHomeController extends ChangeNotifier
     final token = _policyRequests.next();
     _actionErrorMessage = null;
     try {
-      final required = await repository.isAttendanceSelfieRequired(
-        access: access,
-      );
+      final policy = await repository.getAttendancePolicy(access: access);
       if (!_policyRequests.isCurrent(token) || isDisposed) return null;
-      return required;
+      return policy;
     } catch (e, st) {
       if (!_policyRequests.isCurrent(token) || isDisposed) return null;
       _actionErrorMessage = userMessageFor(

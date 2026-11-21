@@ -5,6 +5,7 @@ import 'package:workaxis/core/state/request_generation.dart';
 import 'package:workaxis/core/state/safe_notifier.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/reports/domain/models/operational_report_summary.dart';
+import 'package:workaxis/features/reports/domain/models/report_date_range.dart';
 import 'package:workaxis/features/reports/domain/models/report_period.dart';
 import 'package:workaxis/features/reports/domain/repositories/reports_repository.dart';
 
@@ -20,6 +21,7 @@ class ReportsController extends ChangeNotifier
   String? _errorMessage;
   OperationalReportSummary? _summary;
   ReportPeriod _selectedPeriod = defaultPeriod;
+  ReportDateRange? _selectedDateRange;
 
   ReportsController({required this.repository});
 
@@ -27,16 +29,24 @@ class ReportsController extends ChangeNotifier
   String? get errorMessage => _errorMessage;
   OperationalReportSummary? get summary => _summary;
   ReportPeriod get selectedPeriod => _selectedPeriod;
+  ReportDateRange? get selectedDateRange => _selectedDateRange;
 
   Future<void> loadReports({
     required UserAccessContext access,
     String? activeBranchId,
     ReportPeriod? period,
+    ReportDateRange? dateRange,
   }) async {
     final token = _requests.next();
     _isLoading = true;
     _errorMessage = null;
-    if (period != null) _selectedPeriod = period;
+    if (dateRange != null) {
+      _selectedPeriod = ReportPeriod.customRange;
+      _selectedDateRange = dateRange;
+    } else if (period != null) {
+      _selectedPeriod = period;
+      _selectedDateRange = null;
+    }
     notifyListeners();
 
     try {
@@ -44,6 +54,7 @@ class ReportsController extends ChangeNotifier
         access: access,
         activeBranchId: activeBranchId,
         period: _selectedPeriod,
+        dateRange: _selectedDateRange,
       );
       if (!_requests.isCurrent(token)) return;
       _summary = result;
@@ -73,6 +84,22 @@ class ReportsController extends ChangeNotifier
     );
   }
 
+  Future<void> setDateRange(
+    ReportDateRange dateRange, {
+    required UserAccessContext access,
+    String? activeBranchId,
+  }) async {
+    if (_selectedDateRange == dateRange &&
+        _selectedPeriod == ReportPeriod.customRange) {
+      return;
+    }
+    await loadReports(
+      access: access,
+      activeBranchId: activeBranchId,
+      dateRange: dateRange,
+    );
+  }
+
   @override
   void reset() {
     _requests.invalidate();
@@ -80,6 +107,7 @@ class ReportsController extends ChangeNotifier
     _errorMessage = null;
     _summary = null;
     _selectedPeriod = defaultPeriod;
+    _selectedDateRange = null;
     notifyListeners();
   }
 }

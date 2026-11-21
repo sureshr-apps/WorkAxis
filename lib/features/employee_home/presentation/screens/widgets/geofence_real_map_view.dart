@@ -22,6 +22,7 @@ class GeofenceRealMapView extends StatefulWidget {
     this.longitude,
     this.geofenceRadiusMeters,
     this.isWithinGeofence = true,
+    this.showMyLocation = true,
     this.branchName,
     this.forceFallback = false,
   });
@@ -35,6 +36,9 @@ class GeofenceRealMapView extends StatefulWidget {
 
   /// Whether the employee is validated within the geofence perimeter.
   final bool isWithinGeofence;
+
+  /// Whether the map should show the device location dot.
+  final bool showMyLocation;
 
   /// Optional human-readable branch label for pin metadata.
   final String? branchName;
@@ -122,7 +126,7 @@ class _GeofenceRealMapViewState extends State<GeofenceRealMapView> {
       zoomGesturesEnabled: false,
       tiltGesturesEnabled: false,
       rotateGesturesEnabled: false,
-      myLocationEnabled: _hasLocationPermission,
+      myLocationEnabled: widget.showMyLocation && _hasLocationPermission,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
       mapToolbarEnabled: false,

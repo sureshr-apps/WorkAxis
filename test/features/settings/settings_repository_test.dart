@@ -151,6 +151,7 @@ void main() {
       expect(data['organizationId'], 'org-acme');
       expect(data['updatedBy'], 'user-oa-01');
       expect(data['requireEmployeeAssetAcknowledgement'], isTrue);
+      expect(data['requireAttendanceSelfie'], isTrue);
       expect(data['updatedAt'], isA<Timestamp>());
     });
 
@@ -178,12 +179,21 @@ void main() {
           loaded.gracePeriodMinutes,
           OrganizationSettings.defaults.gracePeriodMinutes,
         );
-        expect(loaded.requireEmployeeAssetAcknowledgement, isFalse);
+        expect(loaded.requireEmployeeAssetAcknowledgement, isTrue);
+        expect(loaded.requireAttendanceSelfie, isTrue);
       },
     );
   });
 
   group('SettingsValidators', () {
+    test('selfie and asset acknowledgment default to enabled', () {
+      expect(
+        OrganizationSettings.defaults.requireEmployeeAssetAcknowledgement,
+        isTrue,
+      );
+      expect(OrganizationSettings.defaults.requireAttendanceSelfie, isTrue);
+    });
+
     test('geofence radius range', () {
       OrganizationSettings withRadius(int r) =>
           OrganizationSettings.defaults.copyWith(geofenceRadiusMeters: r);

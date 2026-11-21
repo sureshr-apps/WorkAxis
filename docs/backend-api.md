@@ -77,8 +77,8 @@ Errors are `HttpsError` codes; internal details are never returned:
 | `deleteOrganizationMember` | `{targetUid}` | `{uid, deleted}` | Employees and branch managers; by their organization admin or branch manager; refused while the account has returns, leave, or attendance |
 | `setOrganizationStatus` | `{organizationId, status}` | `{organizationId, status, membersUpdated, membersFailed}` | platform roles |
 | `resolveLoginIdentifier` | `{identifier}` | `{email}` | unauthenticated |
-| `getAttendanceSelfiePolicy` | `{}` | `{requireAttendanceSelfie}` | Employee |
-| `recordAttendancePunch` | `{kind: 'checkIn'\|'checkOut'\|'breakStart'\|'breakEnd', branchId, latitude, longitude, accuracyMeters, selfiePath?}` | `{entryId, kind, recordedAt, workDate, distanceMeters}` | Employee |
+| `getAttendanceSelfiePolicy` | `{}` | `{requireAttendanceSelfie, requireGeolocation, allowBreaks, defaultGeofenceRadiusMeters}` | Employee |
+| `recordAttendancePunch` | `{kind: 'checkIn'\|'checkOut'\|'breakStart'\|'breakEnd', branchId, latitude?, longitude?, accuracyMeters?, selfiePath?}` | `{entryId, kind, recordedAt, workDate, distanceMeters: number \| null}` | Employee |
 | `createKioskPairingToken` | `{branchId}` | `{token, expiresAt, branchId}` | Org Admin of the org, Branch Manager of the branch |
 
 #### Optional employee profile fields: omit vs null
@@ -116,19 +116,27 @@ Details:
   mitigations.
 - `recordAttendancePunch`: server stamps time and the `workDate`
   (`YYYY-MM-DD`) in `Asia/Kolkata` (`BUSINESS_TIMEZONE` in `config.ts`).
-  Geofence uses the branch coordinates/radius from SQL, requires GPS accuracy
-  <= 100 m (`MAX_GPS_ACCURACY_METERS`), and rejects branches with no (or 0,0)
-  coordinates. Writes `attendance_entries/{uid}_{workDate}` (one per employee
-  per day) and enforces the check-in/break/check-out state machine.
+  When `requireGeolocation` is not `false`, geofence validation uses branch
+  coordinates and a positive branch radius from SQL, falling back to
+  `organization_settings.geofenceRadiusMeters` (150 m if missing or invalid).
+  It requires GPS accuracy <= 100 m (`MAX_GPS_ACCURACY_METERS`) and rejects
+  branches with no (or 0,0) coordinates. When the setting is `false`, GPS fields
+  are optional and geofence validation is skipped. `allowBreaks: false` rejects
+  new break starts but still allows an employee to resume an already-open break.
+  Writes `attendance_entries/{uid}_{workDate}` (one per employee per day) and
+  enforces the check-in/break/check-out state machine.
   Entries gain `breaks: [{startAt, endAt?, startSelfiePath?, endSelfiePath?}]`
   and optional `checkInSelfiePath` / `checkOutSelfiePath`. When the
   organization's `requireAttendanceSelfie` setting is enabled, every
   self-service punch must include a recently uploaded selfie in the dedicated
   attachment bucket, under that employee's own organization/branch path. The
   server checks ownership, image type, size and upload age before recording the
-  storage reference. `getAttendanceSelfiePolicy` returns only this boolean to
-  the employee; it does not expose the rest of organization settings. Status is
-  always `present` (no shift schedule exists in the data model yet).
+  storage reference. Missing `requireAttendanceSelfie`, `requireGeolocation`,
+  and `allowBreaks` settings default to `true`; explicit `false` is respected.
+  `getAttendanceSelfiePolicy` returns only the employee attendance policy and
+  organization default radius, not the rest of organization settings. The
+  response distance is `null` when geolocation is disabled. Status is always
+  `present` (no shift schedule exists in the data model yet).
 - `createKioskPairingToken`: 256-bit random token, 10-minute expiry, only the
   SHA-256 is stored in `kiosk_pairing_tokens/{hash}`. Redemption by the kiosk
   device is not implemented yet.
@@ -400,10 +408,17 @@ Changing, modifying or renewing an organization without a license is
   client maps stored reasons to categories (unknown legacy values count as
   "Other") and the period to `[from, to)` in the business timezone
   (Asia/Kolkata), so `returnCountsCoverPeriod` is true.
-- Employee check-in location: the client obtains the GPS fix via
-  `geolocator` (Android/iOS/web) and sends `latitude, longitude,
-  accuracyMeters` to `recordAttendancePunch`; the server validates the
-  geofence. Web requires HTTPS or localhost for geolocation.
+- The report client resolves either a preset period or an inclusive custom
+  calendar date range into `from`/`to` timestamps. `GetReturnCountsByBranch`
+  and `GetBranchStats` filter `return_record.created_at` with `from <= created_at
+  < to`; this covers the return totals and reason categories currently supplied
+  by the production report backend.
+- Employee attendance location: when `requireGeolocation` is enabled, the
+  client obtains a GPS fix via `geolocator` (Android/iOS/web) and sends
+  `latitude, longitude, accuracyMeters` to `recordAttendancePunch`; the server
+  validates the geofence. When it is disabled, the client does not request a
+  fix and the server accepts punches without geofence validation. Web requires
+  HTTPS or localhost for geolocation.
 
 ## 5. Deployment steps
 
@@ -525,8 +540,9 @@ unique within an organization.
 
 ## Off-site work
 
-Apply `functions/db/migrations/008_off_site_work.sql` before deploying the
-off-site work data operations. Assignment metadata and immutable milestone
+Apply `functions/db/migrations/008_off_site_work.sql` and
+`functions/db/migrations/009_off_site_work_destination_coordinates.sql` before
+deploying the off-site work data operations. Assignment metadata and immutable milestone
 events are authoritative in PostgreSQL. The feature is separate from attendance:
 the operations do not read or update attendance state, and they do not apply an
 attendance geofence.
@@ -535,7 +551,7 @@ attendance geofence.
 | --- | --- | --- | --- |
 | `ListOffSiteWorkAssignments` | Employee (own); Org Admin (own org); Branch Manager (active assigned branch) | `limit`, `offset`; Branch Manager also sends `activeBranchId`; Org Admin may filter with `branchId` | `offSiteWorkAssignments`, `total` |
 | `GetOffSiteWorkAssignment` | Employee (own); Org Admin (own org); Branch Manager (active assigned branch) | `id`; Branch Manager also sends `activeBranchId` | `offSiteWorkAssignment` including `events` |
-| `CreateOffSiteWorkAssignment` | Org Admin (own org); Branch Manager (active assigned branch) | `branchId`, `employeeMemberId`, `title`, `destination`; optional `activeBranchId` for Branch Manager, `instructions`, `dueAt` (ISO-8601), `reference`, `requiredEvidenceDescription` | `offSiteWorkAssignment` (with initial `assigned` event) |
+| `CreateOffSiteWorkAssignment` | Org Admin (own org); Branch Manager (active assigned branch) | `branchId`, `employeeMemberId`, `title`, `destination`; new clients include `destinationLatitude` and `destinationLongitude` selected on the map. Optional `activeBranchId` for Branch Manager, `instructions`, `dueAt` (ISO-8601), `reference`, `requiredEvidenceDescription` | `offSiteWorkAssignment` (including destination coordinates when provided, with initial `assigned` event) |
 | `RecordOffSiteWorkMilestone` | Employee assigned to the work | `id`, `eventType` (`started`, `arrived`, `completed`, `unable_to_complete`, `returned_to_branch`), `latitude`, `longitude`, `accuracyMeters`; optional `note`, `evidenceReferences` | `offSiteWorkAssignment` with updated status and event history |
 
 The server permits only `assigned → started → arrived → completed` or
@@ -548,6 +564,10 @@ Photo references must point to objects under
 and are checked against the assignment before being persisted. Assignment
 creation stores an `assigned` event without a location. No operation records
 route locations.
+
+New clients choose a destination on the map and send both WGS84 coordinates.
+The server validates and stores the pair. Older clients may omit both fields;
+the detail page can still open Directions using the saved destination text.
 
 Organization deletion includes the new table in its ordered SQL cleanup.
 Branch/member deletion blockers preserve assignments with history. Deploy the

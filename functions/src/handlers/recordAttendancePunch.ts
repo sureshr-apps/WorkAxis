@@ -44,10 +44,10 @@ function readState(data: FirebaseFirestore.DocumentData | undefined): DayState {
 /**
  * recordAttendancePunch (callable, asia-south1) - Employees only.
  * Request:  { kind: 'checkIn'|'checkOut'|'breakStart'|'breakEnd', branchId,
- *             latitude, longitude, accuracyMeters, selfiePath? }
- * Response: { entryId, kind, recordedAt (ISO), workDate, distanceMeters }
- * Server time and the Asia/Kolkata workDate are stamped here; the geofence is
- * evaluated against the branch coordinates/radius stored in SQL.
+ *             latitude?, longitude?, accuracyMeters?, selfiePath? }
+ * Response: { entryId, kind, recordedAt (ISO), workDate, distanceMeters: number | null }
+ * Server time and the Asia/Kolkata workDate are stamped here. When required,
+ * the geofence uses the branch radius or the organization default.
  */
 export const recordAttendancePunch = onCall(callableOptions, (request) =>
   guarded(async () => {
@@ -57,19 +57,12 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
     const bag = asBag(request.data);
     const kind: PunchKind = reqEnum(bag, "kind", PUNCH_KINDS);
     const branchId = reqString(bag, "branchId", 1, 100);
-    const fix = {
-      latitude: reqNumber(bag, "latitude", -90, 90),
-      longitude: reqNumber(bag, "longitude", -180, 180),
-    };
-    const accuracy = reqNumber(bag, "accuracyMeters", 0, 100_000);
     const selfiePath = optString(bag, "selfiePath", 1, 512);
 
     if (!actor.branchIds.includes(branchId)) throw denied("You are not assigned to this branch.");
     const branch = await getBranch(branchId);
     if (!branch || branch.status !== "active") throw notFound("Branch not found.");
     if (branch.organizationId !== actor.organizationId) throw denied();
-    const distance = assertInsideGeofence(fix, accuracy, branch);
-
     const member = await getMemberByAuthUid(actor.uid);
     if (!member) throw denied();
 
@@ -89,20 +82,42 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
     const entryId = `${actor.uid}_${workDate}`;
     const ref = getFirestore().collection("attendance_entries").doc(entryId);
     const stamp = Timestamp.fromDate(now);
+    let distanceMeters: number | null = null;
 
     await getFirestore().runTransaction(async (tx) => {
+      distanceMeters = null;
       const snap = await tx.get(ref);
       const settings = await tx.get(settingsRef);
-      const selfieRequired = settings.get("requireAttendanceSelfie") === true;
+      const selfieRequired = settings.get("requireAttendanceSelfie") !== false;
       if (selfieRequired && !selfiePath) {
         throw precondition("Take a selfie before recording this attendance action.");
+      }
+      if (settings.get("requireGeolocation") !== false) {
+        const fix = {
+          latitude: reqNumber(bag, "latitude", -90, 90),
+          longitude: reqNumber(bag, "longitude", -180, 180),
+        };
+        const accuracy = reqNumber(bag, "accuracyMeters", 0, 100_000);
+        const configuredRadius = settings.get("geofenceRadiusMeters");
+        const defaultRadius =
+          typeof configuredRadius === "number" &&
+          Number.isFinite(configuredRadius) &&
+          configuredRadius > 0
+            ? Math.round(configuredRadius)
+            : 150;
+        distanceMeters = assertInsideGeofence(
+          fix,
+          accuracy,
+          branch,
+          defaultRadius,
+        );
       }
       const data = snap.data();
       if (snap.exists && data?.branchId !== branchId) {
         throw precondition("You are already checked in at a different branch today.");
       }
       const state = readState(data);
-      assertPunchAllowed(kind, state);
+      assertPunchAllowed(kind, state, settings.get("allowBreaks") !== false);
       if (selfiePath && hasUsedSelfiePath(data, selfiePath)) {
         throw precondition("Take a new selfie for each attendance action.");
       }
@@ -159,7 +174,8 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
       kind,
       recordedAt: now.toISOString(),
       workDate,
-      distanceMeters: Math.round(distance),
+      distanceMeters:
+        distanceMeters === null ? null : Math.round(distanceMeters),
     };
   }),
 );

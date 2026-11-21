@@ -46,6 +46,8 @@ class OffSiteWorkRemoteDataSource {
       'employeeMemberId': draft.employeeMemberId,
       'title': draft.title,
       'destination': draft.destination,
+      'destinationLatitude': draft.destinationLatitude,
+      'destinationLongitude': draft.destinationLongitude,
       if (draft.instructions?.trim().isNotEmpty == true)
         'instructions': draft.instructions!.trim(),
       if (draft.dueAt != null) 'dueAt': draft.dueAt!.toUtc().toIso8601String(),
@@ -102,6 +104,8 @@ class OffSiteWorkRemoteDataSource {
       title: row.string('title'),
       instructions: row.optString('instructions'),
       destination: row.string('destination'),
+      destinationLatitude: row.optNumber('destinationLatitude'),
+      destinationLongitude: row.optNumber('destinationLongitude'),
       dueAt: row.optDateTime('dueAt'),
       reference: row.optString('reference'),
       requiredEvidenceDescription: row.optString('requiredEvidenceDescription'),

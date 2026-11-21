@@ -4,7 +4,9 @@ import { resolveActor } from "../auth/actor";
 import { callableOptions } from "../config";
 import { denied, guarded } from "../errors";
 
-/** Returns only the selfie policy needed by an employee before a punch. */
+const DEFAULT_GEOFENCE_RADIUS_METERS = 150;
+
+/** Returns the employee attendance policies needed by the app before a punch. */
 export const getAttendanceSelfiePolicy = onCall(callableOptions, (request) =>
   guarded(async () => {
     const actor = await resolveActor(request);
@@ -14,8 +16,18 @@ export const getAttendanceSelfiePolicy = onCall(callableOptions, (request) =>
       .collection("organization_settings")
       .doc(actor.organizationId)
       .get();
+    const configuredRadius = settings.get("geofenceRadiusMeters");
     return {
-      requireAttendanceSelfie: settings.get("requireAttendanceSelfie") === true,
+      requireAttendanceSelfie:
+        settings.get("requireAttendanceSelfie") !== false,
+      requireGeolocation: settings.get("requireGeolocation") !== false,
+      allowBreaks: settings.get("allowBreaks") !== false,
+      defaultGeofenceRadiusMeters:
+        typeof configuredRadius === "number" &&
+        Number.isFinite(configuredRadius) &&
+        configuredRadius > 0
+          ? Math.round(configuredRadius)
+          : DEFAULT_GEOFENCE_RADIUS_METERS,
     };
   }),
 );

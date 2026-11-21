@@ -22,7 +22,14 @@ import '../../helpers/fixed_clock.dart';
 class _FakeCallables implements CallableFunctions {
   final List<({String name, Map<String, dynamic> payload})> calls = [];
   Object? failWith;
+  String? failOnName;
   VoidCallback? onCall;
+  Map<String, dynamic> attendancePolicy = {
+    'requireAttendanceSelfie': true,
+    'requireGeolocation': true,
+    'allowBreaks': true,
+    'defaultGeofenceRadiusMeters': 150,
+  };
 
   @override
   Future<Map<String, dynamic>> call(
@@ -30,8 +37,13 @@ class _FakeCallables implements CallableFunctions {
     Map<String, dynamic> payload = const {},
   ]) async {
     calls.add((name: name, payload: payload));
-    if (failWith != null) throw failWith!;
-    onCall?.call();
+    if (failWith != null && (failOnName == null || failOnName == name)) {
+      throw failWith!;
+    }
+    if (name == 'recordAttendancePunch') onCall?.call();
+    if (name == 'getAttendanceSelfiePolicy') {
+      return Map<String, dynamic>.of(attendancePolicy);
+    }
     return const {};
   }
 }
@@ -298,6 +310,57 @@ void main() {
       expect(summary.locationStatus, contains('Outside geofence'));
     });
 
+    test(
+      'uses the organization radius for a branch with no positive radius',
+      () async {
+        callables.attendancePolicy['defaultGeofenceRadiusMeters'] = 80;
+        final branch = BranchSummary(
+          id: 'br-default-radius',
+          organizationId: acmeOrg.id,
+          name: 'Default Radius Branch',
+          code: 'DEF-01',
+          location: 'City',
+          latitude: 12.9716,
+          longitude: 77.5946,
+          geofenceRadiusMeters: 0,
+        );
+        final branchAccess = UserAccessContext(
+          user: access.user,
+          organization: acmeOrg,
+          assignedBranches: [branch],
+          activeBranch: ActiveBranchContext.fromBranch(branch),
+        );
+
+        final summary = await repo.getEmployeeHomeSummary(access: branchAccess);
+
+        expect(summary.geofenceRadiusMeters, 80);
+        expect(summary.locationStatus, contains('Inside geofence'));
+      },
+    );
+
+    test(
+      'does not request location when organization GPS verification is off',
+      () async {
+        callables.attendancePolicy['requireGeolocation'] = false;
+        final location = _FixedLocation();
+        final noGpsRepo = FirestoreEmployeeHomeRepository(
+          firestore: db,
+          functions: callables,
+          locationProvider: location,
+          now: fixedNow,
+        );
+
+        final summary = await noGpsRepo.getEmployeeHomeSummary(access: access);
+
+        expect(location.peekCalls, 0);
+        expect(summary.requireGeolocation, isFalse);
+        expect(
+          summary.locationStatus,
+          contains('GPS verification is disabled'),
+        );
+      },
+    );
+
     test('only employees may load it', () async {
       await expectLater(
         repo.getEmployeeHomeSummary(access: orgAdminAccess()),
@@ -315,7 +378,9 @@ void main() {
           action: AttendanceAction.checkIn,
         );
 
-        final call = callables.calls.single;
+        final call = callables.calls.singleWhere(
+          (entry) => entry.name == 'recordAttendancePunch',
+        );
         expect(call.name, 'recordAttendancePunch');
         expect(call.payload, {
           'kind': 'checkIn',
@@ -337,7 +402,12 @@ void main() {
         (AttendanceAction.checkOut, 'checkOut'),
       ]) {
         await repo.recordAttendanceAction(access: access, action: action);
-        expect(callables.calls.last.payload['kind'], kind);
+        expect(
+          callables.calls
+              .lastWhere((entry) => entry.name == 'recordAttendancePunch')
+              .payload['kind'],
+          kind,
+        );
       }
     });
 
@@ -368,6 +438,7 @@ void main() {
         'Callable permission-denied',
         'You are outside the branch geofence.',
       );
+      callables.failOnName = 'recordAttendancePunch';
       await expectLater(
         repo.recordAttendanceAction(
           access: access,
@@ -398,9 +469,32 @@ void main() {
           ),
           throwsA(isA<AppException>()),
         );
-        expect(callables.calls, isEmpty);
+        expect(callables.calls.map((call) => call.name), [
+          'getAttendanceSelfiePolicy',
+        ]);
       },
     );
+
+    test('sends no GPS fix when organization policy disables it', () async {
+      callables.attendancePolicy['requireGeolocation'] = false;
+      final noGps = FirestoreEmployeeHomeRepository(
+        firestore: db,
+        functions: callables,
+        now: fixedNow,
+      );
+      final policy = await noGps.getAttendancePolicy(access: access);
+
+      await noGps.recordAttendanceAction(
+        access: access,
+        action: AttendanceAction.checkIn,
+        policy: policy,
+      );
+
+      final punch = callables.calls.singleWhere(
+        (call) => call.name == 'recordAttendancePunch',
+      );
+      expect(punch.payload, {'kind': 'checkIn', 'branchId': 'br-01'});
+    });
 
     test('an employee without a single active branch cannot punch', () async {
       final ambiguous = UserAccessContext(
@@ -455,6 +549,7 @@ void main() {
   group('EmployeeHomeController action feedback', () {
     test('a failed punch reports false and exposes the error', () async {
       callables.failWith = const NetworkException();
+      callables.failOnName = 'recordAttendancePunch';
       final controller = EmployeeHomeController(repository: repo);
       addTearDown(controller.dispose);
       await controller.loadHomeSummary(access: access);

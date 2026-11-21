@@ -14,6 +14,7 @@ import 'package:workaxis/features/attendance/data/attendance_entry_mapper.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employee_home/domain/models/attendance_session.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
+import 'package:workaxis/features/employee_home/domain/models/employee_attendance_policy.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 import 'package:workaxis/features/employee_home/domain/models/location_peek.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_repository.dart';
@@ -41,7 +42,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
 
   /// Name of the punch callable (see `docs/backend-api.md`).
   static const String punchCallable = 'recordAttendancePunch';
-  static const String selfiePolicyCallable = 'getAttendanceSelfiePolicy';
+  static const String attendancePolicyCallable = 'getAttendanceSelfiePolicy';
 
   final FirebaseFirestore? _customFirestore;
   final CallableFunctions? _customFunctions;
@@ -61,10 +62,12 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   }) async {
     try {
       _requireEmployee(access);
+      final policy = await _fetchAttendancePolicy();
       final entry = await _todayEntry(access.user.id);
       return await _summarize(
         access,
         entry,
+        policy: policy,
         requestLocationPermission: requestLocationPermission,
       );
     } catch (e, st) {
@@ -73,20 +76,12 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   }
 
   @override
-  Future<bool> isAttendanceSelfieRequired({
+  Future<EmployeeAttendancePolicy> getAttendancePolicy({
     required UserAccessContext access,
   }) async {
     try {
       _requireEmployee(access);
-      final response = await _functions.call(selfiePolicyCallable);
-      final required = response['requireAttendanceSelfie'];
-      if (required is! bool) {
-        throw const DatabaseException(
-          'Attendance selfie policy returned an invalid value.',
-          userMessage: 'Attendance settings could not be checked. Try again before recording attendance.',
-        );
-      }
-      return required;
+      return await _fetchAttendancePolicy();
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -96,11 +91,13 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   Future<EmployeeHomeSummary> recordAttendanceAction({
     required UserAccessContext access,
     required AttendanceAction action,
+    EmployeeAttendancePolicy? policy,
     String? selfieLocalPath,
   }) async {
     try {
       _requireEmployee(access);
       final branch = _punchBranch(access);
+      final attendancePolicy = policy ?? await _fetchAttendancePolicy();
       String? selfiePath;
       if (selfieLocalPath != null) {
         final storage = _selfieStorage;
@@ -117,20 +114,59 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
           pathSegments: [branch.id, access.user.id],
         );
       }
-      final fix = await _location.currentLocation();
       final payload = <String, dynamic>{
         'kind': _kind(action),
         'branchId': branch.id,
-        'latitude': fix.latitude,
-        'longitude': fix.longitude,
-        'accuracyMeters': fix.accuracyMeters,
       };
+      if (attendancePolicy.requireGeolocation) {
+        final fix = await _location.currentLocation();
+        payload['latitude'] = fix.latitude;
+        payload['longitude'] = fix.longitude;
+        payload['accuracyMeters'] = fix.accuracyMeters;
+      }
       if (selfiePath != null) payload['selfiePath'] = selfiePath;
       await _functions.call(punchCallable, payload);
       return await getEmployeeHomeSummary(access: access);
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
+  }
+
+  Future<EmployeeAttendancePolicy> _fetchAttendancePolicy() async {
+    final response = await _functions.call(attendancePolicyCallable);
+    final requireSelfie = response['requireAttendanceSelfie'];
+    if (requireSelfie is! bool) {
+      throw const DatabaseException(
+        'Attendance policy returned an invalid selfie requirement.',
+        userMessage: 'Attendance settings could not be checked. Try again before recording attendance.',
+      );
+    }
+
+    bool readPolicyFlag(String key, bool fallback) {
+      final value = response[key];
+      return value is bool ? value : fallback;
+    }
+
+    final configuredRadius = response['defaultGeofenceRadiusMeters'];
+    final defaultRadius =
+        configuredRadius is num &&
+            configuredRadius.isFinite &&
+            configuredRadius > 0
+        ? configuredRadius.round()
+        : EmployeeAttendancePolicy.defaults.defaultGeofenceRadiusMeters;
+
+    return EmployeeAttendancePolicy(
+      requireAttendanceSelfie: requireSelfie,
+      requireGeolocation: readPolicyFlag(
+        'requireGeolocation',
+        EmployeeAttendancePolicy.defaults.requireGeolocation,
+      ),
+      allowBreaks: readPolicyFlag(
+        'allowBreaks',
+        EmployeeAttendancePolicy.defaults.allowBreaks,
+      ),
+      defaultGeofenceRadiusMeters: defaultRadius,
+    );
   }
 
   void _requireEmployee(UserAccessContext access) {
@@ -201,6 +237,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   Future<EmployeeHomeSummary> _summarize(
     UserAccessContext access,
     Map<String, dynamic>? entry, {
+    required EmployeeAttendancePolicy policy,
     required bool requestLocationPermission,
   }) async {
     final checkIn = AttendanceEntryMapper.instant(entry?['checkInAt']);
@@ -219,12 +256,17 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     final recordedByManager = entry?['source'] == 'manager-group';
 
     final branch = _displayBranch(access);
-    bool isWithinGeofence = checkIn != null;
-    String locationStatus = checkIn != null
-        ? 'Location verified at check-in'
-        : 'Location is verified when you check in';
+    bool isWithinGeofence = false;
+    String locationStatus = policy.requireGeolocation
+        ? (checkIn != null
+              ? 'Location verified at check-in'
+              : 'Location is verified when you check in')
+        : 'GPS verification is disabled by your organization';
 
-    if (checkIn == null &&
+    if (policy.requireGeolocation && checkIn != null) {
+      isWithinGeofence = true;
+    } else if (policy.requireGeolocation &&
+        checkIn == null &&
         branch != null &&
         branch.latitude != null &&
         branch.longitude != null) {
@@ -239,7 +281,10 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
           branch.latitude!,
           branch.longitude!,
         );
-        final radius = branch.geofenceRadiusMeters ?? 150;
+        final branchRadius = branch.geofenceRadiusMeters;
+        final radius = branchRadius != null && branchRadius > 0
+            ? branchRadius
+            : policy.defaultGeofenceRadiusMeters;
         isWithinGeofence = distance <= radius;
         locationStatus = isWithinGeofence
             ? 'Inside geofence • Ready to check in'
@@ -316,9 +361,16 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
           : '${(progress * 100).toStringAsFixed(0)}% complete',
       locationStatus: locationStatus,
       isWithinGeofence: isWithinGeofence,
+      requireGeolocation: policy.requireGeolocation,
+      allowBreaks: policy.allowBreaks,
       latitude: branch?.latitude,
       longitude: branch?.longitude,
-      geofenceRadiusMeters: branch?.geofenceRadiusMeters,
+      geofenceRadiusMeters: branch == null
+          ? null
+          : (branch.geofenceRadiusMeters != null &&
+                    branch.geofenceRadiusMeters! > 0
+                ? branch.geofenceRadiusMeters
+                : policy.defaultGeofenceRadiusMeters),
       session: session,
     );
   }

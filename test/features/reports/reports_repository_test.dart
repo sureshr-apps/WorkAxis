@@ -4,6 +4,7 @@ import 'package:workaxis/features/reports/data/mock_reports_repository.dart';
 import 'package:workaxis/features/reports/data/report_period_range.dart';
 import 'package:workaxis/features/reports/data/reports_remote.dart';
 import 'package:workaxis/features/reports/data/sql_connect_reports_repository.dart';
+import 'package:workaxis/features/reports/domain/models/report_date_range.dart';
 import 'package:workaxis/features/reports/domain/models/report_period.dart';
 import 'package:workaxis/features/reports/domain/repositories/reports_repository.dart';
 
@@ -143,6 +144,23 @@ void main() {
       );
     });
 
+    test('custom inclusive dates become a business-time query range', () async {
+      final selected = ReportDateRange(
+        startDate: DateTime(2026, 11, 1, 13),
+        endDate: DateTime(2026, 11, 4, 18),
+      );
+      final report = await repo.getReportSummary(
+        access: orgAdminAccess(),
+        period: ReportPeriod.customRange,
+        dateRange: selected,
+      );
+
+      expect(remote.lastRange!.from, DateTime.utc(2026, 10, 31, 18, 30));
+      expect(remote.lastRange!.to, DateTime.utc(2026, 11, 4, 18, 30));
+      expect(report.period, ReportPeriod.customRange);
+      expect(report.dateRange, selected);
+    });
+
     test('an org admin narrowed to a branch uses the branch query', () async {
       await repo.getReportSummary(
         access: orgAdminAccess(),
@@ -209,10 +227,34 @@ void main() {
       );
       expect(q.from, DateTime.utc(2026, 9, 30, 18, 30)); // Oct 1 IST
     });
+
+    test('selected dates include both business-calendar endpoints', () {
+      final range = ReportPeriodRange.resolveDateRange(
+        ReportDateRange(
+          startDate: DateTime(2026, 11, 1),
+          endDate: DateTime(2026, 11, 4),
+        ),
+      );
+      expect(range.from, DateTime.utc(2026, 10, 31, 18, 30));
+      expect(range.to, DateTime.utc(2026, 11, 4, 18, 30));
+    });
+
+    test('rejects a date range whose end precedes its start', () {
+      expect(
+        () => ReportPeriodRange.resolveDateRange(
+          ReportDateRange(
+            startDate: DateTime(2026, 11, 4),
+            endDate: DateTime(2026, 11, 1),
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
   });
 
   test('ReportPeriod has display labels', () {
     expect(ReportPeriod.thisWeek.label, 'This Week');
     expect(ReportPeriod.quarterToDate.label, 'Quarter to Date');
+    expect(ReportPeriod.customRange.label, 'Custom range');
   });
 }

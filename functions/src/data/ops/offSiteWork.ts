@@ -16,7 +16,9 @@ const ASSIGNMENT_COLUMNS = `a.id, a.organization_id AS "organizationId",
   a.employee_member_id AS "employeeMemberId", a.employee_uid AS "employeeUid",
   a.employee_name AS "employeeName", a.assigned_by_uid AS "assignedByUid",
   a.assigned_by_name AS "assignedByName", a.title, a.instructions,
-  a.destination, a.due_at AS "dueAt", a.reference,
+  a.destination, a.destination_latitude AS "destinationLatitude",
+  a.destination_longitude AS "destinationLongitude",
+  a.due_at AS "dueAt", a.reference,
   a.required_evidence_description AS "requiredEvidenceDescription", a.status,
   a.latest_latitude AS "latestLatitude", a.latest_longitude AS "latestLongitude",
   a.latest_accuracy_meters AS "latestAccuracyMeters",
@@ -214,6 +216,15 @@ export const offSiteWorkOps: OperationRegistry = {
     const title = reqString(vars, "title", 1, 120);
     const instructions = optText(vars, "instructions", 4000);
     const destination = reqString(vars, "destination", 1, 250);
+    const destinationLatitude = vars.destinationLatitude == null
+      ? undefined
+      : reqNumber(vars, "destinationLatitude", -90, 90);
+    const destinationLongitude = vars.destinationLongitude == null
+      ? undefined
+      : reqNumber(vars, "destinationLongitude", -180, 180);
+    if ((destinationLatitude == null) !== (destinationLongitude == null)) {
+      throw invalid("Destination coordinates must be provided together.");
+    }
     const dueAt = optTimestamp(vars, "dueAt");
     const reference = optText(vars, "reference", 200);
     const evidenceDescription = optText(vars, "requiredEvidenceDescription", 500);
@@ -244,6 +255,8 @@ export const offSiteWorkOps: OperationRegistry = {
         ["title", title],
         ["instructions", instructions],
         ["destination", destination],
+        ["destination_latitude", destinationLatitude],
+        ["destination_longitude", destinationLongitude],
         ["due_at", dueAt],
         ["reference", reference],
         ["required_evidence_description", evidenceDescription],

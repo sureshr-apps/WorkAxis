@@ -165,6 +165,7 @@ void main() {
 
       final thisMonthChip = find.text('This Month');
       expect(thisMonthChip, findsOneWidget);
+      expect(find.text('Custom range'), findsOneWidget);
 
       await tester.tap(thisMonthChip);
       await tester.pump();

@@ -136,7 +136,6 @@ class _BranchDashboardBody extends StatelessWidget {
     final attentionSection = AttentionItemsSection(
       items: summary.attentionItems,
       branchScope: true,
-      onViewAll: () => context.go(AppRoutes.branchManagerAttendance),
       onItemAction: (_, route) => context.go(route),
     );
 

@@ -65,7 +65,7 @@ void main() {
     }
 
     testWidgets(
-      'renders profile icon in header row, removes signout from header, and removes profile from side pane on compact (<600dp)',
+      'renders profile icon in header and Sign Out at the bottom of the compact drawer',
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(390, 844));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -89,8 +89,12 @@ void main() {
 
         expect(find.text('Home'), findsOneWidget);
         expect(find.text('Employees'), findsOneWidget);
-        // Verify profile and signout are NOT in the drawer side pane
-        expect(find.text('Sign Out'), findsNothing);
+        // Sign Out stays below the scrollable navigation destinations.
+        expect(find.text('Sign Out'), findsOneWidget);
+        expect(
+          tester.getBottomLeft(find.text('Sign Out')).dy,
+          greaterThan(tester.getBottomLeft(find.text('Employees')).dy),
+        );
 
         // Close drawer
         await tester.tap(find.byIcon(Icons.close));
@@ -106,7 +110,7 @@ void main() {
     );
 
     testWidgets(
-      'renders collapsible side pane and profile icon in header on medium viewport (600–839dp)',
+      'renders profile icon in header and Sign Out at the bottom of the medium drawer (600–839dp)',
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(768, 1024));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -128,7 +132,11 @@ void main() {
 
         expect(find.text('Home'), findsOneWidget);
         expect(find.text('Employees'), findsOneWidget);
-        expect(find.text('Sign Out'), findsNothing);
+        expect(find.text('Sign Out'), findsOneWidget);
+        expect(
+          tester.getBottomLeft(find.text('Sign Out')).dy,
+          greaterThan(tester.getBottomLeft(find.text('Employees')).dy),
+        );
       },
     );
 

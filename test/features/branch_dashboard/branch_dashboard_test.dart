@@ -138,6 +138,7 @@ void main() {
         // Verify branch-scoped attendance metrics
         expect(find.text("Today's Attendance"), findsOneWidget);
         expect(find.text('Needs Attention'), findsOneWidget);
+        expect(find.text('View all'), findsNothing);
       },
     );
 

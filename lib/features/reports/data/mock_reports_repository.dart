@@ -4,6 +4,7 @@ import 'package:workaxis/features/access/domain/models/user_access_context.dart'
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/reports/data/mock_reports_data_source.dart';
 import 'package:workaxis/features/reports/domain/models/operational_report_summary.dart';
+import 'package:workaxis/features/reports/domain/models/report_date_range.dart';
 import 'package:workaxis/features/reports/domain/models/report_period.dart';
 import 'package:workaxis/features/reports/domain/repositories/reports_repository.dart';
 
@@ -23,6 +24,7 @@ class MockReportsRepository implements ReportsRepository {
     required UserAccessContext access,
     String? activeBranchId,
     ReportPeriod period = ReportPeriod.thisWeek,
+    ReportDateRange? dateRange,
   }) async {
     if (access.organization == null) {
       throw const AccessDeniedException('No organization context.');
@@ -51,6 +53,10 @@ class MockReportsRepository implements ReportsRepository {
     if (delay > Duration.zero) {
       await Future<void>.delayed(delay);
     }
-    return _dataSource.getSummary(branches: branches, period: period);
+    return _dataSource.getSummary(
+      branches: branches,
+      period: period,
+      dateRange: dateRange,
+    );
   }
 }

@@ -3,6 +3,7 @@ import 'package:workaxis/features/access/domain/models/user_access_context.dart'
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employee_home/data/mock_employee_home_data_source.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
+import 'package:workaxis/features/employee_home/domain/models/employee_attendance_policy.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_simulator.dart';
@@ -51,18 +52,26 @@ class MockEmployeeHomeRepository
   }
 
   @override
-  Future<bool> isAttendanceSelfieRequired({
+  Future<EmployeeAttendancePolicy> getAttendancePolicy({
     required UserAccessContext access,
   }) async {
     _applyIdentity(access);
     await _latency();
-    return false;
+    // The mock organization has selfie verification disabled so sample
+    // attendance actions remain usable without invoking the camera plugin.
+    return const EmployeeAttendancePolicy(
+      requireAttendanceSelfie: false,
+      requireGeolocation: true,
+      allowBreaks: true,
+      defaultGeofenceRadiusMeters: 150,
+    );
   }
 
   @override
   Future<EmployeeHomeSummary> recordAttendanceAction({
     required UserAccessContext access,
     required AttendanceAction action,
+    EmployeeAttendancePolicy? policy,
     String? selfieLocalPath,
   }) async {
     _applyIdentity(access);

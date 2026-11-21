@@ -1,5 +1,6 @@
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/reports/domain/models/operational_report_summary.dart';
+import 'package:workaxis/features/reports/domain/models/report_date_range.dart';
 import 'package:workaxis/features/reports/domain/models/report_period.dart';
 
 /// Canned report figures for the mock backend. Branch identity always comes
@@ -8,6 +9,7 @@ class MockReportsDataSource {
   OperationalReportSummary getSummary({
     required List<BranchSummary> branches,
     required ReportPeriod period,
+    ReportDateRange? dateRange,
   }) {
     final metrics = [
       for (var i = 0; i < branches.length; i++)
@@ -25,6 +27,7 @@ class MockReportsDataSource {
 
     return OperationalReportSummary(
       period: period,
+      dateRange: dateRange,
       attendanceRate: single ? 97.2 : 95.8,
       onTimeRate: single ? 94.5 : 91.4,
       totalHoursLogged: single ? 428.0 : 1684.0,

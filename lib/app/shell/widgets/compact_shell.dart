@@ -42,6 +42,7 @@ class CompactShell extends StatelessWidget {
         destinations: destinations,
         selectedIndex: selectedIndex,
         onDestinationSelected: onDestinationSelected,
+        onSignOut: () => context.read<SessionController>().signOut(),
       ),
       appBar: AppBar(
         backgroundColor: AppColors.surfaceContainerLowest,

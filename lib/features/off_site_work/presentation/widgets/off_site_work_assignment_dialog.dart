@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
+import 'package:workaxis/core/maps/map_location_picker.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
@@ -56,7 +57,6 @@ class _OffSiteWorkAssignmentDialogState
     extends State<OffSiteWorkAssignmentDialog> {
   late final TextEditingController _titleController;
   late final TextEditingController _instructionsController;
-  late final TextEditingController _destinationController;
   late final TextEditingController _referenceController;
   late final TextEditingController _evidenceController;
   late final bool _branchLocked;
@@ -67,6 +67,8 @@ class _OffSiteWorkAssignmentDialogState
   String? _destinationError;
   String? _employeeError;
   String? _formError;
+  double? _destinationLatitude;
+  double? _destinationLongitude;
   DateTime? _dueAt;
   List<OrganizationMember> _employees = const [];
   bool _loadingEmployees = false;
@@ -77,7 +79,6 @@ class _OffSiteWorkAssignmentDialogState
     super.initState();
     _titleController = TextEditingController();
     _instructionsController = TextEditingController();
-    _destinationController = TextEditingController();
     _referenceController = TextEditingController();
     _evidenceController = TextEditingController();
     _branchLocked = widget.access.user.role == UserRole.branchManager;
@@ -92,7 +93,6 @@ class _OffSiteWorkAssignmentDialogState
   void dispose() {
     _titleController.dispose();
     _instructionsController.dispose();
-    _destinationController.dispose();
     _referenceController.dispose();
     _evidenceController.dispose();
     super.dispose();
@@ -179,17 +179,15 @@ class _OffSiteWorkAssignmentDialogState
 
   bool _validate() {
     final title = _titleController.text.trim();
-    final destination = _destinationController.text.trim();
     setState(() {
       _titleError = title.isEmpty
           ? 'Enter a title.'
           : title.length > 120
           ? 'Use 120 characters or fewer.'
           : null;
-      _destinationError = destination.isEmpty
-          ? 'Enter a destination.'
-          : destination.length > 250
-          ? 'Use 250 characters or fewer.'
+      _destinationError =
+          _destinationLatitude == null || _destinationLongitude == null
+          ? 'Choose a destination on the map.'
           : null;
       _employeeError = _employeeId == null ? 'Choose an employee.' : null;
       _formError = null;
@@ -211,7 +209,11 @@ class _OffSiteWorkAssignmentDialogState
         branchId: branchId,
         employeeMemberId: employeeId,
         title: _titleController.text.trim(),
-        destination: _destinationController.text.trim(),
+        destination:
+            '${_destinationLatitude!.toStringAsFixed(6)}, '
+            '${_destinationLongitude!.toStringAsFixed(6)}',
+        destinationLatitude: _destinationLatitude!,
+        destinationLongitude: _destinationLongitude!,
         instructions: _instructionsController.text,
         dueAt: _dueAt,
         reference: _referenceController.text,
@@ -309,14 +311,27 @@ class _OffSiteWorkAssignmentDialogState
                 enabled: !_isSaving,
               ),
               const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: _destinationController,
-                label: 'Destination',
-                hintText: 'Address or place name',
-                maxLength: 250,
-                errorText: _destinationError,
-                enabled: !_isSaving,
+              MapLocationPicker(
+                latitude: _destinationLatitude,
+                longitude: _destinationLongitude,
+                onLocationSelected: (latitude, longitude) {
+                  setState(() {
+                    _destinationLatitude = latitude;
+                    _destinationLongitude = longitude;
+                    _destinationError = null;
+                  });
+                },
+                locationLabel: 'Off-site destination',
+                selectionTitle: 'Select destination on map',
+                selectionHelpText: 'Pan the map and tap the destination, or drag the selected pin.',
               ),
+              if (_destinationError != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  _destinationError!,
+                  style: const TextStyle(color: AppColors.error),
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
               AppTextField(
                 controller: _instructionsController,

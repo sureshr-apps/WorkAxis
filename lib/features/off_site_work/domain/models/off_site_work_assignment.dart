@@ -131,6 +131,8 @@ class OffSiteWorkAssignment {
     required this.createdAt,
     required this.updatedAt,
     this.instructions,
+    this.destinationLatitude,
+    this.destinationLongitude,
     this.dueAt,
     this.reference,
     this.requiredEvidenceDescription,
@@ -150,6 +152,8 @@ class OffSiteWorkAssignment {
   final String title;
   final String? instructions;
   final String destination;
+  final double? destinationLatitude;
+  final double? destinationLongitude;
   final DateTime? dueAt;
   final String? reference;
   final String? requiredEvidenceDescription;
@@ -176,6 +180,8 @@ class OffSiteWorkAssignment {
     title: title,
     instructions: instructions,
     destination: destination,
+    destinationLatitude: destinationLatitude,
+    destinationLongitude: destinationLongitude,
     dueAt: dueAt,
     reference: reference,
     requiredEvidenceDescription: requiredEvidenceDescription,
@@ -193,6 +199,8 @@ class OffSiteWorkAssignmentDraft {
     required this.employeeMemberId,
     required this.title,
     required this.destination,
+    required this.destinationLatitude,
+    required this.destinationLongitude,
     this.instructions,
     this.dueAt,
     this.reference,
@@ -203,6 +211,8 @@ class OffSiteWorkAssignmentDraft {
   final String employeeMemberId;
   final String title;
   final String destination;
+  final double destinationLatitude;
+  final double destinationLongitude;
   final String? instructions;
   final DateTime? dueAt;
   final String? reference;

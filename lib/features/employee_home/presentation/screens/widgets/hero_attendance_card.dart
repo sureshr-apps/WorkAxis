@@ -229,7 +229,9 @@ class HeroAttendanceCard extends StatelessWidget {
   }
 
   Widget _actionSurface(AttendanceStatus status) {
-    final canAct = status.nextAction != null;
+    final canAct =
+        status.nextAction != null &&
+        !(status == AttendanceStatus.checkedIn && !summary.allowBreaks);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -239,17 +241,16 @@ class HeroAttendanceCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          AppButton.primary(
-            text: status.heroActionLabel,
-            iconData: status.heroActionIcon,
-            isLoading:
-                processingAction != null &&
-                processingAction == status.nextAction,
-            onPressed: canAct && !isProcessing ? onPrimaryAction : null,
-          ),
-          if (onCheckOut != null &&
-              (status == AttendanceStatus.checkedIn ||
-                  status == AttendanceStatus.onBreak)) ...[
+          if (canAct)
+            AppButton.primary(
+              text: status.heroActionLabel,
+              iconData: status.heroActionIcon,
+              isLoading:
+                  processingAction != null &&
+                  processingAction == status.nextAction,
+              onPressed: !isProcessing ? onPrimaryAction : null,
+            ),
+          if (onCheckOut != null && status == AttendanceStatus.checkedIn) ...[
             const SizedBox(height: AppSpacing.sm),
             AppButton.outlined(
               text: 'Check Out',
