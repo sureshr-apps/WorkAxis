@@ -62,6 +62,17 @@ class _BranchManagerSelfAttendanceCardState
   }
 
   Future<void> _load({bool requestLocationPermission = false}) async {
+    final controller = Provider.of<EmployeeHomeController?>(
+      context,
+      listen: false,
+    );
+    if (controller == null) {
+      setState(() {
+        _checkingPolicy = false;
+        _enabled = false;
+      });
+      return;
+    }
     final access = _scopedAccess;
     if (access == null) {
       setState(() {
@@ -77,7 +88,6 @@ class _BranchManagerSelfAttendanceCardState
       _enabled = false;
       _policyError = null;
     });
-    final controller = context.read<EmployeeHomeController>();
     final policy = await controller.checkAttendancePolicy(userAccess: access);
     if (!mounted) return;
     if (policy == null) {
@@ -120,7 +130,8 @@ class _BranchManagerSelfAttendanceCardState
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.watch<EmployeeHomeController>();
+    final controller = Provider.of<EmployeeHomeController?>(context);
+    if (controller == null) return const SizedBox.shrink();
     if (_checkingPolicy) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
