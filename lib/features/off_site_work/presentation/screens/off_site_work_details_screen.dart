@@ -8,6 +8,7 @@ import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/responsive/responsive_sliver_page.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
+import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
@@ -16,6 +17,7 @@ import 'package:workaxis/features/off_site_work/domain/models/off_site_work_assi
 import 'package:workaxis/features/off_site_work/presentation/controllers/off_site_work_controller.dart';
 import 'package:workaxis/features/off_site_work/presentation/widgets/off_site_work_event_card.dart';
 import 'package:workaxis/features/off_site_work/presentation/widgets/off_site_work_milestone_dialog.dart';
+import 'package:workaxis/features/off_site_work/presentation/widgets/off_site_work_directions.dart';
 import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
 class OffSiteWorkDetailsScreen extends StatefulWidget {
@@ -188,6 +190,18 @@ class _OffSiteWorkDetailsScreenState extends State<OffSiteWorkDetailsScreen> {
     OffSiteWorkMilestone.returnToBranch => 'Return to branch recorded.',
   };
 
+  Future<void> _openDirections(OffSiteWorkAssignment assignment) async {
+    final opened = await launchOffSiteWorkDirections(
+      destination: assignment.destination,
+      latitude: assignment.destinationLatitude,
+      longitude: assignment.destinationLongitude,
+    );
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open directions. Try again.')),
+    );
+  }
+
   Widget _employeeActions(
     BuildContext context,
     UserRole role,
@@ -288,16 +302,21 @@ class _OffSiteWorkDetailsScreenState extends State<OffSiteWorkDetailsScreen> {
           onRefresh: () => _load(force: true),
           slivers: [
             SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: PageBreadcrumb(
+                  backLabel: 'Off-site Work',
+                  currentLabel: assignment.title,
+                  onBack: () => context.go(widget.listRoute),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
               child: AppPageHeader(
                 eyebrow: 'Off-site Work',
                 title: assignment.title,
                 subtitle:
                     '${assignment.status.label} · ${assignment.branchName}',
-                action: AppButton.link(
-                  text: 'Back to assignments',
-                  iconData: Icons.arrow_back,
-                  onPressed: () => context.go(widget.listRoute),
-                ),
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
@@ -307,9 +326,17 @@ class _OffSiteWorkDetailsScreenState extends State<OffSiteWorkDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _DetailLine(
-                      label: 'Destination',
+                      label: 'Selected location',
                       value: assignment.destination,
                     ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppButton.outlined(
+                      text: 'Directions',
+                      iconData: Icons.directions_outlined,
+                      onPressed: () => _openDirections(assignment),
+                      isFullWidth: false,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
                     _DetailLine(label: 'Branch', value: assignment.branchName),
                     _DetailLine(
                       label: 'Assigned to',

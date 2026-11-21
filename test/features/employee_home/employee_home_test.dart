@@ -72,6 +72,32 @@ void main() {
   });
 
   group('EmployeeHomeScreen Widget Tests', () {
+    testWidgets('hides break start when organization disabled breaks', (
+      tester,
+    ) async {
+      final summary =
+          (await MockEmployeeHomeRepository(delay: Duration.zero)
+                  .getEmployeeHomeSummary(access: employeeAccess()))
+              .copyWith(allowBreaks: false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: HeroAttendanceCard(
+              summary: summary,
+              isProcessing: false,
+              onPrimaryAction: () {},
+              onCheckOut: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Start Break'), findsNothing);
+      expect(find.text('Check Out'), findsOneWidget);
+    });
+
     testWidgets(
       'renders Employee Home with telemetry, assignment and returns from the summary only',
       (tester) async {

@@ -3,7 +3,8 @@ enum ReportPeriod {
   thisWeek('This Week'),
   thisMonth('This Month'),
   lastMonth('Last Month'),
-  quarterToDate('Quarter to Date');
+  quarterToDate('Quarter to Date'),
+  customRange('Custom range');
 
   const ReportPeriod(this.label);
 

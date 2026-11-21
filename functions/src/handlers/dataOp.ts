@@ -31,7 +31,7 @@ export const dataOp = onCall(callableOptions, (request) =>
             .collection("organization_settings")
             .doc(organizationId)
             .get();
-          return snapshot.get("requireEmployeeAssetAcknowledgement") === true;
+          return snapshot.get("requireEmployeeAssetAcknowledgement") !== false;
         },
       },
       request.data,

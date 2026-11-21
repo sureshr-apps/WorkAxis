@@ -9,8 +9,8 @@ class OrganizationSettings {
     required this.requireGeolocation,
     required this.dailyDigest,
     required this.returnAlerts,
-    this.requireEmployeeAssetAcknowledgement = false,
-    this.requireAttendanceSelfie = false,
+    this.requireEmployeeAssetAcknowledgement = true,
+    this.requireAttendanceSelfie = true,
     this.operationsEmail,
     this.emergencyPhone,
   });
@@ -23,11 +23,11 @@ class OrganizationSettings {
     requireGeolocation: true,
     dailyDigest: true,
     returnAlerts: true,
-    requireEmployeeAssetAcknowledgement: false,
-    requireAttendanceSelfie: false,
+    requireEmployeeAssetAcknowledgement: true,
+    requireAttendanceSelfie: true,
   );
 
-  /// Default geofence radius for newly created branches.
+  /// Geofence radius used when a branch has no positive radius configured.
   final int geofenceRadiusMeters;
 
   /// Minutes after shift start before a check-in counts as late.

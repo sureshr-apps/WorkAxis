@@ -1,5 +1,6 @@
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
+import 'package:workaxis/features/employee_home/domain/models/employee_attendance_policy.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 
 /// Stable repository contract for Employee Home operations. Everything is
@@ -15,16 +16,18 @@ abstract interface class EmployeeHomeRepository {
     bool requestLocationPermission = false,
   });
 
-  /// Whether the organization currently requires a new selfie for punches.
-  /// Employees retrieve this value through a trusted callable rather than
+  /// Attendance policy retrieved through a trusted callable rather than
   /// reading the full organization settings document.
-  Future<bool> isAttendanceSelfieRequired({required UserAccessContext access});
+  Future<EmployeeAttendancePolicy> getAttendancePolicy({
+    required UserAccessContext access,
+  });
 
   /// Records an attendance action and returns the refreshed summary. The
   /// server stamps the time and validates the geofence.
   Future<EmployeeHomeSummary> recordAttendanceAction({
     required UserAccessContext access,
     required AttendanceAction action,
+    EmployeeAttendancePolicy? policy,
     String? selfieLocalPath,
   });
 }

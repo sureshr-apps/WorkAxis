@@ -12,6 +12,7 @@ import 'package:workaxis/app/shell/widgets/org_scope_card.dart';
 import 'package:workaxis/app/shell/widgets/shell_labels.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
@@ -22,14 +23,14 @@ class AppNavigationDrawer extends StatelessWidget {
   final List<AppNavDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
-  final FutureOr<void> Function()? onSignOut;
+  final FutureOr<void> Function() onSignOut;
 
   const AppNavigationDrawer({
     super.key,
     required this.destinations,
     required this.selectedIndex,
     required this.onDestinationSelected,
-    this.onSignOut,
+    required this.onSignOut,
   });
 
   @override
@@ -114,7 +115,21 @@ class AppNavigationDrawer extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const Divider(color: AppColors.outlineSubtle, height: 1),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: AppButton.outlined(
+                  text: 'Sign Out',
+                  iconData: Icons.logout,
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await onSignOut();
+                  },
+                ),
+              ),
+            ),
           ],
         ),
       ),

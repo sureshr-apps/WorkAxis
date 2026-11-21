@@ -217,7 +217,7 @@ void main() {
       );
     });
 
-    testWidgets('asset acknowledgment policy is saved by organization admin', (
+    testWidgets('asset acknowledgment defaults on and can be disabled', (
       tester,
     ) async {
       await pumpOrganizationSettingsScreen(tester, width: 1200);
@@ -228,10 +228,10 @@ void main() {
             (widget.title as Text?)?.data == 'Require employee acknowledgment',
       );
       expect(toggle, findsOneWidget);
-      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
       await tester.tap(toggle);
       await tester.pumpAndSettle();
-      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
 
       await tester.tap(find.text('Save Changes'));
       await tester.pumpAndSettle();
@@ -240,8 +240,57 @@ void main() {
         settingsController
             .organizationSettings
             ?.requireEmployeeAssetAcknowledgement,
-        isTrue,
+        isFalse,
       );
+    });
+
+    testWidgets('attendance and digest preferences can all be disabled', (
+      tester,
+    ) async {
+      await pumpOrganizationSettingsScreen(tester, width: 1200);
+
+      SwitchListTile toggleFor(String title) => tester.widget<SwitchListTile>(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is SwitchListTile &&
+              (widget.title as Text?)?.data == title,
+        ),
+      );
+
+      final titles = [
+        'Require selfie for attendance',
+        'Require Device GPS Fix for Attendance',
+        'Allow Mid-Shift Break Recording',
+        'Daily Morning Attendance Digest',
+        'High-Value Product Return Alerts',
+      ];
+      for (final title in titles) {
+        final toggle = find.byWidgetPredicate(
+          (widget) =>
+              widget is SwitchListTile &&
+              (widget.title as Text?)?.data == title,
+        );
+        expect(toggle, findsOneWidget);
+        expect(toggleFor(title).value, isTrue);
+        expect(toggleFor(title).onChanged, isNotNull);
+        await tester.ensureVisible(toggle);
+        await tester.pumpAndSettle();
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(toggleFor(title).value, isFalse);
+      }
+
+      final saveButton = find.text('Save Changes');
+      await tester.ensureVisible(saveButton);
+      await tester.pumpAndSettle();
+      await tester.tap(saveButton);
+      await tester.pumpAndSettle();
+      final saved = settingsController.organizationSettings!;
+      expect(saved.requireAttendanceSelfie, isFalse);
+      expect(saved.requireGeolocation, isFalse);
+      expect(saved.allowBreaks, isFalse);
+      expect(saved.dailyDigest, isFalse);
+      expect(saved.returnAlerts, isFalse);
     });
   });
 }

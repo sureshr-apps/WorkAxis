@@ -1,4 +1,5 @@
 import 'package:workaxis/features/reports/domain/models/report_period.dart';
+import 'package:workaxis/features/reports/domain/models/report_date_range.dart';
 
 class DailyAttendanceMetric {
   final String dayName;
@@ -51,6 +52,7 @@ class CategoryReturnMetric {
 /// must be rendered as "not available", never as zero.
 class OperationalReportSummary {
   final ReportPeriod period;
+  final ReportDateRange? dateRange;
   final double? attendanceRate;
   final double? onTimeRate;
   final double? totalHoursLogged;
@@ -67,6 +69,7 @@ class OperationalReportSummary {
 
   const OperationalReportSummary({
     required this.period,
+    this.dateRange,
     this.attendanceRate,
     this.onTimeRate,
     this.totalHoursLogged,

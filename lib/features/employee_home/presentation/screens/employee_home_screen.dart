@@ -146,7 +146,9 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             const SizedBox(height: AppSpacing.lg),
             ActiveGeofenceCard(
               summary: summary,
-              onRefreshLocation: () => _load(requestLocationPermission: true),
+              onRefreshLocation: summary.requireGeolocation
+                  ? () => _load(requestLocationPermission: true)
+                  : null,
             ),
           ],
         );
@@ -204,19 +206,24 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
 
     setState(() => _isPreparingAttendanceAction = true);
     try {
-      final selfieRequired = await controller
-          .checkAttendanceSelfieRequirement();
+      final policy = await controller.checkAttendancePolicy();
       if (!mounted) return;
-      if (selfieRequired == null) {
+      if (policy == null) {
         _showActionMessage(
           controller.actionErrorMessage ??
               'Attendance settings could not be checked. Try again.',
         );
         return;
       }
+      if (action == AttendanceAction.startBreak && !policy.allowBreaks) {
+        _showActionMessage(
+          'Mid-shift break recording is disabled by your organization.',
+        );
+        return;
+      }
 
       String? selfieLocalPath;
-      if (selfieRequired) {
+      if (policy.requireAttendanceSelfie) {
         try {
           final image = await ImagePicker().pickImage(
             source: ImageSource.camera,
@@ -241,6 +248,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
 
       final recorded = await controller.recordAttendanceAction(
         action,
+        policy: policy,
         selfieLocalPath: selfieLocalPath,
       );
       if (!mounted) return;

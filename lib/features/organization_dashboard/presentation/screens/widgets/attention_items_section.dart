@@ -3,7 +3,6 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/empty_state.dart';
 import 'package:workaxis/features/organization_dashboard/domain/models/attention_item.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/attention_item_presentation.dart';
@@ -16,7 +15,6 @@ class AttentionItemsSection extends StatelessWidget {
     super.key,
     required this.items,
     required this.branchScope,
-    this.onViewAll,
     this.onItemAction,
   });
 
@@ -25,13 +23,8 @@ class AttentionItemsSection extends StatelessWidget {
   /// True when shown on the branch manager dashboard (affects item routes).
   final bool branchScope;
 
-  /// Opens the full list; the link is hidden when null.
-  final VoidCallback? onViewAll;
-
   /// Invoked with an item and its destination route.
   final void Function(AttentionItem item, String route)? onItemAction;
-
-  static const double _compactListHeight = 190;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +32,7 @@ class AttentionItemsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Header(count: items.length, onViewAll: onViewAll),
+          _Header(count: items.length),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Escalations requiring sign-off or follow-up',
@@ -53,17 +46,22 @@ class AttentionItemsSection extends StatelessWidget {
             )
           else if (context.isCompact)
             LayoutBuilder(
-              builder: (context, constraints) => SizedBox(
-                height: _compactListHeight,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(width: AppSpacing.sm),
-                  itemBuilder: (_, index) => SizedBox(
-                    width: constraints.maxWidth,
-                    child: _card(items[index]),
-                  ),
+              builder: (context, constraints) => SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var index = 0; index < items.length; index++)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          right: index == items.length - 1 ? 0 : AppSpacing.sm,
+                        ),
+                        child: SizedBox(
+                          width: constraints.maxWidth,
+                          child: _card(items[index]),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             )
@@ -94,23 +92,21 @@ class AttentionItemsSection extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.count, this.onViewAll});
+  const _Header({required this.count});
 
   final int count;
-  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Flexible(
+        Expanded(
           child: Text(
             'Needs Attention',
             style: AppTypography.titleLarge.copyWith(
               fontWeight: FontWeight.w700,
               color: AppColors.onSurface,
             ),
-            overflow: TextOverflow.ellipsis,
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
@@ -135,13 +131,6 @@ class _Header extends StatelessWidget {
             ),
           ),
         ),
-        const Spacer(),
-        if (onViewAll != null)
-          AppButton.outlined(
-            text: 'View all',
-            isFullWidth: false,
-            onPressed: onViewAll,
-          ),
       ],
     );
   }

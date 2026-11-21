@@ -34,6 +34,18 @@ describe("evaluateGeofence / assertInsideGeofence", () => {
     assert.throws(() => assertInsideGeofence(far, 10, branch), { code: "failed-precondition" });
   });
 
+  it("uses the organization default when a branch radius is unset or zero", () => {
+    const near = { latitude: 12.9721, longitude: 77.5946 }; // ~55 m
+    const noRadius = { ...bangalore };
+    const zeroRadius = { ...bangalore, geofenceRadiusMeters: 0 };
+    assert.doesNotThrow(() => assertInsideGeofence(near, 10, noRadius, 100));
+    assert.doesNotThrow(() => assertInsideGeofence(near, 10, zeroRadius, 100));
+    assert.throws(
+      () => assertInsideGeofence(near, 10, noRadius, 50),
+      { code: "failed-precondition" },
+    );
+  });
+
   it("rejects poor GPS accuracy and unconfigured branches", () => {
     assert.throws(() => assertInsideGeofence(bangalore, 500, branch), { code: "failed-precondition" });
     assert.throws(() => assertInsideGeofence(bangalore, 5, { geofenceRadiusMeters: 100 }), {
@@ -60,5 +72,19 @@ describe("assertPunchAllowed", () => {
     assert.doesNotThrow(() => assertPunchAllowed("breakEnd", { checkInAt: t0, breaks: [{ startAt: t0 }] }));
     assert.throws(() => assertPunchAllowed("checkOut", { checkInAt: t0, breaks: [{ startAt: t0 }] }));
     assert.throws(() => assertPunchAllowed("breakStart", { checkInAt: t0, breaks: [{ startAt: t0 }] }));
+  });
+
+  it("can disable new breaks while still allowing an open break to end", () => {
+    assert.throws(
+      () => assertPunchAllowed("breakStart", { checkInAt: t0, breaks: [] }, false),
+      { code: "failed-precondition" },
+    );
+    assert.doesNotThrow(() =>
+      assertPunchAllowed(
+        "breakEnd",
+        { checkInAt: t0, breaks: [{ startAt: t0 }] },
+        false,
+      ),
+    );
   });
 });

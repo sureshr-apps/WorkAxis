@@ -29,6 +29,8 @@ class EmployeeHomeSummary {
   final String elapsedActivePercentText;
   final String locationStatus;
   final bool isWithinGeofence;
+  final bool requireGeolocation;
+  final bool allowBreaks;
   final double? latitude;
   final double? longitude;
   final int? geofenceRadiusMeters;
@@ -77,6 +79,8 @@ class EmployeeHomeSummary {
     this.elapsedActivePercentText = unavailable,
     required this.locationStatus,
     required this.isWithinGeofence,
+    this.requireGeolocation = true,
+    this.allowBreaks = true,
     this.latitude,
     this.longitude,
     this.geofenceRadiusMeters,
@@ -137,6 +141,8 @@ class EmployeeHomeSummary {
     double? latitude,
     double? longitude,
     int? geofenceRadiusMeters,
+    bool? requireGeolocation,
+    bool? allowBreaks,
     int? pendingReturnsCount,
     int? approvedReturnsCount,
     String? recentReturnTitle,
@@ -166,6 +172,8 @@ class EmployeeHomeSummary {
           elapsedActivePercentText ?? this.elapsedActivePercentText,
       locationStatus: locationStatus,
       isWithinGeofence: isWithinGeofence,
+      requireGeolocation: requireGeolocation ?? this.requireGeolocation,
+      allowBreaks: allowBreaks ?? this.allowBreaks,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       geofenceRadiusMeters: geofenceRadiusMeters ?? this.geofenceRadiusMeters,

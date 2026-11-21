@@ -80,6 +80,7 @@ void main() {
       expect(find.text("Today's Attendance"), findsOneWidget);
       expect(find.text('Total Staff'), findsOneWidget);
       expect(find.text('Needs Attention'), findsOneWidget);
+      expect(find.text('View all'), findsNothing);
 
       // Verify attendance breakdown pills
       expect(find.text('Present'), findsOneWidget);

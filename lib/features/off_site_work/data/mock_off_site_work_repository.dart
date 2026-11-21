@@ -132,6 +132,8 @@ class MockOffSiteWorkRepository implements OffSiteWorkRepository {
       title: draft.title.trim(),
       instructions: _optional(draft.instructions),
       destination: draft.destination.trim(),
+      destinationLatitude: draft.destinationLatitude,
+      destinationLongitude: draft.destinationLongitude,
       dueAt: draft.dueAt,
       reference: _optional(draft.reference),
       requiredEvidenceDescription: _optional(draft.requiredEvidenceDescription),

@@ -7,6 +7,8 @@ import 'package:workaxis/core/responsive/content_width_scope.dart';
 import 'package:workaxis/core/responsive/responsive_sliver_page.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
+import 'package:workaxis/core/time/business_time.dart';
+import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/core/widgets/kpi/app_kpi_card.dart';
 import 'package:workaxis/core/widgets/kpi/responsive_kpi_section.dart';
@@ -15,6 +17,7 @@ import 'package:workaxis/features/access/presentation/controllers/branch_context
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/reports/domain/models/operational_report_summary.dart';
 import 'package:workaxis/features/reports/domain/models/report_period.dart';
+import 'package:workaxis/features/reports/domain/models/report_date_range.dart';
 import 'package:workaxis/features/reports/presentation/controllers/reports_controller.dart';
 import 'package:workaxis/features/reports/presentation/report_presentation.dart';
 import 'package:workaxis/features/reports/presentation/screens/widgets/branch_performance_card.dart';
@@ -63,6 +66,35 @@ class _OperationalReportsScreenState extends State<OperationalReportsScreen> {
     );
   }
 
+  Future<void> _selectCustomDateRange(ReportsController controller) async {
+    final access = context.read<AccessController>().accessContext;
+    if (access == null) return;
+    final today = BusinessTime.today(systemNow);
+    final selectedRange = controller.selectedDateRange;
+    final initialDateRange = selectedRange == null
+        ? DateTimeRange(
+            start: today.subtract(const Duration(days: 6)),
+            end: today,
+          )
+        : DateTimeRange(
+            start: selectedRange.startDate,
+            end: selectedRange.endDate,
+          );
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: today,
+      initialDateRange: initialDateRange,
+      helpText: 'Select report dates',
+    );
+    if (!mounted || range == null) return;
+    await controller.setDateRange(
+      ReportDateRange(startDate: range.start, endDate: range.end),
+      access: access,
+      activeBranchId: _activeBranchId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ReportsController>();
@@ -105,6 +137,8 @@ class _OperationalReportsScreenState extends State<OperationalReportsScreen> {
               child: ReportPeriodSelector(
                 selected: controller.selectedPeriod,
                 onSelected: (period) => _selectPeriod(controller, period),
+                selectedDateRange: controller.selectedDateRange,
+                onCustomRangeSelected: () => _selectCustomDateRange(controller),
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),

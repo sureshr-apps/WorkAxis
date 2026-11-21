@@ -8,6 +8,7 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/reports/data/report_period_range.dart';
 import 'package:workaxis/features/reports/data/reports_remote.dart';
 import 'package:workaxis/features/reports/domain/models/operational_report_summary.dart';
+import 'package:workaxis/features/reports/domain/models/report_date_range.dart';
 import 'package:workaxis/features/reports/domain/models/report_period.dart';
 import 'package:workaxis/features/reports/domain/repositories/reports_repository.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
@@ -40,13 +41,16 @@ class SqlConnectReportsRepository implements ReportsRepository {
     required UserAccessContext access,
     String? activeBranchId,
     ReportPeriod period = ReportPeriod.thisWeek,
+    ReportDateRange? dateRange,
   }) async {
     try {
       final orgId = access.organization?.id;
       if (orgId == null || orgId.isEmpty) {
         throw const AccessDeniedException('No organization context.');
       }
-      final range = ReportPeriodRange.resolve(period, _now);
+      final range = dateRange == null
+          ? ReportPeriodRange.resolve(period, _now)
+          : ReportPeriodRange.resolveDateRange(dateRange);
 
       final List<BranchSummary> branches;
       final ReportReturnStats stats;
@@ -87,6 +91,7 @@ class SqlConnectReportsRepository implements ReportsRepository {
       ];
       return OperationalReportSummary(
         period: period,
+        dateRange: dateRange,
         returnVolume: stats.byBranch.values.fold(
           0,
           (sum, count) => sum + count,

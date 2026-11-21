@@ -96,15 +96,19 @@ class ActiveGeofenceCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             StatusChip(
-              label: summary.isWithinGeofence
+              label: !summary.requireGeolocation
+                  ? 'GPS not required'
+                  : summary.isWithinGeofence
                   ? 'Inside geofence'
                   : 'Outside geofence',
-              type: summary.isWithinGeofence
+              type: !summary.requireGeolocation
+                  ? StatusType.neutral
+                  : summary.isWithinGeofence
                   ? StatusType.active
                   : StatusType.urgent,
               width: null,
             ),
-            if (onRefreshLocation != null) ...[
+            if (onRefreshLocation != null && summary.requireGeolocation) ...[
               const SizedBox(width: AppSpacing.xs),
               AppIconButton(
                 icon: Icons.refresh,
@@ -139,7 +143,9 @@ class ActiveGeofenceCard extends StatelessWidget {
               latitude: summary.latitude,
               longitude: summary.longitude,
               geofenceRadiusMeters: summary.geofenceRadiusMeters,
-              isWithinGeofence: summary.isWithinGeofence,
+              isWithinGeofence:
+                  !summary.requireGeolocation || summary.isWithinGeofence,
+              showMyLocation: summary.requireGeolocation,
               branchName: summary.branchName,
             ),
             if (hasFence)

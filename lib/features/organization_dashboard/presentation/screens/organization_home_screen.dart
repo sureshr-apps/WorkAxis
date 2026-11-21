@@ -101,7 +101,6 @@ class _DashboardBody extends StatelessWidget {
     final attentionSection = AttentionItemsSection(
       items: summary.attentionItems,
       branchScope: false,
-      onViewAll: () => context.go(AppRoutes.orgAdminAttendance),
       onItemAction: (_, route) => context.go(route),
     );
 

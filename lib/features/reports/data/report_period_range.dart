@@ -1,5 +1,6 @@
 import 'package:workaxis/core/time/business_time.dart';
 import 'package:workaxis/core/time/clock.dart';
+import 'package:workaxis/features/reports/domain/models/report_date_range.dart';
 import 'package:workaxis/features/reports/domain/models/report_period.dart';
 
 /// Half-open instant range `[from, to)` a [ReportPeriod] covers.
@@ -33,10 +34,36 @@ abstract final class ReportPeriodRange {
         end = DateTime(today.year, today.month);
       case ReportPeriod.quarterToDate:
         start = DateTime(today.year, ((today.month - 1) ~/ 3) * 3 + 1);
+      case ReportPeriod.customRange:
+        throw ArgumentError.value(
+          period,
+          'period',
+          'A custom range must be resolved from its selected dates.',
+        );
     }
     return ReportRange(
       from: BusinessTime.startOfDay(start),
       to: BusinessTime.startOfDay(end),
+    );
+  }
+
+  /// Resolves inclusive business-calendar dates to `[start, dayAfterEnd)`.
+  static ReportRange resolveDateRange(ReportDateRange range) {
+    if (!range.isValid) {
+      throw ArgumentError.value(
+        range,
+        'range',
+        'End date precedes start date.',
+      );
+    }
+    final dayAfterEnd = DateTime(
+      range.endDate.year,
+      range.endDate.month,
+      range.endDate.day + 1,
+    );
+    return ReportRange(
+      from: BusinessTime.startOfDay(range.startDate),
+      to: BusinessTime.startOfDay(dayAfterEnd),
     );
   }
 }

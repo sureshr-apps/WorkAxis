@@ -22,7 +22,11 @@ export interface DayState {
 }
 
 /** Throws unless `kind` is a legal next punch for the day's state. */
-export function assertPunchAllowed(kind: PunchKind, state: DayState): void {
+export function assertPunchAllowed(
+  kind: PunchKind,
+  state: DayState,
+  allowBreaks = true,
+): void {
   const openBreak = state.breaks.some((b) => !b.endAt);
   switch (kind) {
     case "checkIn":
@@ -34,6 +38,9 @@ export function assertPunchAllowed(kind: PunchKind, state: DayState): void {
       if (openBreak) throw precondition("End your break before checking out.");
       return;
     case "breakStart":
+      if (!allowBreaks) {
+        throw precondition("Mid-shift break recording is disabled by your organization.");
+      }
       if (!state.checkInAt || state.checkOutAt) throw precondition("You are not on shift.");
       if (openBreak) throw precondition("A break is already in progress.");
       return;
@@ -54,11 +61,19 @@ export function assertInsideGeofence(
   fix: LatLng,
   accuracyMeters: number,
   branch: GeofenceBranch,
+  defaultRadiusMeters = 150,
 ): number {
+  const radius =
+    branch.geofenceRadiusMeters !== undefined &&
+    Number.isFinite(branch.geofenceRadiusMeters) &&
+    branch.geofenceRadiusMeters > 0
+      ? branch.geofenceRadiusMeters
+      : Number.isFinite(defaultRadiusMeters) && defaultRadiusMeters > 0
+        ? defaultRadiusMeters
+        : 150;
   if (
     branch.latitude === undefined ||
     branch.longitude === undefined ||
-    branch.geofenceRadiusMeters === undefined ||
     (branch.latitude === 0 && branch.longitude === 0)
   ) {
     throw precondition("This branch has no geofence configured.");
@@ -69,7 +84,7 @@ export function assertInsideGeofence(
   const r = evaluateGeofence(
     fix,
     { latitude: branch.latitude, longitude: branch.longitude },
-    branch.geofenceRadiusMeters,
+    radius,
   );
   if (!r.inside) throw precondition("You are outside the branch geofence.");
   return r.distanceMeters;
