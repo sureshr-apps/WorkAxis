@@ -44,6 +44,7 @@ dependencies:
   cloud_functions: ^7.0.1
   geolocator: ^14.0.2
   google_maps_flutter: ^2.19.0
+  flutter_image_compress: ^2.5.1
   image_picker: ^1.2.4
   firebase_storage: ^14.0.1
   url_launcher: 6.3.3
