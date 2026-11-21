@@ -90,19 +90,23 @@ class MockOffSiteWorkRepository implements OffSiteWorkRepository {
       throw const AccessDeniedException('Branch not found or access denied.');
     }
     final organizationId = _requireOrganization(access);
-    final employees = await _allEmployees(
+    final assignees = await _allEligibleAssignees(
       access,
       activeBranchId: access.user.role == UserRole.branchManager
           ? activeBranchId
           : null,
     );
-    final employee = employees.where((member) {
-      return member.id == draft.employeeMemberId &&
+    final assignee = assignees.where((member) {
+      final allowedRole =
+          access.user.role == UserRole.orgAdmin ||
+          member.role == UserRole.employee;
+      return allowedRole &&
+          member.id == draft.employeeMemberId &&
           member.branchIds.contains(draft.branchId) &&
           member.status == AccountStatus.active;
     }).firstOrNull;
-    if (employee == null || employee.authUid == null) {
-      throw ValidationException('Choose an active employee at this branch.');
+    if (assignee == null || assignee.authUid == null) {
+      throw ValidationException('Choose an active assignee at this branch.');
     }
     final branch = access.assignedBranches
         .where((candidate) => candidate.id == draft.branchId)
@@ -124,9 +128,9 @@ class MockOffSiteWorkRepository implements OffSiteWorkRepository {
       organizationId: organizationId,
       branchId: branch.id,
       branchName: branch.name,
-      employeeMemberId: employee.id,
-      employeeUid: employee.authUid!,
-      employeeName: employee.fullName,
+      employeeMemberId: assignee.id,
+      employeeUid: assignee.authUid!,
+      employeeName: assignee.fullName,
       assignedByUid: access.user.id,
       assignedByName: access.user.name,
       title: draft.title.trim(),
@@ -147,6 +151,34 @@ class MockOffSiteWorkRepository implements OffSiteWorkRepository {
   }
 
   @override
+  Future<void> deleteAssignment({
+    required UserAccessContext access,
+    required String assignmentId,
+    String? activeBranchId,
+  }) async {
+    if (access.user.role != UserRole.orgAdmin &&
+        access.user.role != UserRole.branchManager) {
+      throw const AccessDeniedException(
+        'Only managers can delete assignments.',
+      );
+    }
+    final assignment = await getAssignment(
+      access: access,
+      assignmentId: assignmentId,
+      activeBranchId: activeBranchId,
+    );
+    if (assignment.status != OffSiteWorkStatus.assigned ||
+        assignment.events.any(
+          (event) => event.type != OffSiteWorkEventType.assigned,
+        )) {
+      throw ValidationException(
+        'Only assignments that have not started can be deleted.',
+      );
+    }
+    _assignments.remove(assignmentId);
+  }
+
+  @override
   Future<OffSiteWorkAssignment> recordMilestone({
     required UserAccessContext access,
     String? activeBranchId,
@@ -160,9 +192,11 @@ class MockOffSiteWorkRepository implements OffSiteWorkRepository {
       assignmentId: assignmentId,
       activeBranchId: activeBranchId,
     );
-    if (access.user.role != UserRole.employee) {
+    if ((access.user.role != UserRole.employee &&
+            access.user.role != UserRole.branchManager) ||
+        assignment.employeeUid != access.user.id) {
       throw const AccessDeniedException(
-        'Only the assigned employee can update this assignment.',
+        'Only the assigned person can update this assignment.',
       );
     }
     if (milestone == OffSiteWorkMilestone.unableToComplete &&
@@ -233,24 +267,29 @@ class MockOffSiteWorkRepository implements OffSiteWorkRepository {
     return updated;
   }
 
-  Future<List<OrganizationMember>> _allEmployees(
+  Future<List<OrganizationMember>> _allEligibleAssignees(
     UserAccessContext access, {
     String? activeBranchId,
   }) async {
     final result = <OrganizationMember>[];
-    var offset = 0;
-    while (result.length < 1000) {
-      final page = await members.getMembersPage(
-        access: access,
-        activeBranchId: activeBranchId,
-        role: UserRole.employee,
-        status: AccountStatus.active,
-        offset: offset,
-        limit: 100,
-      );
-      result.addAll(page.items);
-      if (!page.hasMore) break;
-      offset = page.nextOffset;
+    final roles = access.user.role == UserRole.orgAdmin
+        ? const [UserRole.employee, UserRole.branchManager]
+        : const [UserRole.employee];
+    for (final role in roles) {
+      var offset = 0;
+      while (result.length < 1000) {
+        final page = await members.getMembersPage(
+          access: access,
+          activeBranchId: activeBranchId,
+          role: role,
+          status: AccountStatus.active,
+          offset: offset,
+          limit: 100,
+        );
+        result.addAll(page.items);
+        if (!page.hasMore) break;
+        offset = page.nextOffset;
+      }
     }
     return result;
   }

@@ -51,29 +51,32 @@ service firebase.storage {
       allow create: if isOrgManager(orgId) && validImage();
     }
 
-    // Attendance selfies are uploaded by the employee to a branch/employee
-    // path. Only Org Admins and managers assigned to that branch can read them.
+    // Attendance selfies are uploaded only to the caller's own branch/user
+    // path. The punch callable checks the Branch Manager setting before saving
+    // a punch; branch managers assigned to the path's branch and Org Admins
+    // can review the images.
     match /organizations/{orgId}/attendance-selfies/{branchId}/{employeeUid}/{file} {
       allow read: if isOrgAdmin(orgId) ||
         isBranchManagerOf(orgId, branchId) ||
         (inOrg(orgId) && request.auth.token.role == 'employee' &&
           request.auth.uid == employeeUid);
       allow create: if inOrg(orgId) &&
-        request.auth.token.role == 'employee' &&
+        request.auth.token.role in ['employee', 'branchManager'] &&
         request.auth.uid == employeeUid &&
         request.auth.token.get('branchIds', []).hasAny([branchId]) &&
         validImage();
     }
 
-    // Evidence is uploaded by the assigned employee into a branch and
-    // assignment-specific path. Managers can read evidence only in their scope.
+    // Evidence objects must use the uploader's own user path. The off-site
+    // work operation verifies that the caller is the assigned person before
+    // saving a reference. Managers can read evidence in their scope.
     match /organizations/{orgId}/off-site-work-evidence/{branchId}/{employeeUid}/{assignmentId}/{file} {
       allow read: if isOrgAdmin(orgId) ||
         isBranchManagerOf(orgId, branchId) ||
         (inOrg(orgId) && request.auth.token.role == 'employee' &&
           request.auth.uid == employeeUid);
       allow create: if inOrg(orgId) &&
-        request.auth.token.role == 'employee' &&
+        request.auth.token.role in ['employee', 'branchManager'] &&
         request.auth.uid == employeeUid &&
         request.auth.token.get('branchIds', []).hasAny([branchId]) &&
         validImage();

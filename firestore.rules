@@ -19,7 +19,7 @@ rules_version = '2';
 //       aadhaarPhotoUrl?, updatedAt }  sensitive HR data; read by the active Org Admin
 //       of that org, an assigned Branch Manager for employees in their branches,
 //       and by the employee themself; platform roles denied
-//   attendance_entries/{entryId}   employees' punches are written by the
+//   attendance_entries/{entryId}   self-service punches are written by the
 //       recordAttendancePunch / recordGroupAttendance callables; managers
 //       may only review existing entries in their scope
 //   group_attendance_batches/{batchId}  immutable audit log
@@ -189,7 +189,7 @@ service cloud.firestore {
         resource.data.employeeId == request.auth.uid
       );
 
-      // Employee punches are written by the recordAttendancePunch callable.
+      // Self-service punches are written by the recordAttendancePunch callable.
       // Group membership and effective time require authoritative SQL checks.
       allow create: if false; // Trusted recordGroupAttendance callable only.
 
@@ -252,6 +252,7 @@ service cloud.firestore {
           'allowBreaks', 'requireGeolocation', 'dailyDigest', 'returnAlerts',
           'requireEmployeeAssetAcknowledgement',
           'requireAttendanceSelfie',
+          'requireBranchManagerAttendance',
           'operationsEmail', 'emergencyPhone', 'updatedBy', 'updatedAt'
         ]) &&
         hasRequiredFields([
@@ -270,6 +271,8 @@ service cloud.firestore {
           data.requireEmployeeAssetAcknowledgement is bool) &&
         (!('requireAttendanceSelfie' in data) ||
           data.requireAttendanceSelfie is bool) &&
+        (!('requireBranchManagerAttendance' in data) ||
+          data.requireBranchManagerAttendance is bool) &&
         isValidOptionalString('operationsEmail', 3, 254) &&
         isValidOptionalString('emergencyPhone', 1, 32) &&
         data.updatedBy == request.auth.uid &&

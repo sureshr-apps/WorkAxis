@@ -6,11 +6,14 @@ import { denied, guarded } from "../errors";
 
 const DEFAULT_GEOFENCE_RADIUS_METERS = 150;
 
-/** Returns the employee attendance policies needed by the app before a punch. */
+/** Returns self-service attendance policies needed by the app before a punch. */
 export const getAttendanceSelfiePolicy = onCall(callableOptions, (request) =>
   guarded(async () => {
     const actor = await resolveActor(request);
-    if (actor.role !== "employee" || !actor.organizationId) throw denied();
+    if (
+      (actor.role !== "employee" && actor.role !== "branchManager") ||
+      !actor.organizationId
+    ) throw denied();
 
     const settings = await getFirestore()
       .collection("organization_settings")
@@ -20,6 +23,8 @@ export const getAttendanceSelfiePolicy = onCall(callableOptions, (request) =>
     return {
       requireAttendanceSelfie:
         settings.get("requireAttendanceSelfie") !== false,
+      requireBranchManagerAttendance:
+        settings.get("requireBranchManagerAttendance") === true,
       requireGeolocation: settings.get("requireGeolocation") !== false,
       allowBreaks: settings.get("allowBreaks") !== false,
       defaultGeofenceRadiusMeters:

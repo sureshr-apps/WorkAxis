@@ -33,6 +33,8 @@ class _OrganizationSettingsScreenState
       OrganizationSettings.defaults.requireEmployeeAssetAcknowledgement;
   bool _requireAttendanceSelfie =
       OrganizationSettings.defaults.requireAttendanceSelfie;
+  bool _requireBranchManagerAttendance =
+      OrganizationSettings.defaults.requireBranchManagerAttendance;
 
   /// The loaded settings the form fields were last populated from.
   OrganizationSettings? _populatedFrom;
@@ -63,6 +65,7 @@ class _OrganizationSettingsScreenState
     _requireEmployeeAssetAcknowledgement =
         settings.requireEmployeeAssetAcknowledgement;
     _requireAttendanceSelfie = settings.requireAttendanceSelfie;
+    _requireBranchManagerAttendance = settings.requireBranchManagerAttendance;
   }
 
   /// Unparseable numbers become -1 so validation reports the allowed range.
@@ -76,6 +79,7 @@ class _OrganizationSettingsScreenState
     returnAlerts: _returnAlerts,
     requireEmployeeAssetAcknowledgement: _requireEmployeeAssetAcknowledgement,
     requireAttendanceSelfie: _requireAttendanceSelfie,
+    requireBranchManagerAttendance: _requireBranchManagerAttendance,
     operationsEmail: _blankToNull(_emailController.text),
     emergencyPhone: _blankToNull(_phoneController.text),
   );
@@ -142,7 +146,7 @@ class _OrganizationSettingsScreenState
       eyebrow: 'Enterprise Administration',
       title: 'Organization Settings',
       subtitle: 'Manage asset receipt acknowledgment, attendance selfie verification, and organization contacts.',
-      notice: 'Attendance selfie verification applies to employee self-service check-in, check-out, break start, and resume actions. Manager-recorded group attendance is unchanged. Asset acknowledgments already pending remain open if that setting is turned off.',
+      notice: 'Attendance selfie verification applies to employee self-service and to Branch Managers when their attendance workflow is enabled. It covers check-in, check-out, break start, and resume actions. Manager-recorded group attendance is unchanged. Asset acknowledgments already pending remain open if that setting is turned off.',
       controller: settings,
       status: settings.organizationStatus,
       hasLoaded: loaded != null,
@@ -223,6 +227,20 @@ class _OrganizationSettingsScreenState
             },
             title: 'Require selfie for attendance',
             subtitle: 'Employees must take a selfie when checking in, checking out, starting a break, and resuming work. Organization Admins and Branch Managers can view each selfie in attendance records.',
+          ),
+        ),
+        SettingsSectionCard(
+          icon: Icons.badge_outlined,
+          title: 'Branch Manager Attendance',
+          subtitle: 'Require Branch Managers to record their own attendance',
+          child: SettingsSwitchTile(
+            value: _requireBranchManagerAttendance,
+            onChanged: (value) {
+              setState(() => _requireBranchManagerAttendance = value);
+              _edited();
+            },
+            title: 'Require Branch Manager check-in and check-out',
+            subtitle: 'When enabled, Branch Managers use the same GPS, selfie, and break rules as employees for their own attendance.',
           ),
         ),
         SettingsSectionCard(

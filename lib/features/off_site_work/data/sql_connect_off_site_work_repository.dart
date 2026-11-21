@@ -82,6 +82,24 @@ class SqlConnectOffSiteWorkRepository implements OffSiteWorkRepository {
   }
 
   @override
+  Future<void> deleteAssignment({
+    required UserAccessContext access,
+    required String assignmentId,
+    String? activeBranchId,
+  }) async {
+    try {
+      await remote.delete(
+        assignmentId: assignmentId,
+        activeBranchId: access.user.role == UserRole.branchManager
+            ? activeBranchId
+            : null,
+      );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
   Future<OffSiteWorkAssignment> recordMilestone({
     required UserAccessContext access,
     String? activeBranchId,
@@ -98,10 +116,11 @@ class SqlConnectOffSiteWorkRepository implements OffSiteWorkRepository {
         assignmentId: assignmentId,
         activeBranchId: managerBranch,
       );
-      if (access.user.role != UserRole.employee ||
+      if ((access.user.role != UserRole.employee &&
+              access.user.role != UserRole.branchManager) ||
           assignment.employeeUid != access.user.id) {
         throw ValidationException(
-          'Only the assigned employee can update this assignment.',
+          'Only the assigned person can update this assignment.',
         );
       }
       if (milestone == OffSiteWorkMilestone.unableToComplete &&

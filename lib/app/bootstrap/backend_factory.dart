@@ -289,8 +289,15 @@ class BackendFactory {
           ? MockBranchDashboardRepository()
           : MockBranchDashboardRepository(delay: delay),
       employeeRepository: delay == null
-          ? MockEmployeeHomeRepository()
-          : MockEmployeeHomeRepository(delay: delay),
+          ? MockEmployeeHomeRepository(
+              branchManagerAttendanceLookup:
+                  settingsRepository.branchManagerAttendanceRequired,
+            )
+          : MockEmployeeHomeRepository(
+              delay: delay,
+              branchManagerAttendanceLookup:
+                  settingsRepository.branchManagerAttendanceRequired,
+            ),
       branchManagementRepository: MockBranchManagementRepository(
         accessDataSource: accessDataSource,
       ),

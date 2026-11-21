@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
@@ -12,7 +10,6 @@ import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
-import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/presentation/controllers/employee_home_controller.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/active_geofence_card.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/attendance_summary_card.dart';
@@ -21,6 +18,7 @@ import 'package:workaxis/features/employee_home/presentation/screens/widgets/her
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/home_header_badges.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/shift_simulator_bar.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/today_assignment_card.dart';
+import 'package:workaxis/features/employee_home/presentation/services/self_attendance_action_coordinator.dart';
 
 /// Employee Home screen implementing the approved Stitch design.
 class EmployeeHomeScreen extends StatefulWidget {
@@ -197,79 +195,12 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   Future<void> _handlePrimaryAction(
     EmployeeHomeController controller, {
     bool checkOut = false,
-  }) async {
-    if (_isPreparingAttendanceAction || controller.isActionProcessing) return;
-    final action = checkOut
-        ? AttendanceAction.checkOut
-        : controller.summary?.currentStatus.nextAction;
-    if (action == null) return;
-
-    setState(() => _isPreparingAttendanceAction = true);
-    try {
-      final policy = await controller.checkAttendancePolicy();
-      if (!mounted) return;
-      if (policy == null) {
-        _showActionMessage(
-          controller.actionErrorMessage ??
-              'Attendance settings could not be checked. Try again.',
-        );
-        return;
-      }
-      if (action == AttendanceAction.startBreak && !policy.allowBreaks) {
-        _showActionMessage(
-          'Mid-shift break recording is disabled by your organization.',
-        );
-        return;
-      }
-
-      String? selfieLocalPath;
-      if (policy.requireAttendanceSelfie) {
-        try {
-          final image = await ImagePicker().pickImage(
-            source: ImageSource.camera,
-            preferredCameraDevice: CameraDevice.front,
-            imageQuality: 85,
-            maxWidth: 1280,
-          );
-          if (!mounted) return;
-          if (image == null) {
-            _showActionMessage('Take a selfie to record this action.');
-            return;
-          }
-          selfieLocalPath = image.path;
-        } on PlatformException {
-          if (!mounted) return;
-          _showActionMessage(
-            'Camera access is required to record this attendance action.',
-          );
-          return;
-        }
-      }
-
-      final recorded = await controller.recordAttendanceAction(
-        action,
-        policy: policy,
-        selfieLocalPath: selfieLocalPath,
-      );
-      if (!mounted) return;
-      _showActionMessage(
-        recorded
-            ? 'Attendance updated: ${controller.summary?.currentStatus.displayName}'
-            : (controller.actionErrorMessage ??
-                  'Attendance could not be recorded.'),
-      );
-    } finally {
-      if (mounted) setState(() => _isPreparingAttendanceAction = false);
-    }
-  }
-
-  void _showActionMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
+  }) => SelfAttendanceActionCoordinator.perform(
+    context: context,
+    controller: controller,
+    checkOut: checkOut,
+    onPreparingChanged: (value) {
+      if (mounted) setState(() => _isPreparingAttendanceAction = value);
+    },
+  );
 }

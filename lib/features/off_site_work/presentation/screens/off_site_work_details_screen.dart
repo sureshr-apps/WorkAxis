@@ -16,6 +16,7 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/off_site_work/domain/models/off_site_work_assignment.dart';
 import 'package:workaxis/features/off_site_work/presentation/controllers/off_site_work_controller.dart';
 import 'package:workaxis/features/off_site_work/presentation/widgets/off_site_work_event_card.dart';
+import 'package:workaxis/features/off_site_work/presentation/widgets/off_site_work_delete_dialog.dart';
 import 'package:workaxis/features/off_site_work/presentation/widgets/off_site_work_milestone_dialog.dart';
 import 'package:workaxis/features/off_site_work/presentation/widgets/off_site_work_directions.dart';
 import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
@@ -202,6 +203,29 @@ class _OffSiteWorkDetailsScreenState extends State<OffSiteWorkDetailsScreen> {
     );
   }
 
+  Future<void> _delete(OffSiteWorkAssignment assignment) async {
+    if (!mounted) return;
+    final access = context.read<AccessController>().accessContext;
+    if (access == null) return;
+    final controller = context.read<OffSiteWorkController>()
+      ..clearActionError();
+    final deleted = await showOffSiteWorkDeleteDialog(
+      context: context,
+      onDelete: () => controller.deleteAssignment(
+        access: access,
+        activeBranchId: access.user.role == UserRole.branchManager
+            ? _activeBranchId
+            : null,
+        assignmentId: assignment.id,
+      ),
+      failureMessage: () => controller.actionErrorMessage,
+    );
+    if (!mounted || deleted != true) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Off-site work deleted.')));
+    context.go(widget.listRoute);
+  }
+
   Widget _employeeActions(
     BuildContext context,
     UserRole role,
@@ -292,9 +316,12 @@ class _OffSiteWorkDetailsScreenState extends State<OffSiteWorkDetailsScreen> {
     }
     final role = access?.user.role;
     final canUpdate =
-        role == UserRole.employee &&
+        (role == UserRole.employee || role == UserRole.branchManager) &&
         assignment.employeeUid == access?.user.id &&
         assignment.status != OffSiteWorkStatus.returned;
+    final canDelete =
+        (role == UserRole.orgAdmin || role == UserRole.branchManager) &&
+        assignment.status == OffSiteWorkStatus.assigned;
 
     return Scaffold(
       body: SafeArea(
@@ -330,11 +357,10 @@ class _OffSiteWorkDetailsScreenState extends State<OffSiteWorkDetailsScreen> {
                       value: assignment.destination,
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    AppButton.outlined(
+                    AppButton.link(
                       text: 'Directions',
                       iconData: Icons.directions_outlined,
                       onPressed: () => _openDirections(assignment),
-                      isFullWidth: false,
                     ),
                     const SizedBox(height: AppSpacing.md),
                     _DetailLine(label: 'Branch', value: assignment.branchName),
@@ -396,6 +422,17 @@ class _OffSiteWorkDetailsScreenState extends State<OffSiteWorkDetailsScreen> {
                         assignment,
                         controller.isSaving,
                       ),
+                    if (canDelete) ...[
+                      if (canUpdate) const SizedBox(height: AppSpacing.sm),
+                      AppButton.destructive(
+                        text: 'Delete assignment',
+                        iconData: Icons.delete_outline,
+                        isLoading: controller.isSaving,
+                        onPressed: controller.isSaving
+                            ? null
+                            : () => _delete(assignment),
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       'Location is recorded at milestones only. WorkAxis does not track your route, and these actions do not change attendance.',

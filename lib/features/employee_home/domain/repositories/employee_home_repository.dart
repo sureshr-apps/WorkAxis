@@ -4,9 +4,9 @@ import 'package:workaxis/features/employee_home/domain/models/employee_attendanc
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 
 /// Stable repository contract for Employee Home operations. Everything is
-/// scoped to the signed-in employee in [UserAccessContext].
+/// scoped to the signed-in self-service user in [UserAccessContext].
 abstract interface class EmployeeHomeRepository {
-  /// Today's summary for the employee in [access].
+  /// Today's summary for the employee or enabled Branch Manager in [access].
   ///
   /// Loading never shows the OS location-permission prompt. Pass
   /// [requestLocationPermission] only from an explicit user action (such as

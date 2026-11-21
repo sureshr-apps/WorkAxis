@@ -19,6 +19,12 @@ abstract interface class OffSiteWorkRepository {
     required OffSiteWorkAssignmentDraft draft,
   });
 
+  Future<void> deleteAssignment({
+    required UserAccessContext access,
+    required String assignmentId,
+    String? activeBranchId,
+  });
+
   /// Captures one current GPS fix and records a single milestone. It never
   /// watches location updates or changes attendance state.
   Future<OffSiteWorkAssignment> recordMilestone({

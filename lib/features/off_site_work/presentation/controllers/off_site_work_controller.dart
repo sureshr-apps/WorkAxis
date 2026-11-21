@@ -96,6 +96,19 @@ class OffSiteWorkController extends ChangeNotifier
     _replace(saved);
   }, fallback: 'The assignment could not be created.');
 
+  Future<bool> deleteAssignment({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required String assignmentId,
+  }) => _perform(() async {
+    await repository.deleteAssignment(
+      access: access,
+      activeBranchId: activeBranchId,
+      assignmentId: assignmentId,
+    );
+    _items = _items.where((item) => item.id != assignmentId).toList();
+  }, fallback: 'The assignment could not be deleted. Refresh and try again.');
+
   Future<bool> recordMilestone({
     required UserAccessContext access,
     String? activeBranchId,

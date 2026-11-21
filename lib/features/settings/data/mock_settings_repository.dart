@@ -22,6 +22,10 @@ class MockSettingsRepository implements SettingsRepository {
       _organizations[organizationId]?.requireEmployeeAssetAcknowledgement ??
       OrganizationSettings.defaults.requireEmployeeAssetAcknowledgement;
 
+  bool branchManagerAttendanceRequired(String organizationId) =>
+      _organizations[organizationId]?.requireBranchManagerAttendance ??
+      OrganizationSettings.defaults.requireBranchManagerAttendance;
+
   Future<void> _latency() async {
     if (delay > Duration.zero) await Future<void>.delayed(delay);
   }

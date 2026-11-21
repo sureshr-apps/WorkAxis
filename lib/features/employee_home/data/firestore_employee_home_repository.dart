@@ -22,7 +22,7 @@ import 'package:workaxis/features/employee_home/domain/services/attendance_locat
 
 /// Production [EmployeeHomeRepository].
 ///
-/// Reads the employee's own entry for today from `attendance_entries`
+/// Reads the signed-in user's own entry for today from `attendance_entries`
 /// (queried by uid, as `firestore.rules` require). Punches are recorded only
 /// through the `recordAttendancePunch` callable: the server stamps the time,
 /// computes the business day and validates the geofence. When required, the
@@ -61,8 +61,9 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     bool requestLocationPermission = false,
   }) async {
     try {
-      _requireEmployee(access);
+      _requireAttendanceUser(access);
       final policy = await _fetchAttendancePolicy();
+      _requireManagerAttendanceEnabled(access, policy);
       final entry = await _todayEntry(access.user.id);
       return await _summarize(
         access,
@@ -80,7 +81,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     required UserAccessContext access,
   }) async {
     try {
-      _requireEmployee(access);
+      _requireAttendanceUser(access);
       return await _fetchAttendancePolicy();
     } catch (e, st) {
       throw mapBackendError(e, st);
@@ -95,9 +96,10 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     String? selfieLocalPath,
   }) async {
     try {
-      _requireEmployee(access);
+      _requireAttendanceUser(access);
       final branch = _punchBranch(access);
       final attendancePolicy = policy ?? await _fetchAttendancePolicy();
+      _requireManagerAttendanceEnabled(access, attendancePolicy);
       String? selfiePath;
       if (selfieLocalPath != null) {
         final storage = _selfieStorage;
@@ -166,17 +168,34 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         EmployeeAttendancePolicy.defaults.allowBreaks,
       ),
       defaultGeofenceRadiusMeters: defaultRadius,
+      requireBranchManagerAttendance: readPolicyFlag(
+        'requireBranchManagerAttendance',
+        EmployeeAttendancePolicy.defaults.requireBranchManagerAttendance,
+      ),
     );
   }
 
-  void _requireEmployee(UserAccessContext access) {
-    if (access.user.role != UserRole.employee) {
+  void _requireAttendanceUser(UserAccessContext access) {
+    if (access.user.role != UserRole.employee &&
+        access.user.role != UserRole.branchManager) {
       throw const AccessDeniedException(
-        'Employee home is only available to employees.',
+        'Self-service attendance is only available to employees and Branch Managers.',
       );
     }
     if (access.organization == null) {
       throw const AccessDeniedException('No organization context.');
+    }
+  }
+
+  void _requireManagerAttendanceEnabled(
+    UserAccessContext access,
+    EmployeeAttendancePolicy policy,
+  ) {
+    if (access.user.role == UserRole.branchManager &&
+        !policy.requireBranchManagerAttendance) {
+      throw const AccessDeniedException(
+        'Branch Manager attendance is disabled by your organization.',
+      );
     }
   }
 

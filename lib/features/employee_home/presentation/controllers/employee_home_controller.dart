@@ -127,7 +127,10 @@ class EmployeeHomeController extends ChangeNotifier
 
   /// Reads the current organization policy immediately before a punch. A null
   /// result means the policy could not be verified.
-  Future<EmployeeAttendancePolicy?> checkAttendancePolicy() async {
+  Future<EmployeeAttendancePolicy?> checkAttendancePolicy({
+    UserAccessContext? userAccess,
+  }) async {
+    if (userAccess != null) _access = userAccess;
     final access = _access;
     if (access == null) {
       _actionErrorMessage = 'Sign in again before recording attendance.';

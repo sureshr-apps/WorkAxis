@@ -42,7 +42,7 @@ function readState(data: FirebaseFirestore.DocumentData | undefined): DayState {
 }
 
 /**
- * recordAttendancePunch (callable, asia-south1) - Employees only.
+ * recordAttendancePunch (callable, asia-south1) - Employee and enabled Branch Manager self-service.
  * Request:  { kind: 'checkIn'|'checkOut'|'breakStart'|'breakEnd', branchId,
  *             latitude?, longitude?, accuracyMeters?, selfiePath? }
  * Response: { entryId, kind, recordedAt (ISO), workDate, distanceMeters: number | null }
@@ -52,7 +52,9 @@ function readState(data: FirebaseFirestore.DocumentData | undefined): DayState {
 export const recordAttendancePunch = onCall(callableOptions, (request) =>
   guarded(async () => {
     const actor = await resolveActor(request);
-    if (actor.role !== "employee") throw denied();
+    if (actor.role !== "employee" && actor.role !== "branchManager") {
+      throw denied();
+    }
 
     const bag = asBag(request.data);
     const kind: PunchKind = reqEnum(bag, "kind", PUNCH_KINDS);
@@ -88,6 +90,12 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
       distanceMeters = null;
       const snap = await tx.get(ref);
       const settings = await tx.get(settingsRef);
+      if (
+        actor.role === "branchManager" &&
+        settings.get("requireBranchManagerAttendance") !== true
+      ) {
+        throw denied("Branch Manager attendance is disabled by your organization.");
+      }
       const selfieRequired = settings.get("requireAttendanceSelfie") !== false;
       if (selfieRequired && !selfiePath) {
         throw precondition("Take a selfie before recording this attendance action.");
@@ -187,7 +195,7 @@ async function validateSelfieObject(
   const prefix = `organizations/${expected.organizationId}/attendance-selfies/${expected.branchId}/${expected.employeeUid}/`;
   const filename = path.startsWith(prefix) ? path.slice(prefix.length) : "";
   if (!/^[0-9a-f-]{36}\.(jpg|png)$/i.test(filename)) {
-    throw denied("The attendance selfie does not belong to this employee and branch.");
+    throw denied("The attendance selfie does not belong to your account and branch.");
   }
 
   let metadata: {

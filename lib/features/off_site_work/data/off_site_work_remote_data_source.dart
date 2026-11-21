@@ -61,6 +61,16 @@ class OffSiteWorkRemoteDataSource {
     return _assignment(data.object('offSiteWorkAssignment'));
   }
 
+  Future<void> delete({
+    required String assignmentId,
+    String? activeBranchId,
+  }) async {
+    await gateway.call('DeleteOffSiteWorkAssignment', {
+      'id': assignmentId,
+      'activeBranchId': ?activeBranchId,
+    });
+  }
+
   Future<OffSiteWorkAssignment> recordMilestone({
     required String assignmentId,
     required OffSiteWorkMilestone milestone,

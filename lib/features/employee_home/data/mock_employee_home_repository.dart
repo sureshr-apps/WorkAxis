@@ -14,10 +14,14 @@ class MockEmployeeHomeRepository
     implements EmployeeHomeRepository, EmployeeHomeSimulator {
   final MockEmployeeHomeDataSource dataSource;
   final Duration delay;
+  final bool requireBranchManagerAttendanceByDefault;
+  final bool Function(String organizationId)? branchManagerAttendanceLookup;
 
   MockEmployeeHomeRepository({
     MockEmployeeHomeDataSource? dataSource,
     this.delay = const Duration(milliseconds: 300),
+    this.requireBranchManagerAttendanceByDefault = false,
+    this.branchManagerAttendanceLookup,
   }) : dataSource = dataSource ?? MockEmployeeHomeDataSource();
 
   Future<void> _latency() async {
@@ -26,11 +30,13 @@ class MockEmployeeHomeRepository
     }
   }
 
-  /// Mirrors production: employees only, with the identity taken from [access].
+  /// Uses the signed-in self-service user's identity, including an enabled
+  /// Branch Manager, rather than the mock's seeded employee identity.
   void _applyIdentity(UserAccessContext access) {
-    if (access.user.role != UserRole.employee) {
+    if (access.user.role != UserRole.employee &&
+        access.user.role != UserRole.branchManager) {
       throw const AccessDeniedException(
-        'Employee home is only available to employees.',
+        'Self-service attendance is only available to employees and Branch Managers.',
       );
     }
     final branch =
@@ -47,6 +53,7 @@ class MockEmployeeHomeRepository
     bool requestLocationPermission = false,
   }) async {
     _applyIdentity(access);
+    _requireBranchManagerAttendance(access);
     await _latency();
     return dataSource.getSummary();
   }
@@ -57,13 +64,15 @@ class MockEmployeeHomeRepository
   }) async {
     _applyIdentity(access);
     await _latency();
+    final managerAttendanceEnabled = _managerAttendanceEnabled(access);
     // The mock organization has selfie verification disabled so sample
     // attendance actions remain usable without invoking the camera plugin.
-    return const EmployeeAttendancePolicy(
+    return EmployeeAttendancePolicy(
       requireAttendanceSelfie: false,
       requireGeolocation: true,
       allowBreaks: true,
       defaultGeofenceRadiusMeters: 150,
+      requireBranchManagerAttendance: managerAttendanceEnabled,
     );
   }
 
@@ -75,6 +84,7 @@ class MockEmployeeHomeRepository
     String? selfieLocalPath,
   }) async {
     _applyIdentity(access);
+    _requireBranchManagerAttendance(access);
     await _latency();
     dataSource.recordAction(action);
     return dataSource.getSummary();
@@ -87,5 +97,22 @@ class MockEmployeeHomeRepository
     await _latency();
     dataSource.setStatus(status);
     return dataSource.getSummary();
+  }
+
+  void _requireBranchManagerAttendance(UserAccessContext access) {
+    if (access.user.role == UserRole.branchManager &&
+        !_managerAttendanceEnabled(access)) {
+      throw const AccessDeniedException(
+        'Branch Manager attendance is disabled by the organization.',
+      );
+    }
+  }
+
+  bool _managerAttendanceEnabled(UserAccessContext access) {
+    final organizationId =
+        access.organization?.id ?? access.user.organizationId;
+    if (organizationId == null) return requireBranchManagerAttendanceByDefault;
+    return branchManagerAttendanceLookup?.call(organizationId) ??
+        requireBranchManagerAttendanceByDefault;
   }
 }

@@ -11,6 +11,7 @@ class OrganizationSettings {
     required this.returnAlerts,
     this.requireEmployeeAssetAcknowledgement = true,
     this.requireAttendanceSelfie = true,
+    this.requireBranchManagerAttendance = false,
     this.operationsEmail,
     this.emergencyPhone,
   });
@@ -25,6 +26,7 @@ class OrganizationSettings {
     returnAlerts: true,
     requireEmployeeAssetAcknowledgement: true,
     requireAttendanceSelfie: true,
+    requireBranchManagerAttendance: false,
   );
 
   /// Geofence radius used when a branch has no positive radius configured.
@@ -38,6 +40,7 @@ class OrganizationSettings {
   final bool returnAlerts;
   final bool requireEmployeeAssetAcknowledgement;
   final bool requireAttendanceSelfie;
+  final bool requireBranchManagerAttendance;
   final String? operationsEmail;
   final String? emergencyPhone;
 
@@ -50,6 +53,7 @@ class OrganizationSettings {
     bool? returnAlerts,
     bool? requireEmployeeAssetAcknowledgement,
     bool? requireAttendanceSelfie,
+    bool? requireBranchManagerAttendance,
     String? operationsEmail,
     String? emergencyPhone,
   }) => OrganizationSettings(
@@ -64,6 +68,8 @@ class OrganizationSettings {
         this.requireEmployeeAssetAcknowledgement,
     requireAttendanceSelfie:
         requireAttendanceSelfie ?? this.requireAttendanceSelfie,
+    requireBranchManagerAttendance:
+        requireBranchManagerAttendance ?? this.requireBranchManagerAttendance,
     operationsEmail: operationsEmail ?? this.operationsEmail,
     emergencyPhone: emergencyPhone ?? this.emergencyPhone,
   );
@@ -80,6 +86,7 @@ class OrganizationSettings {
       other.requireEmployeeAssetAcknowledgement ==
           requireEmployeeAssetAcknowledgement &&
       other.requireAttendanceSelfie == requireAttendanceSelfie &&
+      other.requireBranchManagerAttendance == requireBranchManagerAttendance &&
       other.operationsEmail == operationsEmail &&
       other.emergencyPhone == emergencyPhone;
 
@@ -93,6 +100,7 @@ class OrganizationSettings {
     returnAlerts,
     requireEmployeeAssetAcknowledgement,
     requireAttendanceSelfie,
+    requireBranchManagerAttendance,
     operationsEmail,
     emergencyPhone,
   );

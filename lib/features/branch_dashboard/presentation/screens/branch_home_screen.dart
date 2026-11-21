@@ -10,10 +10,12 @@ import 'package:workaxis/core/widgets/empty_state.dart';
 import 'package:workaxis/core/widgets/error_banner.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
+import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/branch_dashboard/domain/models/branch_dashboard_summary.dart';
 import 'package:workaxis/features/branch_dashboard/presentation/controllers/branch_dashboard_controller.dart';
 import 'package:workaxis/features/branch_dashboard/presentation/screens/widgets/branch_header_banner.dart';
 import 'package:workaxis/features/branch_dashboard/presentation/screens/widgets/branch_kpi_carousel.dart';
+import 'package:workaxis/features/branch_dashboard/presentation/screens/widgets/branch_manager_self_attendance_card.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/screens/widgets/attention_items_section.dart';
 import 'package:workaxis/shared/widgets/attendance_summary_card.dart';
 
@@ -27,6 +29,7 @@ class BranchHomeScreen extends StatefulWidget {
 
 class _BranchHomeScreenState extends State<BranchHomeScreen> {
   String? _currentBranchId;
+  int _attendancePolicyRevision = 0;
 
   @override
   void initState() {
@@ -43,6 +46,7 @@ class _BranchHomeScreenState extends State<BranchHomeScreen> {
   }
 
   void _load(String branchId, {bool forceRefresh = false}) {
+    if (forceRefresh) _attendancePolicyRevision++;
     final access = context.read<AccessController>().accessContext;
     if (access == null) return;
     context.read<BranchDashboardController>().loadDashboard(
@@ -55,6 +59,7 @@ class _BranchHomeScreenState extends State<BranchHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final activeBranch = context.watch<BranchContextController>().activeBranch;
+    final access = context.watch<AccessController>().accessContext;
     final controller = context.watch<BranchDashboardController>();
 
     // Reload if active branch changed in the background.
@@ -111,7 +116,12 @@ class _BranchHomeScreenState extends State<BranchHomeScreen> {
                           _load(activeBranch.branchId, forceRefresh: true),
                     )
                   else if (summary != null)
-                    _BranchDashboardBody(summary: summary),
+                    _BranchDashboardBody(
+                      summary: summary,
+                      access: access,
+                      activeBranchId: activeBranch.branchId,
+                      attendancePolicyRevision: _attendancePolicyRevision,
+                    ),
                 ],
               ),
             ),
@@ -123,9 +133,17 @@ class _BranchHomeScreenState extends State<BranchHomeScreen> {
 }
 
 class _BranchDashboardBody extends StatelessWidget {
-  const _BranchDashboardBody({required this.summary});
+  const _BranchDashboardBody({
+    required this.summary,
+    required this.access,
+    required this.activeBranchId,
+    required this.attendancePolicyRevision,
+  });
 
   final BranchDashboardSummary summary;
+  final UserAccessContext? access;
+  final String activeBranchId;
+  final int attendancePolicyRevision;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +162,12 @@ class _BranchDashboardBody extends StatelessWidget {
       children: [
         BranchKpiCarousel(summary: summary),
         const SizedBox(height: AppSpacing.xl),
+        if (access != null)
+          BranchManagerSelfAttendanceCard(
+            key: ValueKey('$activeBranchId-$attendancePolicyRevision'),
+            access: access!,
+            branchId: activeBranchId,
+          ),
         if (context.isCompact) ...[
           attendanceCard,
           const SizedBox(height: AppSpacing.lg),

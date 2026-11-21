@@ -1,5 +1,5 @@
 import { getStorage } from "firebase-admin/storage";
-import { denied, invalid } from "../../errors";
+import { denied, invalid, precondition } from "../../errors";
 import type { Actor } from "../../auth/roles";
 import type { SqlExecutor } from "../../db/executor";
 import { attachmentsBucketName } from "../../config";
@@ -231,17 +231,20 @@ export const offSiteWorkOps: OperationRegistry = {
     const employeeMemberId = reqId(vars, "employeeMemberId");
     return db.transaction(async (tx) => {
       const branch = await requireBranchScope(tx, actor, vars, branchId);
+      const assigneeRoleCondition = actor.role === "orgAdmin"
+        ? "m.role IN ('employee', 'branchManager')"
+        : "m.role = 'employee'";
       const employee = await selectOne<{ id: string; uid: string; fullName: string }>(
         tx,
         `SELECT m.id, m.auth_uid AS uid, m.full_name AS "fullName"
            FROM organization_member m
            JOIN user_branch_assignment a ON a.member_id = m.id
-          WHERE m.id = $1 AND m.organization_id = $2 AND m.role = 'employee'
+          WHERE m.id = $1 AND m.organization_id = $2 AND ${assigneeRoleCondition}
             AND m.status = 'active' AND a.branch_id = $3
           LIMIT 1`,
         [employeeMemberId, branch.organizationId, branchId],
       );
-      if (!employee?.uid) throw denied("Employee is not active in this branch.");
+      if (!employee?.uid) throw denied("Assignee is not active in this branch.");
       const manager = await findActor(tx, actor, branch.organizationId);
       const { id } = await insertReturningId(tx, "off_site_work_assignment", [
         ["organization_id", branch.organizationId],
@@ -276,8 +279,40 @@ export const offSiteWorkOps: OperationRegistry = {
     });
   },
 
+  DeleteOffSiteWorkAssignment: async ({ db, actor }, vars) => {
+    requireRole(actor, ["orgAdmin", "branchManager"]);
+    const id = reqId(vars, "id");
+    return db.transaction(async (tx) => {
+      const assignment = await selectOne<AssignmentScope>(
+        tx,
+        `SELECT id, organization_id AS "organizationId",
+                branch_id AS "branchId", employee_uid AS "employeeUid",
+                required_evidence_description AS "requiredEvidenceDescription",
+                status
+           FROM off_site_work_assignment WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      if (!assignment) throw denied("Assignment not found or access denied.");
+      await authorizeRead(tx, actor, vars, assignment);
+      if (assignment.status !== "assigned") {
+        throw precondition("Only assignments that have not started can be deleted.");
+      }
+      const milestoneCount = await selectOne<{ count: number }>(
+        tx,
+        `SELECT count(*)::int AS count FROM off_site_work_event
+          WHERE assignment_id = $1 AND event_type <> 'assigned'`,
+        [id],
+      );
+      if ((milestoneCount?.count ?? 0) > 0) {
+        throw precondition("Only assignments that have not started can be deleted.");
+      }
+      await tx.query("DELETE FROM off_site_work_assignment WHERE id = $1", [id]);
+      return { deleted: true };
+    });
+  },
+
   RecordOffSiteWorkMilestone: async ({ db, actor }, vars) => {
-    requireRole(actor, ["employee"]);
+    requireRole(actor, ["employee", "branchManager"]);
     const id = reqId(vars, "id");
     const eventType = reqString(vars, "eventType", 1, 40);
     const allowed = ["started", "arrived", "completed", "unable_to_complete", "returned_to_branch"];
@@ -298,6 +333,9 @@ export const offSiteWorkOps: OperationRegistry = {
     );
     if (!initial || initial.employeeUid !== actor.uid || initial.organizationId !== actor.organizationId) {
       throw denied("Assignment not found or access denied.");
+    }
+    if (actor.role === "branchManager") {
+      await requireBranchScope(db, actor, vars, initial.branchId);
     }
     if (eventType === "unable_to_complete" && !note?.trim()) {
       throw invalid("Add a reason before marking the assignment unable to complete.");
@@ -336,6 +374,9 @@ export const offSiteWorkOps: OperationRegistry = {
       );
       if (!current || current.employeeUid !== actor.uid || current.organizationId !== actor.organizationId) {
         throw denied("Assignment not found or access denied.");
+      }
+      if (actor.role === "branchManager") {
+        await requireBranchScope(tx, actor, vars, current.branchId);
       }
       if (!transition.from.includes(current.status)) {
         throw denied("This assignment has changed. Refresh it and try again.");

@@ -114,7 +114,9 @@ Details:
   (`resource-exhausted`). Because a successful lookup returns the email, this
   is not enumeration-proof on its own; App Check plus rate limiting are the
   mitigations.
-- `recordAttendancePunch`: server stamps time and the `workDate`
+- `recordAttendancePunch`: Employee self-service punches and Branch Manager
+  self-service punches when `requireBranchManagerAttendance` is enabled. The
+  server stamps time and the `workDate`
   (`YYYY-MM-DD`) in `Asia/Kolkata` (`BUSINESS_TIMEZONE` in `config.ts`).
   When `requireGeolocation` is not `false`, geofence validation uses branch
   coordinates and a positive branch radius from SQL, falling back to
@@ -123,18 +125,20 @@ Details:
   branches with no (or 0,0) coordinates. When the setting is `false`, GPS fields
   are optional and geofence validation is skipped. `allowBreaks: false` rejects
   new break starts but still allows an employee to resume an already-open break.
-  Writes `attendance_entries/{uid}_{workDate}` (one per employee per day) and
+  Writes `attendance_entries/{uid}_{workDate}` (one per self-service user per day) and
   enforces the check-in/break/check-out state machine.
   Entries gain `breaks: [{startAt, endAt?, startSelfiePath?, endSelfiePath?}]`
   and optional `checkInSelfiePath` / `checkOutSelfiePath`. When the
   organization's `requireAttendanceSelfie` setting is enabled, every
   self-service punch must include a recently uploaded selfie in the dedicated
-  attachment bucket, under that employee's own organization/branch path. The
+  attachment bucket, under the user's own organization/branch path. The
   server checks ownership, image type, size and upload age before recording the
   storage reference. Missing `requireAttendanceSelfie`, `requireGeolocation`,
   and `allowBreaks` settings default to `true`; explicit `false` is respected.
-  `getAttendanceSelfiePolicy` returns only the employee attendance policy and
-  organization default radius, not the rest of organization settings. The
+  `getAttendanceSelfiePolicy` returns only the caller's attendance policy,
+  `requireBranchManagerAttendance`, and organization default radius, not the
+  rest of organization settings. The Branch Manager flag defaults to false;
+  selfie, GPS, and break settings retain their existing defaults. The
   response distance is `null` when geolocation is disabled. Status is always
   `present` (no shift schedule exists in the data model yet).
 - `createKioskPairingToken`: 256-bit random token, 10-minute expiry, only the
@@ -549,10 +553,15 @@ attendance geofence.
 
 | Operation | Who may call | Key vars | Response keys |
 | --- | --- | --- | --- |
-| `ListOffSiteWorkAssignments` | Employee (own); Org Admin (own org); Branch Manager (active assigned branch) | `limit`, `offset`; Branch Manager also sends `activeBranchId`; Org Admin may filter with `branchId` | `offSiteWorkAssignments`, `total` |
-| `GetOffSiteWorkAssignment` | Employee (own); Org Admin (own org); Branch Manager (active assigned branch) | `id`; Branch Manager also sends `activeBranchId` | `offSiteWorkAssignment` including `events` |
-| `CreateOffSiteWorkAssignment` | Org Admin (own org); Branch Manager (active assigned branch) | `branchId`, `employeeMemberId`, `title`, `destination`; new clients include `destinationLatitude` and `destinationLongitude` selected on the map. Optional `activeBranchId` for Branch Manager, `instructions`, `dueAt` (ISO-8601), `reference`, `requiredEvidenceDescription` | `offSiteWorkAssignment` (including destination coordinates when provided, with initial `assigned` event) |
-| `RecordOffSiteWorkMilestone` | Employee assigned to the work | `id`, `eventType` (`started`, `arrived`, `completed`, `unable_to_complete`, `returned_to_branch`), `latitude`, `longitude`, `accuracyMeters`; optional `note`, `evidenceReferences` | `offSiteWorkAssignment` with updated status and event history |
+| `ListOffSiteWorkAssignments` | Employee (own); Org Admin (own org); Branch Manager (active assigned branch) | `limit`, `offset`; Branch Manager must send `activeBranchId`; Org Admin may filter with `branchId` | `offSiteWorkAssignments`, `total` |
+| `GetOffSiteWorkAssignment` | Employee (own); Org Admin (own org); Branch Manager (active assigned branch) | `id`; Branch Manager must send `activeBranchId` | `offSiteWorkAssignment` including `events` |
+| `CreateOffSiteWorkAssignment` | Org Admin (own org); Branch Manager (active assigned branch) | `branchId`, `employeeMemberId` (target member), `title`, `destination`; new clients include `destinationLatitude` and `destinationLongitude` selected on the map. Branch Manager must send `activeBranchId`; optional `instructions`, `dueAt` (ISO-8601), `reference`, `requiredEvidenceDescription` | `offSiteWorkAssignment` (including destination coordinates when provided, with initial `assigned` event) |
+| `DeleteOffSiteWorkAssignment` | Org Admin (own org); Branch Manager (active assigned branch) | `id`; Branch Manager must send `activeBranchId` | `{ deleted: true }`; only an unstarted assignment can be removed |
+| `RecordOffSiteWorkMilestone` | Employee or Branch Manager assigned to the work | `id`, `eventType` (`started`, `arrived`, `completed`, `unable_to_complete`, `returned_to_branch`), `latitude`, `longitude`, `accuracyMeters`; Branch Manager must send `activeBranchId`; optional `note`, `evidenceReferences` | `offSiteWorkAssignment` with updated status and event history |
+
+Organization Admins may assign work to active Employees or Branch Managers
+assigned to the selected branch. Branch Managers may assign only to Employees
+in their active branch. Only the assigned person can record milestones.
 
 The server permits only `assigned → started → arrived → completed` or
 `unable_to_complete → returned_to_branch`. Each milestone needs a valid GPS fix;
@@ -561,7 +570,8 @@ specifies completion evidence, completion needs a note/reference or at least one
 photo. Up to five JPEG/PNG evidence objects (each under 5 MB) are accepted.
 Photo references must point to objects under
 `organizations/{orgId}/off-site-work-evidence/{branchId}/{employeeUid}/{assignmentId}/`
-and are checked against the assignment before being persisted. Assignment
+and are checked against the assignment before being persisted. The assigned
+Branch Manager may upload evidence to their own path. Assignment
 creation stores an `assigned` event without a location. No operation records
 route locations.
 

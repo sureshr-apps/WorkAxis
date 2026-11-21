@@ -189,7 +189,10 @@ class _OffSiteWorkScreenState extends State<OffSiteWorkScreen> {
                             child: index < items.length
                                 ? OffSiteWorkAssignmentCard(
                                     assignment: items[index],
-                                    isEmployee: isEmployee,
+                                    isEmployee:
+                                        isEmployee ||
+                                        items[index].employeeUid ==
+                                            access.user.id,
                                     onTap: () => context.push(
                                       _detailsPath(role, items[index].id),
                                     ),

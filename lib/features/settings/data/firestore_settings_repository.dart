@@ -70,6 +70,8 @@ class FirestoreSettingsRepository implements SettingsRepository {
         'requireEmployeeAssetAcknowledgement':
             settings.requireEmployeeAssetAcknowledgement,
         'requireAttendanceSelfie': settings.requireAttendanceSelfie,
+        'requireBranchManagerAttendance':
+            settings.requireBranchManagerAttendance,
         'operationsEmail': _blankToNull(settings.operationsEmail),
         'emergencyPhone': _blankToNull(settings.emergencyPhone),
         'updatedBy': access.user.id,
@@ -136,6 +138,9 @@ class FirestoreSettingsRepository implements SettingsRepository {
           d.requireEmployeeAssetAcknowledgement,
       requireAttendanceSelfie:
           data['requireAttendanceSelfie'] as bool? ?? d.requireAttendanceSelfie,
+      requireBranchManagerAttendance:
+          data['requireBranchManagerAttendance'] as bool? ??
+          d.requireBranchManagerAttendance,
       operationsEmail: data['operationsEmail'] as String?,
       emergencyPhone: data['emergencyPhone'] as String?,
     );
