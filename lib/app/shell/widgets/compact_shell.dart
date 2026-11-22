@@ -152,19 +152,20 @@ class _OrganizationLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(AppSpacing.radiusSm);
+    final logoReference = reference;
 
     return Container(
       width: 32,
       height: 32,
       decoration: BoxDecoration(color: AppColors.primary, borderRadius: radius),
       clipBehavior: Clip.antiAlias,
-      child: reference == null || reference.isEmpty
+      child: logoReference == null || logoReference.isEmpty
           ? const Icon(
               Icons.business_outlined,
               color: AppColors.onPrimary,
               size: 18,
             )
-          : AttachmentImage(reference: reference, fit: BoxFit.cover),
+          : AttachmentImage(reference: logoReference, fit: BoxFit.cover),
     );
   }
 }
