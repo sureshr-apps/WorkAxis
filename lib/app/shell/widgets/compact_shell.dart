@@ -76,6 +76,7 @@ class CompactShell extends StatelessWidget {
           UserProfileMenu(
             userName: user?.name,
             roleLabel: user?.role.displayName,
+            profilePhotoUrl: user?.profilePhotoUrl,
             onSignOut: () => context.read<SessionController>().signOut(),
           ),
           const SizedBox(width: AppSpacing.sm),

@@ -70,6 +70,7 @@ class ExpandedShell extends StatelessWidget {
               role: user?.role,
               organization: accessContext?.organization,
               userName: user?.name,
+              profilePhotoUrl: user?.profilePhotoUrl,
               onSignOut: () => context.read<SessionController>().signOut(),
             ),
           ),

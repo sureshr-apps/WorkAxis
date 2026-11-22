@@ -273,6 +273,7 @@ class FirebaseAuthRepository implements AuthenticationRepository {
       username: profile['username'] as String? ?? firebaseUser.uid,
       email: email.isEmpty ? null : email,
       phone: profile['phone'] as String?,
+      profilePhotoUrl: profile['profilePhotoUrl'] as String?,
       role: role,
       status: status,
       organizationId: role.isCustomerLevel ? organizationId : null,

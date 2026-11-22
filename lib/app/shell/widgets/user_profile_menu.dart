@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/core/widgets/attachment_image.dart';
 
 /// Avatar menu offering the signed-in user's identity and optional Sign Out.
 ///
@@ -16,12 +17,14 @@ class UserProfileMenu extends StatefulWidget {
     required this.onSignOut,
     this.userName,
     this.roleLabel,
+    this.profilePhotoUrl,
     this.showNameAndRole = false,
     this.showSignOut = true,
   });
 
   final String? userName;
   final String? roleLabel;
+  final String? profilePhotoUrl;
   final bool showNameAndRole;
   final bool showSignOut;
   final FutureOr<void> Function() onSignOut;
@@ -57,6 +60,7 @@ class _UserProfileMenuState extends State<UserProfileMenu> {
   Widget build(BuildContext context) {
     final displayName = _displayName;
     final displayRole = _displayRole;
+    final photoReference = widget.profilePhotoUrl?.trim();
     final avatar = ConstrainedBox(
       constraints: const BoxConstraints(
         minHeight: AppSpacing.minTouchTarget,
@@ -111,18 +115,28 @@ class _UserProfileMenuState extends State<UserProfileMenu> {
                 color: AppColors.primaryDark,
                 shape: BoxShape.circle,
               ),
-              child: Center(
-                child: _isSigningOut
-                    ? const SizedBox(
+              child: _isSigningOut
+                  ? const Center(
+                      child: SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
-                      )
-                    : const Icon(Icons.person, size: 18, color: Colors.white),
-              ),
+                      ),
+                    )
+                  : photoReference == null || photoReference.isEmpty
+                  ? const Center(
+                      child: Icon(Icons.person, size: 18, color: Colors.white),
+                    )
+                  : ClipOval(
+                      child: AttachmentImage(
+                        reference: photoReference,
+                        fit: BoxFit.cover,
+                        iconSize: 18,
+                      ),
+                    ),
             ),
           ],
         ),

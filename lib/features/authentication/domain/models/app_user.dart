@@ -10,6 +10,7 @@ class AppUser {
     required this.role,
     this.email,
     this.phone,
+    this.profilePhotoUrl,
     this.organizationId,
     this.status = AccountStatus.active,
   });
@@ -28,6 +29,9 @@ class AppUser {
 
   /// Optional phone number alias.
   final String? phone;
+
+  /// Optional Firebase Storage reference or URL for the user's profile photo.
+  final String? profilePhotoUrl;
 
   /// Role assigned to the user.
   final UserRole role;

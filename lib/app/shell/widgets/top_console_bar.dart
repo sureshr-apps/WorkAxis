@@ -23,11 +23,13 @@ class TopConsoleBar extends StatelessWidget {
     this.role,
     this.organization,
     this.userName,
+    this.profilePhotoUrl,
   });
 
   final UserRole? role;
   final OrganizationSummary? organization;
   final String? userName;
+  final String? profilePhotoUrl;
   final FutureOr<void> Function() onSignOut;
 
   @override
@@ -58,6 +60,7 @@ class TopConsoleBar extends StatelessWidget {
             child: UserProfileMenu(
               userName: userName,
               roleLabel: role?.displayName,
+              profilePhotoUrl: profilePhotoUrl,
               showNameAndRole: true,
               showSignOut: false,
               onSignOut: onSignOut,
