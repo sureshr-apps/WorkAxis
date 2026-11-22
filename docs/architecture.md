@@ -659,9 +659,9 @@ weekly day off. Missing legacy shifts use the existing 8-hour default. The
 operation removes each legacy schedule or salary field only after its
 corresponding SQL history row was inserted successfully; invalid or missing
 values remain available for correction. Migration 010 and the backend, rules,
-indexes, and web deployment completed on 22 November 2026. An Organization
-Admin still needs to use the Payslips page's **Import existing history**
-action once per organization.
+indexes, and web deployment completed on 22 November 2026. The app does not
+expose the backfill action; the callable remains a controlled recovery path
+for organizations with legacy Firestore-only employee data.
 
 The `GetEmployeeWorkforceHistory`, `SaveEmployeeSchedule`, and
 `SaveEmployeeCompensation` data operations resolve membership scope on the
@@ -691,5 +691,6 @@ does not initiate payroll approval or payment.
 
 Local validation covers payroll calculation and history operations using
 `FakeDb`. Production migration and application deployment completed on
-22 November 2026. Run and verify the organization-scoped backfill before
+22 November 2026. New employees receive schedule and compensation history
+during provisioning. Legacy organizations can use the recovery backfill before
 existing employees use the new history screens.

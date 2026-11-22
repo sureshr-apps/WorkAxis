@@ -12,13 +12,11 @@ class PayslipsController extends ChangeNotifier implements SessionScoped {
   MonthlyPayroll? _payroll;
   String? _errorMessage;
   bool _isLoading = false;
-  bool _isBackfilling = false;
   int _generation = 0;
 
   MonthlyPayroll? get payroll => _payroll;
   String? get errorMessage => _errorMessage;
   bool get isLoading => _isLoading;
-  bool get isBackfilling => _isBackfilling;
 
   Future<void> load({
     required UserAccessContext access,
@@ -52,35 +50,12 @@ class PayslipsController extends ChangeNotifier implements SessionScoped {
     }
   }
 
-  Future<Map<String, int>?> backfill({
-    required UserAccessContext access,
-  }) async {
-    if (_isBackfilling) return null;
-    _isBackfilling = true;
-    _errorMessage = null;
-    notifyListeners();
-    try {
-      return await repository.backfillExistingPayrollHistory(access: access);
-    } catch (error) {
-      _errorMessage = userMessageFor(
-        error,
-        null,
-        fallback: 'Legacy schedule and salary history could not be imported.',
-      );
-      return null;
-    } finally {
-      _isBackfilling = false;
-      notifyListeners();
-    }
-  }
-
   @override
   void reset() {
     _generation++;
     _payroll = null;
     _errorMessage = null;
     _isLoading = false;
-    _isBackfilling = false;
     notifyListeners();
   }
 }

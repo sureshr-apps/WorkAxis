@@ -28,23 +28,4 @@ class SqlConnectPayrollRepository implements PayrollRepository {
       throw mapBackendError(error, stackTrace);
     }
   }
-
-  @override
-  Future<Map<String, int>> backfillExistingPayrollHistory({
-    required UserAccessContext access,
-  }) async {
-    try {
-      final response = await _gateway.call('BackfillEmployeeWorkforceHistory');
-      return {
-        'membersProcessed': _int(response['membersProcessed']),
-        'schedulesCreated': _int(response['schedulesCreated']),
-        'salariesCreated': _int(response['salariesCreated']),
-        'legacyProfilesCleaned': _int(response['legacyProfilesCleaned']),
-      };
-    } catch (error, stackTrace) {
-      throw mapBackendError(error, stackTrace);
-    }
-  }
-
-  static int _int(Object? value) => value is num ? value.toInt() : 0;
 }

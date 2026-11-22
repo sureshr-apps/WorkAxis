@@ -7,8 +7,4 @@ abstract interface class PayrollRepository {
     required String month,
     String? activeBranchId,
   });
-
-  Future<Map<String, int>> backfillExistingPayrollHistory({
-    required UserAccessContext access,
-  });
 }

@@ -74,7 +74,6 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     final access = context.watch<AccessController>().accessContext;
     final controller = context.watch<PayslipsController>();
     final payroll = controller.payroll;
-    final isOrgAdmin = access?.user.role == UserRole.orgAdmin;
     final total =
         payroll?.records
             .where((record) => record.available)
@@ -110,10 +109,6 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                     color: AppColors.statusUrgent,
                     onRetry: _load,
                   ),
-                ],
-                if (isOrgAdmin) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _historyBackfill(controller),
                 ],
                 if (controller.isLoading) ...[
                   const SizedBox(height: AppSpacing.xl),
@@ -217,35 +212,6 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         ],
       ),
     );
-  }
-
-  Widget _historyBackfill(PayslipsController controller) => _MessagePanel(
-    message: 'Import existing employee schedule and salary values into dated payroll history. The import is safe to repeat.',
-    icon: Icons.history,
-    color: AppColors.primary,
-    action: AppButton.secondary(
-      text: 'Import existing history',
-      isLoading: controller.isBackfilling,
-      isFullWidth: false,
-      onPressed: controller.isBackfilling ? null : _backfill,
-    ),
-  );
-
-  Future<void> _backfill() async {
-    final access = context.read<AccessController>().accessContext;
-    if (access == null) return;
-    final controller = context.read<PayslipsController>();
-    final result = await controller.backfill(access: access);
-    if (!mounted) return;
-    if (result == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'History imported: ${result['schedulesCreated']} schedules and ${result['salariesCreated']} salary records.',
-        ),
-      ),
-    );
-    await _load();
   }
 
   Future<void> _exportXlsx(MonthlyPayroll payroll) async {
@@ -608,13 +574,11 @@ class _MessagePanel extends StatelessWidget {
     required this.message,
     required this.icon,
     required this.color,
-    this.action,
     this.onRetry,
   });
   final String message;
   final IconData icon;
   final Color color;
-  final Widget? action;
   final VoidCallback? onRetry;
 
   @override
@@ -642,7 +606,6 @@ class _MessagePanel extends StatelessWidget {
             ],
           ),
         ),
-        ?action,
         if (onRetry != null)
           TextButton.icon(
             onPressed: onRetry,

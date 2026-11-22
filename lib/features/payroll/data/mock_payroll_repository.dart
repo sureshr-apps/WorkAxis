@@ -35,14 +35,4 @@ class MockPayrollRepository implements PayrollRepository {
       ),
     ],
   );
-
-  @override
-  Future<Map<String, int>> backfillExistingPayrollHistory({
-    required UserAccessContext access,
-  }) async => const {
-    'membersProcessed': 4,
-    'schedulesCreated': 4,
-    'salariesCreated': 4,
-    'legacyProfilesCleaned': 4,
-  };
 }

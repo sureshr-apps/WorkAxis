@@ -614,8 +614,10 @@ Schedule and salary changes are separate operations and cannot be backdated.
 Schedule writes include the recurring weekday off. Existing employees are
 backfilled with Sunday off and their current Firestore shift and salary values,
 effective from the Asia/Kolkata cutover date because earlier history is not
-available. The backfill callable is idempotent; run it from the Payslips page
-after migration and Functions deployment, once per organization.
+available. The backfill callable is idempotent and is not exposed in the app.
+Keep it for controlled recovery of legacy organizations after migration and
+Functions deployment; newly created employees receive history during
+provisioning.
 
 Self-service attendance entries remain in Firestore. Each session is a
 separate `attendance_entries` document. The trusted punch callable maintains
@@ -642,5 +644,5 @@ do not call a separate backend operation.
 
 Local tests cover the calculator, history operations, access checks, and
 attendance session rules with `FakeDb`. Migration 010 was applied to production
-on 22 November 2026. The organization-scoped backfill remains to be run from
-the Payslips page by an Organization Admin for each organization.
+on 22 November 2026. The optional legacy recovery backfill is not available
+from the Payslips page.
