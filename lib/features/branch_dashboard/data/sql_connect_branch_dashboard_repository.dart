@@ -68,7 +68,7 @@ class SqlConnectBranchDashboardRepository implements BranchDashboardRepository {
         attendance: AttendanceSummary.fromCheckIns(
           checkedIn: checkIns.checkedIn,
           late: checkIns.late,
-          expectedHeadcount: counts.memberCount,
+          expectedHeadcount: counts.scheduledMemberCount,
         ),
         pendingReturns: pending,
         totalEmployees: counts.memberCount,

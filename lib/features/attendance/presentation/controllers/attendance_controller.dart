@@ -6,6 +6,7 @@ import 'package:workaxis/core/state/safe_notifier.dart';
 import 'package:workaxis/core/time/business_time.dart';
 import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
+import 'package:workaxis/features/attendance/domain/models/attendance_day_summary.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
 import 'package:workaxis/features/attendance/domain/repositories/attendance_repository.dart';
@@ -37,16 +38,19 @@ class AttendanceController extends ChangeNotifier
   bool get isSaving => _isSaving;
   String? get errorMessage => _errorMessage;
   String? get actionErrorMessage => _actionErrorMessage;
-  int get needsReviewCount => _entries
-      .where(
-        (entry) => entry.reviewStatus == AttendanceReviewStatus.needsReview,
-      )
-      .length;
+  int get needsReviewCount =>
+      AttendanceDaySummary.fromEntries(_entries)
+          .where((summary) => summary.needsReviewCount > 0)
+          .length;
 
   int get onTimeCount =>
-      _entries.where((e) => e.status == AttendanceStatus.present).length;
+      AttendanceDaySummary.fromEntries(_entries)
+          .where((summary) => summary.status == AttendanceStatus.present)
+          .length;
   int get lateCount =>
-      _entries.where((e) => e.status == AttendanceStatus.late).length;
+      AttendanceDaySummary.fromEntries(_entries)
+          .where((summary) => summary.status == AttendanceStatus.late)
+          .length;
 
   /// Today's business date according to the injected clock.
   DateTime get today => BusinessTime.today(_now);

@@ -1,6 +1,19 @@
 /// Operational policy for one customer organization.
 ///
 /// Stored in Firestore `organization_settings/{organizationId}`.
+enum PayCalculationBasis {
+  hours('hours'),
+  workdays('workdays');
+
+  const PayCalculationBasis(this.wireValue);
+  final String wireValue;
+
+  static PayCalculationBasis fromWire(Object? value) => values.firstWhere(
+    (basis) => basis.wireValue == value,
+    orElse: () => hours,
+  );
+}
+
 class OrganizationSettings {
   const OrganizationSettings({
     required this.geofenceRadiusMeters,
@@ -12,6 +25,8 @@ class OrganizationSettings {
     this.requireEmployeeAssetAcknowledgement = true,
     this.requireAttendanceSelfie = true,
     this.requireBranchManagerAttendance = false,
+    this.payCalculationBasis = PayCalculationBasis.hours,
+    this.overtimeEnabled = false,
     this.operationsEmail,
     this.emergencyPhone,
   });
@@ -27,6 +42,8 @@ class OrganizationSettings {
     requireEmployeeAssetAcknowledgement: true,
     requireAttendanceSelfie: true,
     requireBranchManagerAttendance: false,
+    payCalculationBasis: PayCalculationBasis.hours,
+    overtimeEnabled: false,
   );
 
   /// Geofence radius used when a branch has no positive radius configured.
@@ -41,6 +58,8 @@ class OrganizationSettings {
   final bool requireEmployeeAssetAcknowledgement;
   final bool requireAttendanceSelfie;
   final bool requireBranchManagerAttendance;
+  final PayCalculationBasis payCalculationBasis;
+  final bool overtimeEnabled;
   final String? operationsEmail;
   final String? emergencyPhone;
 
@@ -54,6 +73,8 @@ class OrganizationSettings {
     bool? requireEmployeeAssetAcknowledgement,
     bool? requireAttendanceSelfie,
     bool? requireBranchManagerAttendance,
+    PayCalculationBasis? payCalculationBasis,
+    bool? overtimeEnabled,
     String? operationsEmail,
     String? emergencyPhone,
   }) => OrganizationSettings(
@@ -70,6 +91,8 @@ class OrganizationSettings {
         requireAttendanceSelfie ?? this.requireAttendanceSelfie,
     requireBranchManagerAttendance:
         requireBranchManagerAttendance ?? this.requireBranchManagerAttendance,
+    payCalculationBasis: payCalculationBasis ?? this.payCalculationBasis,
+    overtimeEnabled: overtimeEnabled ?? this.overtimeEnabled,
     operationsEmail: operationsEmail ?? this.operationsEmail,
     emergencyPhone: emergencyPhone ?? this.emergencyPhone,
   );
@@ -87,6 +110,8 @@ class OrganizationSettings {
           requireEmployeeAssetAcknowledgement &&
       other.requireAttendanceSelfie == requireAttendanceSelfie &&
       other.requireBranchManagerAttendance == requireBranchManagerAttendance &&
+      other.payCalculationBasis == payCalculationBasis &&
+      other.overtimeEnabled == overtimeEnabled &&
       other.operationsEmail == operationsEmail &&
       other.emergencyPhone == emergencyPhone;
 
@@ -101,6 +126,8 @@ class OrganizationSettings {
     requireEmployeeAssetAcknowledgement,
     requireAttendanceSelfie,
     requireBranchManagerAttendance,
+    payCalculationBasis,
+    overtimeEnabled,
     operationsEmail,
     emergencyPhone,
   );

@@ -6,6 +6,7 @@ class AttendanceSession {
     required this.standardSeconds,
     this.checkOut,
     this.breaks = const [],
+    this.workedBeforeSeconds = 0,
   });
 
   final DateTime checkIn;
@@ -15,13 +16,17 @@ class AttendanceSession {
   /// Length of a standard working day, in seconds.
   final int standardSeconds;
 
+  /// Work already completed in earlier same-day branch sessions.
+  final int workedBeforeSeconds;
+
   /// Whether the employee is still checked in (not yet checked out).
   bool get isRunning => checkOut == null;
 
   /// Time worked up to [now]: check-in to check-out (or [now]) minus breaks.
   Duration workedAt(DateTime now) {
     final end = checkOut ?? now;
-    var total = end.difference(checkIn);
+    var total =
+        end.difference(checkIn) + Duration(seconds: workedBeforeSeconds);
     for (final b in breaks) {
       total -= (b.end ?? end).difference(b.start);
     }

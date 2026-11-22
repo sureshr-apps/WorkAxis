@@ -161,18 +161,18 @@ void main() {
       expect(find.byType(AttendanceTable), findsOneWidget);
 
       for (final header in [
-        'EMPLOYEE',
-        'BRANCH / HUB',
-        'CHECK IN',
-        'CHECK OUT',
-        'METHOD',
+        'EMPLOYEE / DATE',
+        'BRANCHES',
+        'FIRST IN',
+        'LAST OUT',
+        'SESSIONS',
         'STATUS',
-        'EXCEPTION & REVIEW',
-        'ACTIONS',
+        'REVIEW',
+        'DETAILS',
       ]) {
         expect(find.text(header), findsOneWidget);
       }
-      expect(find.text('Showing 6 attendance records'), findsOneWidget);
+      expect(find.text('Showing 6 employee/day summaries'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -192,7 +192,7 @@ void main() {
 
       expect(find.text('Today'), findsOneWidget);
       expect(find.text('Yesterday'), findsOneWidget);
-      expect(find.text('Nov 7, 2026'), findsOneWidget);
+      expect(find.text('Nov 7, 2026'), findsWidgets);
     });
 
     testWidgets('renders 1-column cards on smartphone without overflow', (
@@ -202,7 +202,7 @@ void main() {
 
       expect(find.byType(AttendanceCardItem), findsWidgets);
       expect(find.byType(AttendanceTable), findsNothing);
-      expect(find.text('Details'), findsWidgets);
+      expect(find.text('View sessions'), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 
@@ -240,10 +240,14 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byTooltip('Verify attendance').first);
+      await tester.tap(find.text('Alex Chen'));
       await tester.pumpAndSettle();
+      expect(find.byType(AttendanceDetailsScreen), findsOneWidget);
+
+      await tester.tap(find.text('Verify session'));
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(
         find.text('This attendance item could not be reviewed.'),
@@ -301,11 +305,12 @@ void main() {
       (tester) async {
         await pumpAttendanceScreen(tester, role: UserRole.orgAdmin);
 
-        await tester.tap(find.byTooltip('View details').first);
+        await tester.tap(find.text('Sarah Connor'));
         await tester.pumpAndSettle();
 
         expect(find.byType(AttendanceDetailsScreen), findsOneWidget);
-        expect(find.text('Read-only attendance record.'), findsOneWidget);
+        expect(find.text('Daily summary'), findsOneWidget);
+        expect(find.text('Session history'), findsOneWidget);
         expect(find.text('Check-in'), findsOneWidget);
 
         await tester.tap(
@@ -318,7 +323,7 @@ void main() {
 
         expect(find.byType(AttendanceDetailsScreen), findsNothing);
         expect(find.byType(AttendanceOperationsScreen), findsOneWidget);
-        expect(find.text('Showing 6 attendance records'), findsOneWidget);
+        expect(find.text('Showing 6 employee/day summaries'), findsOneWidget);
       },
     );
 
@@ -332,7 +337,7 @@ void main() {
         userId: 'user-emp-01',
       );
 
-      await tester.tap(find.text('Details').first);
+      await tester.tap(find.text('View sessions').first);
       await tester.pumpAndSettle();
 
       expect(find.byType(AttendanceDetailsScreen), findsOneWidget);

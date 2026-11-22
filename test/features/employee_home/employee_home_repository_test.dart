@@ -83,16 +83,21 @@ class _FixedLocation implements AttendanceLocationProvider {
 Future<void> _entry(
   FakeFirebaseFirestore db, {
   required String employee,
+  String? documentId,
+  String branchId = 'br-01',
   Map<String, dynamic> extra = const {},
-}) => db.collection('attendance_entries').doc('${employee}_2026-11-07').set({
-  'organizationId': 'org-acme',
-  'branchId': 'br-01',
-  'employeeId': employee,
-  'employeeName': 'Name $employee',
-  'workDateString': '2026-11-07',
-  'status': 'present',
-  ...extra,
-});
+}) => db
+    .collection('attendance_entries')
+    .doc(documentId ?? '${employee}_2026-11-07')
+    .set({
+      'organizationId': 'org-acme',
+      'branchId': branchId,
+      'employeeId': employee,
+      'employeeName': 'Name $employee',
+      'workDateString': '2026-11-07',
+      'status': 'present',
+      ...extra,
+    });
 
 void main() {
   late FakeFirebaseFirestore db;
@@ -184,6 +189,31 @@ void main() {
       expect(summary.currentStatus, AttendanceStatus.checkedOut);
       expect(summary.workingDuration, '3h 00m');
     });
+
+    test(
+      'sums sequential sessions across branches for the business day',
+      () async {
+        await _entry(
+          db,
+          employee: 'user-emp-01',
+          documentId: 'session-branch-a',
+          branchId: 'br-01',
+          extra: {'checkInAt': at(2, 0), 'checkOutAt': at(3, 0)},
+        );
+        await _entry(
+          db,
+          employee: 'user-emp-01',
+          documentId: 'session-branch-b',
+          branchId: 'br-02',
+          extra: {'checkInAt': at(4, 0), 'checkOutAt': at(4, 45)},
+        );
+
+        final summary = await repo.getEmployeeHomeSummary(access: access);
+
+        expect(summary.currentStatus, AttendanceStatus.checkedOut);
+        expect(summary.workingDuration, '1h 45m');
+      },
+    );
 
     test(
       'data the backend does not hold is marked unavailable, not invented',
@@ -393,6 +423,26 @@ void main() {
         expect(call.payload.containsKey('employeeId'), isFalse);
       },
     );
+
+    test('uses the selected assigned branch for the next session', () async {
+      final secondBranch = acmeBranch('br-02');
+      final multiBranchAccess = access.copyWith(
+        assignedBranches: [...access.assignedBranches, secondBranch],
+        activeBranch: ActiveBranchContext.fromBranch(secondBranch),
+      );
+
+      await repo.recordAttendanceAction(
+        access: multiBranchAccess,
+        action: AttendanceAction.checkIn,
+      );
+
+      expect(
+        callables.calls
+            .singleWhere((entry) => entry.name == 'recordAttendancePunch')
+            .payload['branchId'],
+        'br-02',
+      );
+    });
 
     test('maps every action to the server\'s punch kinds', () async {
       for (final (action, kind) in [

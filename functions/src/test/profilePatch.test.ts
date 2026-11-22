@@ -25,11 +25,11 @@ describe("buildProfilePatch", () => {
 });
 
 describe("buildPrivatePatch", () => {
-  it("deletes cleared private fields and sets given ones", () => {
-    const patch = buildPrivatePatch({ salary: null, aadhaarNumber: "123412341234", aadhaarPhotoUrl: null });
-    assert.ok(isDelete(patch.salary));
+  it("keeps Aadhaar documents private and leaves salary to SQL history", () => {
+    const patch = buildPrivatePatch({ aadhaarNumber: "123412341234", aadhaarPhotoUrl: null });
     assert.ok(isDelete(patch.aadhaarPhotoUrl));
     assert.equal(patch.aadhaarNumber, "123412341234");
+    assert.equal("salary" in patch, false);
   });
 
   it("is empty when nothing is supplied", () => {

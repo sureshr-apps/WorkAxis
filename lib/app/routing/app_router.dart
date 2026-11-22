@@ -42,6 +42,7 @@ import 'package:workaxis/features/platform_users/presentation/screens/platform_a
 import 'package:workaxis/features/platform_users/presentation/screens/platform_users_list_screen.dart';
 import 'package:workaxis/features/profile/presentation/screens/employee_profile_screen.dart';
 import 'package:workaxis/features/reports/presentation/screens/operational_reports_screen.dart';
+import 'package:workaxis/features/payroll/presentation/screens/payslips_screen.dart';
 import 'package:workaxis/features/returns/presentation/screens/employee_returns_screen.dart';
 import 'package:workaxis/features/returns/presentation/screens/return_details_route.dart';
 import 'package:workaxis/features/returns/presentation/screens/submit_return_route.dart';
@@ -346,6 +347,10 @@ GoRouter createAppRouter({
             builder: (context, state) => const OperationalReportsScreen(),
           ),
           GoRoute(
+            path: AppRoutes.orgAdminPayslips,
+            builder: (context, state) => const PayslipsScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.orgAdminLeaves,
             builder: (context, state) => const LeavesScreen(),
           ),
@@ -469,6 +474,10 @@ GoRouter createAppRouter({
             builder: (context, state) => const OperationalReportsScreen(),
           ),
           GoRoute(
+            path: AppRoutes.branchManagerPayslips,
+            builder: (context, state) => const PayslipsScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.branchManagerLeaves,
             builder: (context, state) => const LeavesScreen(),
           ),
@@ -519,6 +528,10 @@ GoRouter createAppRouter({
                 ),
               ),
             ],
+          ),
+          GoRoute(
+            path: AppRoutes.employeePayslips,
+            builder: (context, state) => const PayslipsScreen(),
           ),
           GoRoute(
             path: AppRoutes.employeeOffSiteWork,

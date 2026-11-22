@@ -203,6 +203,7 @@ void main() {
         const OrganizationCounts(
           branchesByStatus: {'active': 2, 'maintenance': 1},
           activeEmployees: 10,
+          scheduledEmployees: 8,
           returnsByStatus: {'pending': 4, 'approved': 9},
         ),
       );
@@ -227,8 +228,8 @@ void main() {
         expect(summary.pendingReturns, 4);
         expect(summary.attendance.present, 2);
         expect(summary.attendance.late, 1);
-        expect(summary.attendance.absent, 7);
-        expect(summary.attendance.totalScheduled, 10);
+        expect(summary.attendance.absent, 5);
+        expect(summary.attendance.totalScheduled, 8);
         expect(summary.branchSnapshots, isEmpty);
       },
     );
@@ -252,6 +253,7 @@ void main() {
         remote.counts = const OrganizationCounts(
           branchesByStatus: {'active': 1},
           activeEmployees: 0,
+          scheduledEmployees: 0,
           returnsByStatus: {},
         );
         final summary = await repo.getOrganizationDashboardSummary(
@@ -306,7 +308,11 @@ void main() {
 
     setUp(() {
       remote = _FakeBranchRemote(
-        const BranchCounts(memberCount: 6, returnsByStatus: {'pending': 2}),
+        const BranchCounts(
+          memberCount: 6,
+          scheduledMemberCount: 4,
+          returnsByStatus: {'pending': 2},
+        ),
       );
       repo = SqlConnectBranchDashboardRepository(
         remote: remote,
@@ -328,7 +334,8 @@ void main() {
       // Only br-01 entries: 2 checked in, 1 late.
       expect(summary.attendance.present, 1);
       expect(summary.attendance.late, 1);
-      expect(summary.attendance.absent, 4);
+      expect(summary.attendance.absent, 2);
+      expect(summary.attendance.totalScheduled, 4);
       expect(summary.attentionItems.map((i) => i.kind), [
         AttentionKind.pendingReturns,
         AttentionKind.lateArrivals,

@@ -5,11 +5,15 @@ import 'package:workaxis/core/backend/json_reader.dart';
 class BranchCounts {
   const BranchCounts({
     required this.memberCount,
+    required this.scheduledMemberCount,
     required this.returnsByStatus,
   });
 
   /// Members assigned to the branch.
   final int memberCount;
+
+  /// Active employees assigned here whose weekly schedule includes today.
+  final int scheduledMemberCount;
 
   /// Return count per lower-cased status.
   final Map<String, int> returnsByStatus;
@@ -33,6 +37,7 @@ class DataConnectBranchDashboardRemote implements BranchDashboardRemote {
     final data = await _gateway.call('GetBranchStats', {'branchId': branchId});
     return BranchCounts(
       memberCount: sumCounts(data.objects('memberCount')),
+      scheduledMemberCount: sumCounts(data.objects('scheduledMemberCount')),
       returnsByStatus: groupedCounts(
         data.objects('returnsByStatus'),
         'status',

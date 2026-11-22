@@ -245,26 +245,30 @@ class MockAttendanceRepository implements AttendanceRepository {
     }
     final results = <AttendanceEntry>[];
 
-    // One entry per employee per day: never record the same person twice.
+    // A second branch session is allowed after the earlier session closed.
     for (final attendee in request.attendees) {
       final alreadyRecorded = _entries.values.any(
         (entry) =>
             entry.organizationId == orgId &&
             entry.employeeId == attendee.employeeId &&
-            _sameDate(entry.workDate, request.workDate),
+            _sameDate(entry.workDate, request.workDate) &&
+            entry.checkInAt != null &&
+            entry.checkOutAt == null,
       );
       if (alreadyRecorded) {
         throw const DatabaseException(
-          'Group attendance includes employees already recorded.',
-          userMessage:
-              'Some selected employees already have attendance for this day.',
+          'Group attendance includes employees with an open session.',
+          userMessage: 'Some selected employees already have an open attendance session.',
         );
       }
     }
 
     for (final attendee in request.attendees) {
+      final requestId =
+          request.requestId ??
+          request.checkInAt.millisecondsSinceEpoch.toString();
       final entryId =
-          'att-grp-${attendee.employeeId}-${BusinessTime.keyOfDate(request.workDate)}';
+          'att-grp-${attendee.employeeId}-${BusinessTime.keyOfDate(request.workDate)}-$requestId';
 
       final finalNote = request.note != null && request.note!.isNotEmpty
           ? '${request.shiftName}: ${request.note}'

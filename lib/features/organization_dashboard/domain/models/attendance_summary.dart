@@ -1,8 +1,8 @@
 /// Daily attendance breakdown for organization or branch dashboards.
 ///
-/// There is no shift schedule or leave data in the backend yet, so real
-/// repositories derive [totalScheduled] from the expected headcount, [absent]
-/// from "no check-in recorded" and leave [onLeave] null (not tracked).
+/// Repositories supply [expectedHeadcount] from active employees whose
+/// effective schedule includes the current Asia/Kolkata business date. Weekly
+/// days off are excluded; approved leave remains untracked in this summary.
 class AttendanceSummary {
   final int present;
   final int late;
@@ -20,7 +20,7 @@ class AttendanceSummary {
     required this.totalScheduled,
   });
 
-  /// Builds a summary from check-in counts and the expected headcount.
+  /// Builds a summary from check-in counts and today's scheduled headcount.
   factory AttendanceSummary.fromCheckIns({
     required int checkedIn,
     required int late,

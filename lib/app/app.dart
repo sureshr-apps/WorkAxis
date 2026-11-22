@@ -18,12 +18,14 @@ import 'package:workaxis/features/branches/presentation/controllers/branch_manag
 import 'package:workaxis/features/employee_home/presentation/controllers/employee_home_controller.dart';
 import 'package:workaxis/features/employees/presentation/controllers/organization_members_controller.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
+import 'package:workaxis/features/employees/domain/repositories/employee_workforce_repository.dart';
 import 'package:workaxis/features/organization_dashboard/presentation/controllers/organization_dashboard_controller.dart';
 import 'package:workaxis/features/platform_dashboard/presentation/controllers/platform_dashboard_controller.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
 import 'package:workaxis/features/plans/presentation/controllers/license_plans_controller.dart';
 import 'package:workaxis/features/platform_users/presentation/controllers/platform_users_controller.dart';
 import 'package:workaxis/features/reports/presentation/controllers/reports_controller.dart';
+import 'package:workaxis/features/payroll/presentation/controllers/payslips_controller.dart';
 import 'package:workaxis/features/returns/presentation/controllers/returns_controller.dart';
 import 'package:workaxis/features/leaves/presentation/controllers/leaves_controller.dart';
 import 'package:workaxis/features/off_site_work/presentation/controllers/off_site_work_controller.dart';
@@ -67,6 +69,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
   late final LeavesController _leavesController;
   late final OffSiteWorkController _offSiteWorkController;
   late final ReportsController _reportsController;
+  late final PayslipsController _payslipsController;
   late final SettingsController _settingsController;
   late final SessionController _sessionController;
   late final GoRouter _router;
@@ -122,6 +125,9 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
       repository: repos.offSiteWorkRepository,
     );
     _reportsController = ReportsController(repository: repos.reportsRepository);
+    _payslipsController = PayslipsController(
+      repository: repos.payrollRepository,
+    );
     _settingsController = SettingsController(
       repository: repos.settingsRepository,
     );
@@ -135,6 +141,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
       _organizationMembersController,
       _assetsController,
       _reportsController,
+      _payslipsController,
     ];
     _sessionController = SessionController(
       auth: _authController,
@@ -187,6 +194,7 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
     _leavesController.dispose();
     _offSiteWorkController.dispose();
     _reportsController.dispose();
+    _payslipsController.dispose();
     _settingsController.dispose();
     super.dispose();
   }
@@ -197,6 +205,9 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
       providers: [
         Provider<OrganizationMembersRepository>.value(
           value: widget.repositories.organizationMembersRepository,
+        ),
+        Provider<EmployeeWorkforceRepository>.value(
+          value: widget.repositories.employeeWorkforceRepository,
         ),
         Provider<AttachmentStorage>.value(
           value: widget.repositories.attachmentStorage,
@@ -253,6 +264,9 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
         ),
         ChangeNotifierProvider<ReportsController>.value(
           value: _reportsController,
+        ),
+        ChangeNotifierProvider<PayslipsController>.value(
+          value: _payslipsController,
         ),
         ChangeNotifierProvider<SettingsController>.value(
           value: _settingsController,

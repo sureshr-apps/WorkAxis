@@ -10,7 +10,7 @@ extension AttendanceStatusPresentation on AttendanceStatus {
     AttendanceStatus.notCheckedIn => 'Not Checked In',
     AttendanceStatus.checkedIn => 'Checked In',
     AttendanceStatus.onBreak => 'On Meal Break',
-    AttendanceStatus.checkedOut => 'Shift Completed',
+    AttendanceStatus.checkedOut => 'Session Completed',
   };
 
   StatusType get chipType => switch (this) {
@@ -32,13 +32,13 @@ extension AttendanceStatusPresentation on AttendanceStatus {
     AttendanceStatus.notCheckedIn => 'Check In Now',
     AttendanceStatus.checkedIn => 'Start Break',
     AttendanceStatus.onBreak => 'Resume Shift',
-    AttendanceStatus.checkedOut => 'Shift Logged (Done for Today)',
+    AttendanceStatus.checkedOut => 'Check In At Another Branch',
   };
 
   IconData get heroActionIcon => switch (this) {
     AttendanceStatus.notCheckedIn => Icons.login,
     AttendanceStatus.checkedIn => Icons.local_cafe_outlined,
     AttendanceStatus.onBreak => Icons.play_arrow_rounded,
-    AttendanceStatus.checkedOut => Icons.done_all,
+    AttendanceStatus.checkedOut => Icons.login,
   };
 }

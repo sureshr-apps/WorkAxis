@@ -19,6 +19,7 @@ import 'package:workaxis/features/employee_home/domain/models/employee_home_summ
 import 'package:workaxis/features/employee_home/domain/models/location_peek.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/services/attendance_location_provider.dart';
+import 'package:workaxis/features/employees/domain/repositories/employee_workforce_repository.dart';
 
 /// Production [EmployeeHomeRepository].
 ///
@@ -33,6 +34,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     CallableFunctions? functions,
     this._selfieStorage,
     AttendanceLocationProvider? locationProvider,
+    this._workforceRepository,
     Now? now,
   }) : _customFirestore = firestore,
        _customFunctions = functions,
@@ -48,6 +50,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   final CallableFunctions? _customFunctions;
   final ScopedAttachmentStorage? _selfieStorage;
   final AttendanceLocationProvider _location;
+  final EmployeeWorkforceRepository? _workforceRepository;
   final Now _now;
 
   FirebaseFirestore get _firestore =>
@@ -64,10 +67,10 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       _requireAttendanceUser(access);
       final policy = await _fetchAttendancePolicy();
       _requireManagerAttendanceEnabled(access, policy);
-      final entry = await _todayEntry(access.user.id);
+      final entries = await _todayEntries(access.user.id);
       return await _summarize(
         access,
-        entry,
+        entries,
         policy: policy,
         requestLocationPermission: requestLocationPermission,
       );
@@ -97,7 +100,11 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   }) async {
     try {
       _requireAttendanceUser(access);
-      final branch = _punchBranch(access);
+      final todayEntries = await _todayEntries(access.user.id);
+      final activeEntry = _activeEntry(todayEntries);
+      final branch = action == AttendanceAction.checkIn
+          ? _punchBranch(access)
+          : _branchForEntry(access, activeEntry) ?? _punchBranch(access);
       final attendancePolicy = policy ?? await _fetchAttendancePolicy();
       _requireManagerAttendanceEnabled(access, attendancePolicy);
       String? selfiePath;
@@ -221,15 +228,43 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     return active.length == 1 ? active.single : null;
   }
 
-  Future<Map<String, dynamic>?> _todayEntry(String uid) async {
+  Future<List<Map<String, dynamic>>> _todayEntries(String uid) async {
     final key = BusinessTime.keyOfInstant(_now());
     final snapshot = await _firestore
         .collection('attendance_entries')
         .where('employeeId', isEqualTo: uid)
         .where('workDateString', isEqualTo: key)
-        .limit(1)
         .get();
-    return snapshot.docs.isEmpty ? null : snapshot.docs.first.data();
+    final entries = snapshot.docs.map((document) => document.data()).toList();
+    entries.sort(
+      (a, b) =>
+          (AttendanceEntryMapper.instant(a['checkInAt']) ?? DateTime(1970))
+              .compareTo(
+                AttendanceEntryMapper.instant(b['checkInAt']) ?? DateTime(1970),
+              ),
+    );
+    return entries;
+  }
+
+  Map<String, dynamic>? _activeEntry(List<Map<String, dynamic>> entries) {
+    for (final entry in entries.reversed) {
+      if (AttendanceEntryMapper.instant(entry['checkInAt']) != null &&
+          AttendanceEntryMapper.instant(entry['checkOutAt']) == null) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  BranchSummary? _branchForEntry(
+    UserAccessContext access,
+    Map<String, dynamic>? entry,
+  ) {
+    final branchId = entry?['branchId'];
+    if (branchId is! String) return null;
+    return access.assignedBranches
+        .where((branch) => branch.id == branchId)
+        .firstOrNull;
   }
 
   static const double _earthRadiusMeters = 6371000.0;
@@ -255,13 +290,15 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
 
   Future<EmployeeHomeSummary> _summarize(
     UserAccessContext access,
-    Map<String, dynamic>? entry, {
+    List<Map<String, dynamic>> entries, {
     required EmployeeAttendancePolicy policy,
     required bool requestLocationPermission,
   }) async {
-    final checkIn = AttendanceEntryMapper.instant(entry?['checkInAt']);
-    final checkOut = AttendanceEntryMapper.instant(entry?['checkOutAt']);
-    final breaks = _breaks(entry?['breaks']);
+    final current =
+        _activeEntry(entries) ?? (entries.isEmpty ? null : entries.last);
+    final checkIn = AttendanceEntryMapper.instant(current?['checkInAt']);
+    final checkOut = AttendanceEntryMapper.instant(current?['checkOutAt']);
+    final breaks = _breaks(current?['breaks']);
     final onBreak = breaks.any((b) => b.end == null);
 
     final status = checkOut != null
@@ -272,9 +309,12 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         ? AttendanceStatus.checkedIn
         : AttendanceStatus.notCheckedIn;
 
-    final recordedByManager = entry?['source'] == 'manager-group';
+    final recordedByManager = current?['source'] == 'manager-group';
 
-    final branch = _displayBranch(access);
+    final activeSession = _activeEntry(entries);
+    final branch = activeSession == null
+        ? _displayBranch(access)
+        : _branchForEntry(access, activeSession);
     bool isWithinGeofence = false;
     String locationStatus = policy.requireGeolocation
         ? (checkIn != null
@@ -316,23 +356,29 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     double dailyWorkHours = 8.0;
     String shiftHours = EmployeeHomeSummary.unavailable;
     try {
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(access.user.id)
-          .get();
-      final userData = userDoc.data();
-      if (userData != null) {
-        final hoursVal = userData['dailyWorkHours'];
-        if (hoursVal is num && hoursVal > 0) {
-          dailyWorkHours = hoursVal.toDouble();
-        }
-        final shiftVal = userData['shiftHours'];
-        if (shiftVal is String && shiftVal.trim().isNotEmpty) {
-          shiftHours = shiftVal.trim();
+      final workforceRepository = _workforceRepository;
+      if (workforceRepository != null) {
+        final history = await workforceRepository.getHistory(
+          access: access,
+          memberId: '',
+          activeBranchId: access.activeBranch?.branchId,
+        );
+        final todayKey = BusinessTime.keyOfInstant(_now());
+        final schedule = history.schedules.where((version) {
+          final from = _dateKey(version.effectiveFrom);
+          final to = version.effectiveTo == null
+              ? null
+              : _dateKey(version.effectiveTo!);
+          return from.compareTo(todayKey) <= 0 &&
+              (to == null || todayKey.compareTo(to) < 0);
+        }).firstOrNull;
+        if (schedule != null) {
+          dailyWorkHours = schedule.dailyWorkHours;
+          shiftHours = schedule.shiftHours;
         }
       }
     } catch (_) {
-      // Fallback to defaults if read fails or device is offline.
+      // Defaults keep the dashboard usable if history is not yet backfilled.
     }
 
     final totalMinutes = (dailyWorkHours * 60).round();
@@ -342,6 +388,14 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         '${stdHours}h ${stdMins.toString().padLeft(2, '0')}m';
 
     final standardShiftSeconds = (dailyWorkHours * 3600).round();
+    final currentIndex = current == null ? -1 : entries.indexOf(current);
+    var previousWorkedSeconds = 0;
+    var totalWorked = Duration.zero;
+    for (var index = 0; index < entries.length; index++) {
+      final duration = _workedDuration(entries[index], _now());
+      totalWorked += duration;
+      if (index != currentIndex) previousWorkedSeconds += duration.inSeconds;
+    }
     final session = checkIn == null
         ? null
         : AttendanceSession(
@@ -352,8 +406,9 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
                 AttendanceBreak(start: b.start, end: b.end),
             ],
             standardSeconds: standardShiftSeconds,
+            workedBeforeSeconds: previousWorkedSeconds,
           );
-    final worked = session?.workedAt(_now());
+    final worked = session?.workedAt(_now()) ?? totalWorked;
     final progress = session?.progressAt(_now()) ?? 0.0;
 
     return EmployeeHomeSummary(
@@ -368,16 +423,11 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       checkInTime: AppFormatters.formatTime(checkIn, placeholder: '-- : --'),
       checkInNote: recordedByManager ? 'Recorded by your manager' : null,
       checkOutTime: AppFormatters.formatTime(checkOut, placeholder: '-- : --'),
-      workingDuration: worked == null
-          ? '0h 00m'
-          : AttendanceSession.formatDuration(worked),
+      workingDuration: AttendanceSession.formatDuration(worked),
       shiftProgress: progress,
-      elapsedActive: worked == null
-          ? '-- : --'
-          : AttendanceSession.formatDuration(worked),
-      elapsedActivePercentText: worked == null
-          ? EmployeeHomeSummary.unavailable
-          : '${(progress * 100).toStringAsFixed(0)}% complete',
+      elapsedActive: AttendanceSession.formatDuration(worked),
+      elapsedActivePercentText:
+          '${(progress * 100).toStringAsFixed(0)}% complete',
       locationStatus: locationStatus,
       isWithinGeofence: isWithinGeofence,
       requireGeolocation: policy.requireGeolocation,
@@ -437,6 +487,26 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         ),
     ];
   }
+
+  Duration _workedDuration(Map<String, dynamic> entry, DateTime now) {
+    final start = AttendanceEntryMapper.instant(entry['checkInAt']);
+    if (start == null) return Duration.zero;
+    final checkOut = AttendanceEntryMapper.instant(entry['checkOutAt']);
+    final end = checkOut ?? now;
+    var worked = end.difference(start);
+    for (final pause in _breaks(entry['breaks'])) {
+      final pauseEnd = pause.end ?? end;
+      if (!pause.start.isAfter(end)) {
+        worked -= pauseEnd.isAfter(end)
+            ? end.difference(pause.start)
+            : pauseEnd.difference(pause.start);
+      }
+    }
+    return worked.isNegative ? Duration.zero : worked;
+  }
+
+  String _dateKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   String _kind(AttendanceAction action) => switch (action) {
     AttendanceAction.checkIn => 'checkIn',

@@ -13,8 +13,7 @@ class DailyCheckInCounts {
   final int late;
 }
 
-/// Aggregates today's `attendance_entries` with Firestore count queries, so
-/// dashboards never download documents just to count them.
+/// Aggregates today's session documents into unique employee counts.
 ///
 /// Queries are always constrained by organization (and branch when given) to
 /// satisfy `firestore.rules`.
@@ -51,13 +50,18 @@ class AttendanceDayCounter {
     if (branchId != null) {
       base = base.where('branchId', isEqualTo: branchId);
     }
-    final results = await Future.wait([
-      base.count().get(),
-      base.where('status', isEqualTo: 'late').count().get(),
-    ]);
+    final snapshot = await base.get();
+    final checkedInEmployees = <String>{};
+    final lateEmployees = <String>{};
+    for (final document in snapshot.docs) {
+      final employeeId = document.data()['employeeId'];
+      if (employeeId is! String || employeeId.isEmpty) continue;
+      checkedInEmployees.add(employeeId);
+      if (document.data()['status'] == 'late') lateEmployees.add(employeeId);
+    }
     return DailyCheckInCounts(
-      checkedIn: results[0].count ?? 0,
-      late: results[1].count ?? 0,
+      checkedIn: checkedInEmployees.length,
+      late: lateEmployees.length,
     );
   }
 }

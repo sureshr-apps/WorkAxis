@@ -23,6 +23,7 @@ class EmployeeEmploymentSection extends StatelessWidget {
     required this.onJoiningDateChanged,
     required this.relievingDate,
     required this.onRelievingDateChanged,
+    this.includeSalary = true,
     this.assetsController,
     this.feedback = MemberFormFeedback.none,
   });
@@ -33,6 +34,7 @@ class EmployeeEmploymentSection extends StatelessWidget {
   final ValueChanged<DateTime?> onJoiningDateChanged;
   final DateTime? relievingDate;
   final ValueChanged<DateTime?> onRelievingDateChanged;
+  final bool includeSalary;
 
   /// Accepted for legacy callers; asset assignments are managed elsewhere.
   final TextEditingController? assetsController;
@@ -83,12 +85,14 @@ class EmployeeEmploymentSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Employment & Compensation',
+          includeSalary ? 'Employment & Compensation' : 'Employment',
           style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Role designation, service tenure dates, and compensation.',
+          includeSalary
+              ? 'Role designation, service tenure dates, and starting compensation.'
+              : 'Role designation and service tenure dates.',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.onSurfaceVariant,
           ),
@@ -110,25 +114,27 @@ class EmployeeEmploymentSection extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: feedback.anchor(
-                MemberField.salary,
-                AppTextField(
-                  controller: salaryController,
-                  label: feedback.label('Monthly Salary', MemberField.salary),
-                  errorText: feedback.errorFor(MemberField.salary),
-                  hintText: 'e.g. 25000',
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  prefixIcon: const Icon(
-                    Icons.currency_rupee_rounded,
-                    size: 20,
+            if (includeSalary) ...[
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: feedback.anchor(
+                  MemberField.salary,
+                  AppTextField(
+                    controller: salaryController,
+                    label: feedback.label('Monthly Salary', MemberField.salary),
+                    errorText: feedback.errorFor(MemberField.salary),
+                    hintText: 'e.g. 25000',
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.currency_rupee_rounded,
+                      size: 20,
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
         const SizedBox(height: AppSpacing.md),

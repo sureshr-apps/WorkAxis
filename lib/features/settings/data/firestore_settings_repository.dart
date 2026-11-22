@@ -72,6 +72,8 @@ class FirestoreSettingsRepository implements SettingsRepository {
         'requireAttendanceSelfie': settings.requireAttendanceSelfie,
         'requireBranchManagerAttendance':
             settings.requireBranchManagerAttendance,
+        'payCalculationBasis': settings.payCalculationBasis.wireValue,
+        'overtimeEnabled': settings.overtimeEnabled,
         'operationsEmail': _blankToNull(settings.operationsEmail),
         'emergencyPhone': _blankToNull(settings.emergencyPhone),
         'updatedBy': access.user.id,
@@ -141,6 +143,10 @@ class FirestoreSettingsRepository implements SettingsRepository {
       requireBranchManagerAttendance:
           data['requireBranchManagerAttendance'] as bool? ??
           d.requireBranchManagerAttendance,
+      payCalculationBasis: PayCalculationBasis.fromWire(
+        data['payCalculationBasis'],
+      ),
+      overtimeEnabled: data['overtimeEnabled'] as bool? ?? d.overtimeEnabled,
       operationsEmail: data['operationsEmail'] as String?,
       emergencyPhone: data['emergencyPhone'] as String?,
     );

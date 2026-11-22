@@ -45,6 +45,9 @@ import 'package:workaxis/features/employee_home/domain/services/attendance_locat
 import 'package:workaxis/features/employee_home/domain/services/gateway_attendance_location_provider.dart';
 import 'package:workaxis/features/employees/data/mock_organization_members_repository.dart';
 import 'package:workaxis/features/employees/data/sql_connect_organization_members_repository.dart';
+import 'package:workaxis/features/employees/data/mock_employee_workforce_repository.dart';
+import 'package:workaxis/features/employees/data/sql_connect_employee_workforce_repository.dart';
+import 'package:workaxis/features/employees/domain/repositories/employee_workforce_repository.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 import 'package:workaxis/features/organization_dashboard/data/mock_organization_dashboard_repository.dart';
 import 'package:workaxis/features/organization_dashboard/data/sql_connect_organization_dashboard_repository.dart';
@@ -63,6 +66,9 @@ import 'package:workaxis/features/platform_users/domain/repositories/platform_us
 import 'package:workaxis/features/reports/data/mock_reports_repository.dart';
 import 'package:workaxis/features/reports/data/sql_connect_reports_repository.dart';
 import 'package:workaxis/features/reports/domain/repositories/reports_repository.dart';
+import 'package:workaxis/features/payroll/data/mock_payroll_repository.dart';
+import 'package:workaxis/features/payroll/data/sql_connect_payroll_repository.dart';
+import 'package:workaxis/features/payroll/domain/repositories/payroll_repository.dart';
 import 'package:workaxis/features/returns/data/mock_returns_repository.dart';
 import 'package:workaxis/features/returns/data/sql_connect_returns_repository.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
@@ -98,6 +104,8 @@ class BackendRepositories {
     required this.leavesRepository,
     required this.offSiteWorkRepository,
     required this.reportsRepository,
+    required this.payrollRepository,
+    required this.employeeWorkforceRepository,
     required this.settingsRepository,
     required this.attachmentStorage,
   });
@@ -119,6 +127,8 @@ class BackendRepositories {
   final LeavesRepository leavesRepository;
   final OffSiteWorkRepository offSiteWorkRepository;
   final ReportsRepository reportsRepository;
+  final PayrollRepository payrollRepository;
+  final EmployeeWorkforceRepository employeeWorkforceRepository;
   final SettingsRepository settingsRepository;
   final AttachmentStorage attachmentStorage;
 }
@@ -154,6 +164,9 @@ class BackendFactory {
           GatewayAttendanceLocationProvider(
             const GeolocatorDeviceLocationGateway(),
           );
+      final workforceRepository = SqlConnectEmployeeWorkforceRepository(
+        gateway: data,
+      );
       final platformOrganizationsRepository =
           SqlConnectPlatformOrganizationsRepository(
             dataSource: SqlConnectPlatformOrganizationsRemoteDataSource(
@@ -202,6 +215,7 @@ class BackendFactory {
           functions: callables,
           selfieStorage: attachmentStorage,
           locationProvider: resolvedLocationProvider,
+          workforceRepository: workforceRepository,
           now: now,
         ),
         branchManagementRepository: SqlConnectBranchManagementRepository(
@@ -233,6 +247,8 @@ class BackendFactory {
           locationProvider: resolvedLocationProvider,
         ),
         reportsRepository: SqlConnectReportsRepository(gateway: data),
+        payrollRepository: SqlConnectPayrollRepository(gateway: data),
+        employeeWorkforceRepository: workforceRepository,
         settingsRepository: FirestoreSettingsRepository(firestore: firestore),
         attachmentStorage: attachmentStorage,
       );
@@ -326,6 +342,8 @@ class BackendFactory {
       reportsRepository: delay == null
           ? MockReportsRepository()
           : MockReportsRepository(delay: delay),
+      payrollRepository: const MockPayrollRepository(),
+      employeeWorkforceRepository: const MockEmployeeWorkforceRepository(),
       settingsRepository: settingsRepository,
       attachmentStorage: attachmentStorage,
     );

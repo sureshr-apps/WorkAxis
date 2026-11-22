@@ -21,7 +21,7 @@ class ShiftSimulatorBar extends StatelessWidget {
     AttendanceStatus.notCheckedIn: 'Not Checked In',
     AttendanceStatus.checkedIn: 'Checked In (Active)',
     AttendanceStatus.onBreak: 'On Break',
-    AttendanceStatus.checkedOut: 'Shift Completed',
+    AttendanceStatus.checkedOut: 'Session Completed',
   };
 
   @override

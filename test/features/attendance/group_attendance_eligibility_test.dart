@@ -16,16 +16,19 @@ void main() {
     AttendanceStatus status = AttendanceStatus.present,
     DateTime? workDate,
     bool checkedIn = true,
+    bool checkedOut = false,
+    String branchId = 'br-01',
   }) => AttendanceEntry(
     id: 'e-$employeeId',
     organizationId: 'org',
-    branchId: 'br-01',
+    branchId: branchId,
     employeeId: employeeId,
     employeeName: employeeId,
     workDate: workDate ?? day,
     status: status,
     reviewStatus: AttendanceReviewStatus.none,
     checkInAt: checkedIn ? testNow : null,
+    checkOutAt: checkedOut ? testNow.add(const Duration(hours: 1)) : null,
   );
 
   OrganizationMember member(
@@ -85,6 +88,33 @@ void main() {
         isFalse,
       );
     });
+
+    test(
+      'a closed session does not block a later session at another branch',
+      () {
+        final closedBranchASession = entry(
+          'a',
+          branchId: 'br-01',
+          checkedOut: true,
+        );
+
+        expect(
+          eligibility.hasRecorded('a', [closedBranchASession], day),
+          isFalse,
+        );
+        expect(
+          eligibility.unrecordedMembers(
+            [
+              member('a', branches: const ['br-01', 'br-02']),
+            ],
+            branchId: 'br-02',
+            entries: [closedBranchASession],
+            day: day,
+          ),
+          hasLength(1),
+        );
+      },
+    );
 
     test('the time of day on either side is ignored', () {
       expect(

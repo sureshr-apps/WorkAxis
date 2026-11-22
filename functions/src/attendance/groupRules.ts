@@ -38,7 +38,7 @@ export function parseGroupAttendance(input: unknown, now: Date) {
   if (
     !Array.isArray(raw) ||
     raw.length === 0 ||
-    raw.length > 400 ||
+    raw.length > 200 ||
     raw.some(
       (uid) =>
         typeof uid !== "string" ||
@@ -47,7 +47,7 @@ export function parseGroupAttendance(input: unknown, now: Date) {
         uid.includes("/"),
     )
   ) {
-    throw invalid("Select between 1 and 400 employees.");
+    throw invalid("Select between 1 and 200 employees.");
   }
   const employeeIds = raw as string[];
   if (new Set(employeeIds).size !== employeeIds.length)

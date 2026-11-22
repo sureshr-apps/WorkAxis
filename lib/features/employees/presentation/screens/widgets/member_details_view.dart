@@ -111,16 +111,6 @@ class MemberDetailsView extends StatelessWidget {
         if (member.address != null && member.address!.isNotEmpty)
           _Detail(label: 'Address', value: member.address!),
 
-        const Divider(height: 16),
-
-        _Detail(
-          label: 'Work hours',
-          value:
-              '${member.dailyWorkHours == member.dailyWorkHours.roundToDouble() ? member.dailyWorkHours.toInt() : member.dailyWorkHours.toStringAsFixed(1)} hrs / day',
-        ),
-        if (member.shiftHours != null && member.shiftHours!.isNotEmpty)
-          _Detail(label: 'Shift window', value: member.shiftHours!),
-
         if (member.joiningDate != null)
           _Detail(
             label: 'Joining Date',
@@ -130,11 +120,6 @@ class MemberDetailsView extends StatelessWidget {
           _Detail(
             label: 'Relieving Date',
             value: _dateFormat.format(member.relievingDate!),
-          ),
-        if (member.salary != null)
-          _Detail(
-            label: 'Monthly Salary',
-            value: '₹${member.salary!.toStringAsFixed(0)}',
           ),
         _Detail(
           label: 'Branches',

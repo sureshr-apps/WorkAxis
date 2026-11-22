@@ -23,7 +23,7 @@ export const usersCol = () => getFirestore().collection("users");
 export const employeePrivateCol = () => getFirestore().collection("employee_private");
 
 /** Profile keys that must never live on the manager-readable users/{uid} doc. */
-const PRIVATE_KEYS = ["salary", "aadhaarNumber", "aadhaarPhotoUrl"] as const;
+const PRIVATE_KEYS = ["aadhaarNumber", "aadhaarPhotoUrl"] as const;
 
 /**
  * Firestore patch for the sensitive HR fields: a value sets, `null` deletes the
@@ -41,8 +41,6 @@ export function buildPrivatePatch(extra?: Pick<EmployeeProfileExtra, (typeof PRI
 }
 
 const PROFILE_KEYS = [
-  "dailyWorkHours",
-  "shiftHours",
   "dateOfBirth",
   "gender",
   "address",

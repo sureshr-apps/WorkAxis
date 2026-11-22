@@ -16,6 +16,7 @@ class OrganizationMember {
     this.authUid,
     this.dailyWorkHours = 8.0,
     this.shiftHours = '09:00 AM - 05:00 PM',
+    this.weeklyDayOff = 0,
     this.employeeCode,
     this.aadhaarNumber,
     this.aadhaarPhotoUrl,
@@ -46,6 +47,9 @@ class OrganizationMember {
   final AccountStatus status;
   final double dailyWorkHours;
   final String? shiftHours;
+
+  /// Weekday assigned as the employee's recurring weekly day off (Sunday = 0).
+  final int weeklyDayOff;
 
   /// Human-readable employee code/ID (e.g. 'EMP-10001').
   final String? employeeCode;
@@ -107,6 +111,7 @@ class OrganizationMember {
     AccountStatus? status,
     double? dailyWorkHours,
     String? shiftHours,
+    int? weeklyDayOff,
     String? employeeCode,
     String? aadhaarNumber,
     String? aadhaarPhotoUrl,
@@ -134,6 +139,7 @@ class OrganizationMember {
     status: status ?? this.status,
     dailyWorkHours: dailyWorkHours ?? this.dailyWorkHours,
     shiftHours: shiftHours ?? this.shiftHours,
+    weeklyDayOff: weeklyDayOff ?? this.weeklyDayOff,
     employeeCode: clear.contains(MemberField.employeeCode)
         ? null
         : employeeCode ?? this.employeeCode,

@@ -166,7 +166,7 @@ void main() {
     });
 
     test(
-      'profile fields including dailyWorkHours hydrate from Firestore',
+      'legacy schedule and salary profile values are not hydrated',
       () async {
         final fakeFirestore = FakeFirebaseFirestore();
         await fakeFirestore.collection('users').doc('user-emp-02').set({
@@ -204,8 +204,10 @@ void main() {
         );
 
         expect(member, isNotNull);
-        expect(member!.dailyWorkHours, 9.0);
-        expect(member.shiftHours, '9:00 AM - 6:00 PM');
+        // Schedule and compensation histories are loaded from PostgreSQL by
+        // EmployeeWorkforceRepository, not from legacy profile fields.
+        expect(member!.dailyWorkHours, 8.0);
+        expect(member.shiftHours, '09:00 AM - 05:00 PM');
         // SQL is authoritative: the stale Firestore value must not override it.
         expect(member.employeeCode, server.byId('user-emp-02')!.employeeCode);
         expect(member.employeeCode, isNot('EMP-OLD'));
@@ -218,7 +220,7 @@ void main() {
         expect(member.designation, 'Senior Branch Manager');
         expect(member.joiningDate, DateTime(2023, 1, 10));
         expect(member.relievingDate, DateTime(2025, 12, 31));
-        expect(member.salary, 75000.0);
+        expect(member.salary, isNull);
         expect(member.assetDetails, 'MacBook Pro M3');
 
         // Test page enrichment as well (which runs on refresh)
@@ -228,53 +230,57 @@ void main() {
         final enrichedInPage = page.items.firstWhere(
           (m) => m.id == 'user-emp-02',
         );
-        expect(enrichedInPage.dailyWorkHours, 9.0);
+        expect(enrichedInPage.dailyWorkHours, 8.0);
         expect(enrichedInPage.designation, 'Senior Branch Manager');
-        expect(enrichedInPage.salary, 75000.0);
+        expect(enrichedInPage.salary, isNull);
       },
     );
 
-    test('a branch manager reads private HR details for an employee in the active branch', () async {
-      final fakeFirestore = FakeFirebaseFirestore();
-      await fakeFirestore.collection('users').doc('user-emp-02').set({
-        'organizationId': 'org-acme',
-        'role': 'employee',
-        'branchIds': ['br-01'],
-        'designation': 'Cashier',
-      });
-      await fakeFirestore.collection('employee_private').doc('user-emp-02').set(
-        {
+    test(
+      'a branch manager reads scoped details without legacy salary',
+      () async {
+        final fakeFirestore = FakeFirebaseFirestore();
+        await fakeFirestore.collection('users').doc('user-emp-02').set({
           'organizationId': 'org-acme',
-          'salary': 75000.0,
-          'aadhaarNumber': '123456789012',
-          'aadhaarPhotoUrl': 'https://example.com/aadhaar.jpg',
-        },
-      );
-      final managerRepo = SqlConnectOrganizationMembersRepository(
-        dataSource: FakeMembersDataSource(server),
-        accounts: AccountCallables(server),
-        firestore: fakeFirestore,
-      );
-      final access = branchManagerAccess(activeBranchId: 'br-01');
+          'role': 'employee',
+          'branchIds': ['br-01'],
+          'designation': 'Cashier',
+        });
+        await fakeFirestore
+            .collection('employee_private')
+            .doc('user-emp-02')
+            .set({
+              'organizationId': 'org-acme',
+              'salary': 75000.0,
+              'aadhaarNumber': '123456789012',
+              'aadhaarPhotoUrl': 'https://example.com/aadhaar.jpg',
+            });
+        final managerRepo = SqlConnectOrganizationMembersRepository(
+          dataSource: FakeMembersDataSource(server),
+          accounts: AccountCallables(server),
+          firestore: fakeFirestore,
+        );
+        final access = branchManagerAccess(activeBranchId: 'br-01');
 
-      final member = await managerRepo.getMember(
-        access: access,
-        memberId: 'user-emp-02',
-        activeBranchId: 'br-01',
-      );
-      expect(member, isNotNull);
-      expect(member!.designation, 'Cashier');
-      expect(member.salary, 75000.0);
-      expect(member.aadhaarNumber, '123456789012');
-      expect(member.aadhaarPhotoUrl, 'https://example.com/aadhaar.jpg');
+        final member = await managerRepo.getMember(
+          access: access,
+          memberId: 'user-emp-02',
+          activeBranchId: 'br-01',
+        );
+        expect(member, isNotNull);
+        expect(member!.designation, 'Cashier');
+        expect(member.salary, isNull);
+        expect(member.aadhaarNumber, '123456789012');
+        expect(member.aadhaarPhotoUrl, 'https://example.com/aadhaar.jpg');
 
-      final page = await managerRepo.getMembersPage(
-        access: access,
-        activeBranchId: 'br-01',
-      );
-      final listed = page.items.firstWhere((m) => m.id == 'user-emp-02');
-      expect(listed.salary, 75000.0);
-    });
+        final page = await managerRepo.getMembersPage(
+          access: access,
+          activeBranchId: 'br-01',
+        );
+        final listed = page.items.firstWhere((m) => m.id == 'user-emp-02');
+        expect(listed.salary, isNull);
+      },
+    );
 
     test(
       'editing when private data is not loaded sends no salary or Aadhaar',

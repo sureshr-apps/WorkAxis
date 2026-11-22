@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
+import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employee_home/data/mock_employee_home_repository.dart';
@@ -115,6 +116,8 @@ void main() {
           'user-emp-01',
           name: 'Sarah Connor',
         );
+        final branchController = BranchContextController()
+          ..initFromAccessContext(accessController.accessContext!);
         await controller.loadHomeSummary(access: employeeAccess());
 
         await tester.pumpWidget(
@@ -125,6 +128,9 @@ void main() {
               providers: [
                 ChangeNotifierProvider<AccessController>.value(
                   value: accessController,
+                ),
+                ChangeNotifierProvider<BranchContextController>.value(
+                  value: branchController,
                 ),
                 ChangeNotifierProvider<EmployeeHomeController>.value(
                   value: controller,
@@ -153,7 +159,7 @@ void main() {
         expect(find.text('Not Checked In'), findsWidgets);
         expect(find.text('Checked In (Active)'), findsOneWidget);
         expect(find.text('On Break'), findsOneWidget);
-        expect(find.text('Shift Completed'), findsOneWidget);
+        expect(find.text('Session Completed'), findsOneWidget);
 
         // 3. Verify Hero Attendance Card
         expect(find.byType(HeroAttendanceCard), findsOneWidget);
@@ -241,6 +247,8 @@ void main() {
         'user-emp-01',
         name: 'Sarah Connor',
       );
+      final branchController = BranchContextController()
+        ..initFromAccessContext(accessController.accessContext!);
       await controller.loadHomeSummary(access: employeeAccess());
 
       await tester.pumpWidget(
@@ -251,6 +259,9 @@ void main() {
             providers: [
               ChangeNotifierProvider<AccessController>.value(
                 value: accessController,
+              ),
+              ChangeNotifierProvider<BranchContextController>.value(
+                value: branchController,
               ),
               ChangeNotifierProvider<EmployeeHomeController>.value(
                 value: controller,
@@ -283,6 +294,8 @@ void main() {
         'user-emp-01',
         name: 'Sarah Connor',
       );
+      final branchController = BranchContextController()
+        ..initFromAccessContext(accessController.accessContext!);
       await controller.loadHomeSummary(access: employeeAccess());
 
       await tester.pumpWidget(
@@ -293,6 +306,9 @@ void main() {
             providers: [
               ChangeNotifierProvider<AccessController>.value(
                 value: accessController,
+              ),
+              ChangeNotifierProvider<BranchContextController>.value(
+                value: branchController,
               ),
               ChangeNotifierProvider<EmployeeHomeController>.value(
                 value: controller,

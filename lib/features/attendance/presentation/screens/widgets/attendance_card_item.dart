@@ -4,44 +4,41 @@ import 'package:workaxis/app/theme/app_shadows.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/formatting/date_time_formatters.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
-import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
+import 'package:workaxis/features/attendance/domain/models/attendance_day_summary.dart';
 import 'package:workaxis/features/attendance/presentation/attendance_presentation.dart';
-import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_method_badge.dart';
 
-/// Card representation of an attendance record for smartphone and tablet
-/// widths, replacing the wide table.
+/// Responsive card for one employee/day; underlying sessions open in details.
 class AttendanceCardItem extends StatelessWidget {
   const AttendanceCardItem({
     super.key,
-    required this.entry,
-    required this.branchName,
-    required this.canReview,
-    required this.isSaving,
-    required this.onReview,
+    required this.summary,
+    required this.branchNames,
     required this.onDetails,
   });
 
-  final AttendanceEntry entry;
-  final String branchName;
-  final bool canReview;
-  final bool isSaving;
-  final void Function(AttendanceEntry entry, AttendanceReviewDecision decision)?
-  onReview;
+  final AttendanceDaySummary summary;
+  final String branchNames;
   final VoidCallback onDetails;
+
+  String get _initials {
+    final parts = summary.employeeName.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '?';
+    return parts.length == 1
+        ? parts.first.characters.first.toUpperCase()
+        : '${parts.first.characters.first}${parts.last.characters.first}'
+              .toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isNeedsReview = entry.needsReview;
-    final hasNote = entry.note != null && entry.note!.isNotEmpty;
-
+    final needsReview = summary.needsReviewCount > 0;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: AppSpacing.roundedMd,
         border: Border.all(
-          color: isNeedsReview
+          color: needsReview
               ? AppColors.statusPendingBorder
               : AppColors.outlineSubtle,
         ),
@@ -57,15 +54,83 @@ class AttendanceCardItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _topRow(),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: AppColors.primaryContainer,
+                      child: Text(
+                        _initials,
+                        style: AppTypography.labelMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            summary.employeeName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodyMedium.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            AppFormatters.formatDate(summary.workDate),
+                            style: AppTypography.labelSmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    StatusChip(
+                      label: summary.status.label,
+                      type: summary.status.chipType,
+                    ),
+                  ],
+                ),
                 const SizedBox(height: AppSpacing.md),
-                _infoPanel(),
-                if (isNeedsReview || hasNote) ...[
+                _InfoPanel(
+                  branchNames: branchNames,
+                  branchCount: summary.branchIds.length,
+                  sessionCount: summary.sessions.length,
+                  firstCheckIn: summary.firstCheckIn,
+                  lastCheckOut: summary.lastCheckOut,
+                ),
+                if (needsReview) ...[
                   const SizedBox(height: AppSpacing.sm),
-                  _noticeBanner(),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        size: 16,
+                        color: AppColors.statusPendingText,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        '${summary.needsReviewCount} session(s) need review',
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.statusPendingText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
                 const SizedBox(height: AppSpacing.sm),
-                _actionRow(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: onDetails,
+                    icon: const Icon(Icons.history, size: 18),
+                    label: const Text('View sessions'),
+                  ),
+                ),
               ],
             ),
           ),
@@ -73,236 +138,110 @@ class AttendanceCardItem extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _topRow() {
-    return Row(
+class _InfoPanel extends StatelessWidget {
+  const _InfoPanel({
+    required this.branchNames,
+    required this.branchCount,
+    required this.sessionCount,
+    required this.firstCheckIn,
+    required this.lastCheckOut,
+  });
+
+  final String branchNames;
+  final int branchCount;
+  final int sessionCount;
+  final DateTime? firstCheckIn;
+  final DateTime? lastCheckOut;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      borderRadius: AppSpacing.roundedSm,
+      border: Border.all(color: AppColors.outlineSubtle),
+    ),
+    child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 20,
-          backgroundColor: AppColors.primaryContainer,
-          child: Text(
-            entry.initials,
-            style: AppTypography.labelMedium.copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                entry.employeeName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xxs),
-              Text(
-                entry.employeeId,
-                style: AppTypography.labelMono.copyWith(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.secondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        StatusChip(label: entry.status.label, type: entry.status.chipType),
-      ],
-    );
-  }
-
-  Widget _infoPanel() {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: AppSpacing.roundedSm,
-        border: Border.all(color: AppColors.outlineSubtle),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.storefront_outlined,
-                size: 15,
-                color: AppColors.secondary,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: Text(
-                  branchName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySmall.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.onSurface,
-                  ),
-                ),
-              ),
-              AttendanceMethodBadge(entry: entry),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          const Divider(height: 1, color: AppColors.outlineSubtle),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            children: [
-              Expanded(
-                child: _TimeLabel(
-                  icon: Icons.login_rounded,
-                  iconColor: AppColors.statusActive,
-                  prefix: 'In',
-                  time: entry.checkInAt,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: _TimeLabel(
-                  icon: Icons.logout_rounded,
-                  iconColor: AppColors.secondary,
-                  prefix: 'Out',
-                  time: entry.checkOutAt,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _noticeBanner() {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.statusPendingContainer,
-        borderRadius: AppSpacing.roundedXs,
-        border: Border.all(color: AppColors.statusPendingBorder),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            size: 14,
-            color: AppColors.statusPendingText,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text(
-              entry.note ?? 'Needs supervisor verification',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.labelSmall.copyWith(
-                fontWeight: FontWeight.w500,
-                color: AppColors.statusPendingText,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionRow() {
-    final showReview = canReview && entry.needsReview && onReview != null;
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.xs,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      alignment: WrapAlignment.spaceBetween,
-      children: [
-        if (showReview)
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.xs,
-            children: [
-              AppButton.secondary(
-                text: 'Verify',
-                iconData: Icons.check,
-                isFullWidth: false,
-                onPressed: isSaving
-                    ? null
-                    : () => onReview!(entry, AttendanceReviewDecision.verify),
-              ),
-              AppButton.outlined(
-                text: 'Dismiss',
-                iconData: Icons.close,
-                isFullWidth: false,
-                onPressed: isSaving
-                    ? null
-                    : () => onReview!(entry, AttendanceReviewDecision.dismiss),
-              ),
-            ],
-          ),
         Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'Details',
-              style: AppTypography.labelMedium.copyWith(
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
+            const Icon(
+              Icons.storefront_outlined,
+              size: 16,
+              color: AppColors.secondary,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Text(
+                branchNames,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.onSurface,
+                ),
               ),
             ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 16,
-              color: AppColors.primary,
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '$sessionCount session(s) · $branchCount branch(es)',
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.onSurfaceVariant,
+          ),
+        ),
+        const Divider(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: _TimeLabel(
+                icon: Icons.login_rounded,
+                label: 'First in',
+                time: firstCheckIn,
+              ),
+            ),
+            Expanded(
+              child: _TimeLabel(
+                icon: Icons.logout_rounded,
+                label: 'Last out',
+                time: lastCheckOut,
+              ),
             ),
           ],
         ),
       ],
-    );
-  }
+    ),
+  );
 }
 
 class _TimeLabel extends StatelessWidget {
   const _TimeLabel({
     required this.icon,
-    required this.iconColor,
-    required this.prefix,
+    required this.label,
     required this.time,
   });
 
   final IconData icon;
-  final Color iconColor;
-  final String prefix;
+  final String label;
   final DateTime? time;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 13, color: iconColor),
-        const SizedBox(width: AppSpacing.xs),
-        Flexible(
-          child: Text(
-            '$prefix: ${AppFormatters.formatTime(time, placeholder: '—')}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.labelMono.copyWith(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+  Widget build(BuildContext context) => Row(
+    children: [
+      Icon(icon, size: 14, color: AppColors.secondary),
+      const SizedBox(width: AppSpacing.xs),
+      Flexible(
+        child: Text(
+          '$label: ${AppFormatters.formatTime(time, placeholder: time == null ? 'In progress' : '—')}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.labelMono.copyWith(fontSize: 11),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
 }

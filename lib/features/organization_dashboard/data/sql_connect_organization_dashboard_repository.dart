@@ -50,7 +50,7 @@ class SqlConnectOrganizationDashboardRepository
         attendance: AttendanceSummary.fromCheckIns(
           checkedIn: checkIns.checkedIn,
           late: checkIns.late,
-          expectedHeadcount: counts.activeEmployees,
+          expectedHeadcount: counts.scheduledEmployees,
         ),
         pendingReturns: counts.returns('pending'),
         totalEmployees: counts.activeEmployees,

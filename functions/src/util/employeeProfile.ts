@@ -13,6 +13,7 @@ type Bag = Record<string, unknown>;
 export interface EmployeeProfileExtras {
   dailyWorkHours?: number;
   shiftHours?: string;
+  weeklyDayOff?: number;
   employeeCode?: string;
   aadhaarNumber?: string | null;
   aadhaarPhotoUrl?: string | null;
@@ -136,7 +137,7 @@ function neverNull(bag: Bag, key: string): void {
  * business record has already been committed.
  */
 export function parseEmployeeExtras(bag: Bag): EmployeeProfileExtras {
-  for (const key of ["dailyWorkHours", "shiftHours", "employeeCode"]) neverNull(bag, key);
+  for (const key of ["dailyWorkHours", "shiftHours", "weeklyDayOff", "employeeCode"]) neverNull(bag, key);
   const aadhaarNumber = clearable(bag, "aadhaarNumber", () => optString(bag, "aadhaarNumber", 1, 20));
   if (typeof aadhaarNumber === "string" && !/^\d{12}$/.test(aadhaarNumber.replace(/\s+/g, ""))) {
     throw invalid("aadhaarNumber must be 12 digits.");
@@ -146,9 +147,15 @@ export function parseEmployeeExtras(bag: Bag): EmployeeProfileExtras {
   if (typeof joiningDate === "string" && typeof relievingDate === "string" && relievingDate < joiningDate) {
     throw invalid("relievingDate cannot be before joiningDate.");
   }
+  const weeklyDayOff = bag.weeklyDayOff;
+  if (weeklyDayOff !== undefined && weeklyDayOff !== null &&
+      (typeof weeklyDayOff !== "number" || !Number.isInteger(weeklyDayOff) || weeklyDayOff < 0 || weeklyDayOff > 6)) {
+    throw invalid("weeklyDayOff must be a weekday from 0 (Sunday) through 6 (Saturday).");
+  }
   return {
     dailyWorkHours: optNumber(bag, "dailyWorkHours", 0.5, 24),
     shiftHours: optString(bag, "shiftHours", 1, 100),
+    weeklyDayOff: weeklyDayOff as number | undefined,
     employeeCode: optEmployeeCode(bag),
     aadhaarNumber: typeof aadhaarNumber === "string" ? aadhaarNumber.replace(/\s+/g, "") : aadhaarNumber,
     aadhaarPhotoUrl: clearable(bag, "aadhaarPhotoUrl", () => optString(bag, "aadhaarPhotoUrl", 1, 1000)),

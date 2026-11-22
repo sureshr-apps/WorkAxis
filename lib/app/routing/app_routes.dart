@@ -64,6 +64,7 @@ abstract final class AppRoutes {
   static String orgAdminAttendanceDetailsPath(String id) =>
       '/organization/attendance/$id';
   static const String orgAdminReports = '/organization/reports';
+  static const String orgAdminPayslips = '/organization/payslips';
   static const String orgAdminLeaves = '/organization/leaves';
   static const String orgAdminOffSiteWork = '/organization/off-site-work';
   static String orgAdminOffSiteWorkDetailsPath(String id) =>
@@ -88,6 +89,7 @@ abstract final class AppRoutes {
   static const String branchManagerAttendance = '/branch-manager/attendance';
   static const String branchManagerReturns = '/branch-manager/returns';
   static const String branchManagerReports = '/branch-manager/reports';
+  static const String branchManagerPayslips = '/branch-manager/payslips';
   static const String branchManagerLeaves = '/branch-manager/leaves';
   static const String branchManagerOffSiteWork =
       '/branch-manager/off-site-work';
@@ -112,6 +114,7 @@ abstract final class AppRoutes {
   // Employee destinations
   static const String employeeWorkspace = '/employee';
   static const String employeeAttendance = '/employee/attendance';
+  static const String employeePayslips = '/employee/payslips';
   static const String employeeReturns = '/employee/returns';
   static const String employeeProfile = '/employee/profile';
   static const String employeeAssets = '/employee/assets';

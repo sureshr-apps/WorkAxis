@@ -6,6 +6,7 @@ class OrganizationCounts {
   const OrganizationCounts({
     required this.branchesByStatus,
     required this.activeEmployees,
+    required this.scheduledEmployees,
     required this.returnsByStatus,
   });
 
@@ -14,6 +15,9 @@ class OrganizationCounts {
 
   /// Members with role `employee` and status `active`.
   final int activeEmployees;
+
+  /// Active employees scheduled to work on the current Asia/Kolkata date.
+  final int scheduledEmployees;
 
   /// Return count per lower-cased status (`pending`, `approved`, ...).
   final Map<String, int> returnsByStatus;
@@ -54,6 +58,7 @@ class DataConnectOrganizationDashboardRemote
         lowerCaseKeys: true,
       ),
       activeEmployees: activeEmployees,
+      scheduledEmployees: sumCounts(data.objects('scheduledEmployeeCount')),
       returnsByStatus: groupedCounts(
         data.objects('returnsByStatus'),
         'status',

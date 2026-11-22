@@ -283,6 +283,7 @@ class SqlConnectOrganizationMembersRepository
       branchIds: prepared.branchIds,
       dailyWorkHours: prepared.dailyWorkHours,
       shiftHours: prepared.shiftHours,
+      weeklyDayOff: prepared.weeklyDayOff,
       employeeCode: prepared.employeeCode,
       aadhaarNumber: prepared.aadhaarNumber,
       aadhaarPhotoUrl: prepared.aadhaarPhotoUrl,
@@ -340,12 +341,6 @@ class SqlConnectOrganizationMembersRepository
       clearPhone: hadPhone && nextPhone.isEmpty,
       role: next.role != existing.role ? next.role : null,
       branchIds: sameBranches ? null : next.branchIds,
-      dailyWorkHours: next.dailyWorkHours != existing.dailyWorkHours
-          ? next.dailyWorkHours
-          : null,
-      shiftHours: next.shiftHours != existing.shiftHours
-          ? next.shiftHours
-          : null,
       employeeCode: next.employeeCode != existing.employeeCode
           ? next.employeeCode
           : null,
@@ -373,7 +368,6 @@ class SqlConnectOrganizationMembersRepository
           ? next.relievingDate
           : null,
       clear: _clearedFields(existing, next),
-      salary: next.salary != existing.salary ? next.salary : null,
       assetDetails: next.assetDetails != existing.assetDetails
           ? next.assetDetails
           : null,
@@ -548,9 +542,7 @@ class SqlConnectOrganizationMembersRepository
     OrganizationMember member,
     Map<String, dynamic> data,
   ) {
-    final rawSalary = data['salary'];
     return member.copyWith(
-      salary: rawSalary is num ? rawSalary.toDouble() : null,
       aadhaarNumber: data['aadhaarNumber'] as String?,
       aadhaarPhotoUrl: data['aadhaarPhotoUrl'] as String?,
     );
@@ -560,10 +552,6 @@ class SqlConnectOrganizationMembersRepository
     OrganizationMember member,
     Map<String, dynamic> data,
   ) {
-    double? workHours;
-    final rawHours = data['dailyWorkHours'];
-    if (rawHours is num) workHours = rawHours.toDouble();
-
     DateTime? parseDate(dynamic val) {
       if (val is String && val.isNotEmpty) return DateTime.tryParse(val);
       if (val is Timestamp) return val.toDate();
@@ -571,8 +559,6 @@ class SqlConnectOrganizationMembersRepository
     }
 
     return member.copyWith(
-      dailyWorkHours: workHours,
-      shiftHours: data['shiftHours'] as String?,
       dateOfBirth: parseDate(data['dateOfBirth']),
       gender: data['gender'] as String?,
       address: data['address'] as String?,

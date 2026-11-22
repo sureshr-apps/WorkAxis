@@ -5,9 +5,8 @@ import 'package:workaxis/features/employees/domain/models/organization_member.da
 
 /// Decides who can be included in a manager's group check-in.
 ///
-/// * **Recorded**: the employee has any check-in on the same business day,
-///   whatever its status (present, late, ...). Recording them again would
-///   create a duplicate for the day.
+/// * **Recorded**: the employee has an open check-in session on that business
+///   day. A closed session does not prevent another branch session.
 /// * **Eligible**: an active employee assigned to the branch.
 class GroupAttendanceEligibility {
   const GroupAttendanceEligibility();
@@ -19,7 +18,9 @@ class GroupAttendanceEligibility {
 
   /// Whether [entry] is a check-in recorded for the business [day].
   bool isRecorded(AttendanceEntry entry, DateTime day) =>
-      entry.checkInAt != null && _sameDay(entry.workDate, day);
+      entry.checkInAt != null &&
+      entry.checkOutAt == null &&
+      _sameDay(entry.workDate, day);
 
   /// Whether [employeeId] already has a check-in on [day] in [entries].
   bool hasRecorded(
@@ -41,7 +42,7 @@ class GroupAttendanceEligibility {
     required String? branchId,
   }) => members.where((m) => isEligible(m, branchId: branchId)).toList();
 
-  /// Eligible members with no check-in on [day]: the default selection.
+  /// Eligible members with no open session on [day]: the default selection.
   List<OrganizationMember> unrecordedMembers(
     Iterable<OrganizationMember> members, {
     required String? branchId,

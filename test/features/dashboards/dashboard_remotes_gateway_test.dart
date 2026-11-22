@@ -15,6 +15,9 @@ void main() {
       'memberCount': [
         {'_count': 6},
       ],
+      'scheduledMemberCount': [
+        {'_count': 4},
+      ],
       'returnsByStatus': [
         {'status': 'Pending', '_count': 2},
         {'status': 'approved', '_count': 5},
@@ -27,6 +30,7 @@ void main() {
 
     expect(gateway.singleVarsOf('GetBranchStats'), {'branchId': 'b1'});
     expect(counts.memberCount, 6);
+    expect(counts.scheduledMemberCount, 4);
     expect(counts.returns('pending'), 2);
     expect(counts.returns('approved'), 5);
   });
@@ -44,6 +48,9 @@ void main() {
           {'role': 'employee', 'status': 'suspended', '_count': 4},
           {'role': 'branchManager', 'status': 'active', '_count': 2},
         ],
+        'scheduledEmployeeCount': [
+          {'_count': 18},
+        ],
         'returnsByStatus': [
           {'status': 'pending', '_count': 7},
         ],
@@ -57,6 +64,7 @@ void main() {
         'orgId': 'org1',
       });
       expect(counts.activeEmployees, 20);
+      expect(counts.scheduledEmployees, 18);
       expect(counts.totalBranches, 4);
       expect(counts.branches('maintenance'), 1);
       expect(counts.returns('pending'), 7);

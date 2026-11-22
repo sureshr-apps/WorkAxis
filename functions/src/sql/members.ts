@@ -155,6 +155,15 @@ export interface NewMember {
   employeeCode?: string;
 }
 
+export interface InitialMemberWorkforce {
+  createdByUid?: string;
+  effectiveFrom?: string;
+  dailyWorkHours?: number;
+  shiftHours?: string;
+  weeklyDayOff?: number;
+  monthlySalary?: number | null;
+}
+
 const MEMBER_INSERT_COLUMNS: ReadonlyArray<[keyof NewMember, string]> = [
   ["id", "id"],
   ["authUid", "auth_uid"],
@@ -243,6 +252,7 @@ async function requireActiveOrganizationForProvision(
 export async function insertMember(
   member: NewMember,
   branchIds: string[],
+  workforce?: InitialMemberWorkforce,
 ): Promise<string | undefined> {
   // Employee IDs are per organization; platform roles have none.
   const manualCode =
@@ -265,6 +275,36 @@ export async function insertMember(
       const values = cols.map(([k]) => row[k]);
       await insertRow(tx, cols, values);
       await insertAssignments(tx, member.id, branchIds);
+      if (workforce && (member.role === "employee" || member.role === "branchManager")) {
+        const today = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date());
+        const effectiveFrom = workforce.effectiveFrom ?? today;
+        await tx.query(
+          `INSERT INTO employee_schedule_history
+            (member_id, effective_from, daily_work_hours, shift_hours, weekly_day_off, created_by_uid)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            member.id,
+            effectiveFrom,
+            workforce.dailyWorkHours ?? 8,
+            workforce.shiftHours ?? "09:00 AM - 05:00 PM",
+            workforce.weeklyDayOff ?? 0,
+            workforce.createdByUid ?? null,
+          ],
+        );
+        if (workforce.monthlySalary !== undefined && workforce.monthlySalary !== null) {
+          await tx.query(
+            `INSERT INTO employee_compensation_history
+              (member_id, effective_from, monthly_salary, created_by_uid)
+             VALUES ($1, $2, $3, $4)`,
+            [member.id, effectiveFrom, workforce.monthlySalary, workforce.createdByUid ?? null],
+          );
+        }
+      }
       return employeeCode;
     });
   } catch (e) {

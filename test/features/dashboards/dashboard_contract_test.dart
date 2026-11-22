@@ -20,14 +20,18 @@ class _OrgRemote implements OrganizationDashboardRemote {
       const OrganizationCounts(
         branchesByStatus: {'active': 3},
         activeEmployees: 12,
+        scheduledEmployees: 10,
         returnsByStatus: {'pending': 1},
       );
 }
 
 class _BranchRemote implements BranchDashboardRemote {
   @override
-  Future<BranchCounts> loadCounts(String branchId) async =>
-      const BranchCounts(memberCount: 8, returnsByStatus: {'pending': 1});
+  Future<BranchCounts> loadCounts(String branchId) async => const BranchCounts(
+    memberCount: 8,
+    scheduledMemberCount: 7,
+    returnsByStatus: {'pending': 1},
+  );
 }
 
 void _orgContract(

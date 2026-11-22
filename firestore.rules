@@ -253,6 +253,7 @@ service cloud.firestore {
           'requireEmployeeAssetAcknowledgement',
           'requireAttendanceSelfie',
           'requireBranchManagerAttendance',
+          'payCalculationBasis', 'overtimeEnabled',
           'operationsEmail', 'emergencyPhone', 'updatedBy', 'updatedAt'
         ]) &&
         hasRequiredFields([
@@ -273,6 +274,9 @@ service cloud.firestore {
           data.requireAttendanceSelfie is bool) &&
         (!('requireBranchManagerAttendance' in data) ||
           data.requireBranchManagerAttendance is bool) &&
+        (!('payCalculationBasis' in data) ||
+          data.payCalculationBasis in ['hours', 'workdays']) &&
+        (!('overtimeEnabled' in data) || data.overtimeEnabled is bool) &&
         isValidOptionalString('operationsEmail', 3, 254) &&
         isValidOptionalString('emergencyPhone', 1, 32) &&
         data.updatedBy == request.auth.uid &&

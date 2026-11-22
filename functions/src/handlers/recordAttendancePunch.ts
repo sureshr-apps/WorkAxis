@@ -4,6 +4,7 @@ import { onCall } from "firebase-functions/v2/https";
 import { resolveActor } from "../auth/actor";
 import {
   PUNCH_KINDS,
+  assertScheduledWorkday,
   assertInsideGeofence,
   assertPunchAllowed,
   type BreakSpan,
@@ -12,6 +13,7 @@ import {
 } from "../attendance/punchRules";
 import { attachmentsBucketName, callableOptions } from "../config";
 import { denied, guarded, notFound, precondition } from "../errors";
+import { getDb } from "../db";
 import { getBranch } from "../sql/branches";
 import { getMemberByAuthUid } from "../sql/members";
 import { workDateStart, workDateString } from "../time/workDate";
@@ -58,15 +60,57 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
 
     const bag = asBag(request.data);
     const kind: PunchKind = reqEnum(bag, "kind", PUNCH_KINDS);
-    const branchId = reqString(bag, "branchId", 1, 100);
     const selfiePath = optString(bag, "selfiePath", 1, 512);
+    const member = await getMemberByAuthUid(actor.uid);
+    if (!member) throw denied();
 
-    if (!actor.branchIds.includes(branchId)) throw denied("You are not assigned to this branch.");
+    const now = new Date();
+    const workDate = workDateString(now);
+    const firestore = getFirestore();
+    const entries = firestore.collection("attendance_entries");
+    const stateRef = firestore.collection("attendance_session_state")
+      .doc(`${actor.uid}_${workDate}`);
+    const legacyRef = entries.doc(`${actor.uid}_${workDate}`);
+    const initialState = await stateRef.get();
+    let activeEntryId = typeof initialState.get("activeEntryId") === "string"
+      ? initialState.get("activeEntryId") as string
+      : null;
+    let branchId: string;
+    if (kind === "checkIn") {
+      branchId = reqString(bag, "branchId", 1, 100);
+    } else if (activeEntryId) {
+      branchId = typeof initialState.get("branchId") === "string"
+        ? initialState.get("branchId") as string
+        : "";
+    } else {
+      // Supports existing daily documents and manager-recorded check-ins while
+      // they are active. The transaction below rechecks this legacy state.
+      const legacy = await legacyRef.get();
+      const legacyData = legacy.data();
+      if (!legacy.exists || !legacyData?.checkInAt || legacyData.checkOutAt) {
+        throw precondition("Check in before recording this attendance action.");
+      }
+      activeEntryId = legacy.id;
+      branchId = typeof legacyData.branchId === "string" ? legacyData.branchId : "";
+    }
+    if (!branchId || !actor.branchIds.includes(branchId)) {
+      throw denied("You are not assigned to the active attendance branch.");
+    }
     const branch = await getBranch(branchId);
     if (!branch || branch.status !== "active") throw notFound("Branch not found.");
     if (branch.organizationId !== actor.organizationId) throw denied();
-    const member = await getMemberByAuthUid(actor.uid);
-    if (!member) throw denied();
+
+    const database = await getDb();
+    const schedule = await database.query<{ weeklyDayOff: number }>(
+      `SELECT weekly_day_off AS "weeklyDayOff"
+         FROM employee_schedule_history
+        WHERE member_id = $1 AND effective_from <= $2::date
+          AND (effective_to IS NULL OR effective_to > $2::date)
+        ORDER BY effective_from DESC LIMIT 1`,
+      [member.id, workDate],
+    );
+    const weeklyDayOff = schedule.length ? Number(schedule[0].weeklyDayOff) : 0;
+    assertScheduledWorkday(workDate, weeklyDayOff);
 
     const settingsRef = getFirestore()
       .collection("organization_settings")
@@ -79,16 +123,36 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
       });
     }
 
-    const now = new Date();
-    const workDate = workDateString(now);
-    const entryId = `${actor.uid}_${workDate}`;
-    const ref = getFirestore().collection("attendance_entries").doc(entryId);
+    const ref = activeEntryId ? entries.doc(activeEntryId) : null;
+    const newEntryRef = kind === "checkIn" ? entries.doc() : null;
     const stamp = Timestamp.fromDate(now);
     let distanceMeters: number | null = null;
 
-    await getFirestore().runTransaction(async (tx) => {
+    await firestore.runTransaction(async (tx) => {
       distanceMeters = null;
-      const snap = await tx.get(ref);
+      const state = await tx.get(stateRef);
+      const legacy = await tx.get(legacyRef);
+      const guardedEntryId = typeof state.get("activeEntryId") === "string"
+        ? state.get("activeEntryId") as string
+        : null;
+      if (kind === "checkIn") {
+        const legacyData = legacy.data();
+        const legacyOpen = legacy.exists && !!legacyData?.checkInAt && !legacyData?.checkOutAt;
+        if (guardedEntryId || legacyOpen) {
+          throw precondition("Finish your current branch session before checking in again.");
+        }
+      } else {
+        const transactionEntryId = guardedEntryId ?? (
+          legacy.exists && legacy.get("checkInAt") && !legacy.get("checkOutAt")
+            ? legacy.id
+            : null
+        );
+        if (!transactionEntryId || transactionEntryId !== activeEntryId) {
+          throw precondition("Your active attendance session changed. Refresh and try again.");
+        }
+      }
+      const targetRef = kind === "checkIn" ? newEntryRef! : ref!;
+      const snap = kind === "checkIn" ? null : await tx.get(targetRef);
       const settings = await tx.get(settingsRef);
       if (
         actor.role === "branchManager" &&
@@ -120,19 +184,19 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
           defaultRadius,
         );
       }
-      const data = snap.data();
-      if (snap.exists && data?.branchId !== branchId) {
-        throw precondition("You are already checked in at a different branch today.");
+      const data = snap?.data();
+      if (data?.branchId !== branchId) {
+        throw precondition("This attendance session belongs to a different branch.");
       }
-      const state = readState(data);
-      assertPunchAllowed(kind, state, settings.get("allowBreaks") !== false);
+      const punchState = readState(data);
+      assertPunchAllowed(kind, punchState, settings.get("allowBreaks") !== false);
       if (selfiePath && hasUsedSelfiePath(data, selfiePath)) {
         throw precondition("Take a new selfie for each attendance action.");
       }
 
       if (kind === "checkIn") {
-        tx.set(ref, {
-          id: entryId,
+        tx.create(newEntryRef!, {
+          id: newEntryRef!.id,
           organizationId: branch.organizationId,
           branchId,
           employeeId: actor.uid,
@@ -148,16 +212,24 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
           source: "employee-app",
           createdAt: FieldValue.serverTimestamp(),
         });
+        tx.set(stateRef, {
+          employeeId: actor.uid,
+          workDateString: workDate,
+          activeEntryId: newEntryRef!.id,
+          branchId,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
         return;
       }
       const stored = (data?.breaks as StoredBreak[] | undefined) ?? [];
       if (kind === "checkOut") {
-        tx.update(ref, {
+        tx.update(targetRef, {
           checkOutAt: stamp,
           ...(selfiePath ? { checkOutSelfiePath: selfiePath } : {}),
         });
+        tx.delete(stateRef);
       } else if (kind === "breakStart") {
-        tx.update(ref, {
+        tx.update(targetRef, {
           breaks: [
             ...stored,
             { startAt: stamp, ...(selfiePath ? { startSelfiePath: selfiePath } : {}) },
@@ -173,12 +245,12 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
                 ...(selfiePath ? { endSelfiePath: selfiePath } : {}),
               },
         );
-        tx.update(ref, { breaks: next });
+        tx.update(targetRef, { breaks: next });
       }
     });
 
     return {
-      entryId,
+      entryId: newEntryRef?.id ?? activeEntryId,
       kind,
       recordedAt: now.toISOString(),
       workDate,

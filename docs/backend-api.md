@@ -268,11 +268,14 @@ to an approved request, including changes to its review details.
 
 | Operation | Who may call | Key vars | Response keys |
 | --- | --- | --- | --- |
-| `GetOrganizationDashboardCounts` | Platform; Org Admin | `orgId` | `branchesByStatus`, `membersByRole`, `returnsByStatus` |
+| `GetOrganizationDashboardCounts` | Platform; Org Admin | `orgId` | `branchesByStatus`, `membersByRole`, `scheduledEmployeeCount`, `returnsByStatus` |
 | `GetReturnCountsByBranch` | Platform; Org Admin | `orgId`, optional `from`, `to` | `returnRecords`, `returnsByReason` |
-| `GetBranchStats` | Org Admin of its org; BM assigned | `branchId`, optional `from`, `to` | `memberCount`, `returnsByStatus`, `returnsByReason` |
+| `GetBranchStats` | Org Admin of its org; BM assigned | `branchId`, optional `from`, `to` | `memberCount`, `scheduledMemberCount`, `returnsByStatus`, `returnsByReason` |
 
 `from` is inclusive and `to` exclusive (business-timezone period).
+The scheduled counts use the effective schedule for today's Asia/Kolkata date
+and exclude active employees whose recurring weekly day off is today. Employees
+without imported schedule history use the existing-employee Sunday default.
 
 ### License plans (`ops/licensePlans.ts`)
 
@@ -590,3 +593,53 @@ or emulator needed) from the repository root:
 ```powershell
 npm --prefix functions test
 ```
+
+## Employee workforce history and monthly payroll
+
+Apply `functions/db/migrations/010_employee_workforce_history.sql` before
+deploying the operations below. Schedule and salary history are authoritative
+in PostgreSQL. Effective ranges use `effective_from` inclusive and
+`effective_to` exclusive; queries select records by employee and date with the
+history indexes rather than scanning the table.
+
+| Operation | Who may call | Key vars | Response |
+| --- | --- | --- | --- |
+| `GetEmployeeWorkforceHistory` | Employee (self); Org Admin (own org); Branch Manager (self or employee in active assigned branch) | `memberId` for another member; Branch Manager supplies `activeBranchId` | `{ member, schedules, compensations }` |
+| `SaveEmployeeSchedule` | Org Admin (own org); Branch Manager (employee assigned to active branch) | `memberId`, `effectiveFrom` (`YYYY-MM-DD`), `dailyWorkHours`, `shiftHours`, `weeklyDayOff`; Branch Manager supplies `activeBranchId` | `{ saved: true }` |
+| `SaveEmployeeCompensation` | Org Admin (own org); Branch Manager (employee assigned to active branch) | `memberId`, `effectiveFrom` (`YYYY-MM-DD`), `monthlySalary`; Branch Manager supplies `activeBranchId` | `{ saved: true }` |
+| `BackfillEmployeeWorkforceHistory` | Org Admin (own organization) | none | `{ membersProcessed, schedulesCreated, salariesCreated, legacyProfilesCleaned, effectiveFrom }` |
+| `GetMonthlyPayroll` | Employee (self); Org Admin (own org); Branch Manager (self and employees in active assigned branch) | `month` (`YYYY-MM`); Branch Manager supplies `activeBranchId` | `{ month, basis, overtimeEnabled, paySlips }` |
+
+Schedule and salary changes are separate operations and cannot be backdated.
+Schedule writes include the recurring weekday off. Existing employees are
+backfilled with Sunday off and their current Firestore shift and salary values,
+effective from the Asia/Kolkata cutover date because earlier history is not
+available. The backfill callable is idempotent; run it from the Payslips page
+after migration and Functions deployment, once per organization.
+
+Self-service attendance entries remain in Firestore. Each session is a
+separate `attendance_entries` document. The trusted punch callable maintains
+`attendance_session_state/{uid}_{workDate}` to enforce one open session,
+checks out against the branch recorded for that session, and allows a later
+session at another assigned branch. Effective weekly days off block
+self-service and group attendance punches. Attendance reads remain limited by
+the existing repository queries: Organization Admins see their organization,
+Branch Managers see the active assigned branch, and Employees see only their
+own records.
+
+Organization pay settings are stored in
+`organization_settings/{organizationId}` as `payCalculationBasis` (`hours` or
+`workdays`) and `overtimeEnabled` (boolean). Missing values mean hours-based
+pay and overtime off. Payroll reads effective schedule, compensation,
+attendance, and approved leave for the requested Asia/Kolkata calendar month.
+Hours-based pay caps regular payable hours at the scheduled daily duration;
+workday mode counts at most one full scheduled day for a valid punch. Approved
+leave is unpaid. When overtime is enabled, daily hours above the schedule are
+paid separately at 1× the regular hourly rate. The operation returns gross
+pay and the calculation breakdown. Individual PDF payslips and the monthly
+XLSX report are generated in Flutter from this already scoped result; exports
+do not call a separate backend operation.
+
+Local tests cover the calculator, history operations, access checks, and
+attendance session rules with `FakeDb`. Migration 010 and the organization
+backfill have not been applied in production as part of this implementation.

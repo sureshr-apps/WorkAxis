@@ -35,6 +35,9 @@ class _OrganizationSettingsScreenState
       OrganizationSettings.defaults.requireAttendanceSelfie;
   bool _requireBranchManagerAttendance =
       OrganizationSettings.defaults.requireBranchManagerAttendance;
+  PayCalculationBasis _payCalculationBasis =
+      OrganizationSettings.defaults.payCalculationBasis;
+  bool _overtimeEnabled = OrganizationSettings.defaults.overtimeEnabled;
 
   /// The loaded settings the form fields were last populated from.
   OrganizationSettings? _populatedFrom;
@@ -66,6 +69,8 @@ class _OrganizationSettingsScreenState
         settings.requireEmployeeAssetAcknowledgement;
     _requireAttendanceSelfie = settings.requireAttendanceSelfie;
     _requireBranchManagerAttendance = settings.requireBranchManagerAttendance;
+    _payCalculationBasis = settings.payCalculationBasis;
+    _overtimeEnabled = settings.overtimeEnabled;
   }
 
   /// Unparseable numbers become -1 so validation reports the allowed range.
@@ -80,6 +85,8 @@ class _OrganizationSettingsScreenState
     requireEmployeeAssetAcknowledgement: _requireEmployeeAssetAcknowledgement,
     requireAttendanceSelfie: _requireAttendanceSelfie,
     requireBranchManagerAttendance: _requireBranchManagerAttendance,
+    payCalculationBasis: _payCalculationBasis,
+    overtimeEnabled: _overtimeEnabled,
     operationsEmail: _blankToNull(_emailController.text),
     emergencyPhone: _blankToNull(_phoneController.text),
   );
@@ -154,6 +161,39 @@ class _OrganizationSettingsScreenState
       onRetry: _load,
       onSave: _saveSettings,
       children: [
+        SettingsSectionCard(
+          icon: Icons.payments_outlined,
+          title: 'Payroll Calculation',
+          subtitle: 'Choose the monthly pay basis and overtime policy',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingsSwitchTile(
+                value: _payCalculationBasis == PayCalculationBasis.workdays,
+                onChanged: (value) {
+                  setState(
+                    () => _payCalculationBasis = value
+                        ? PayCalculationBasis.workdays
+                        : PayCalculationBasis.hours,
+                  );
+                  _edited();
+                },
+                title: 'Calculate by workdays',
+                subtitle: 'When off, base pay uses payable hours against scheduled hours.',
+              ),
+              const Divider(height: 1, color: AppColors.outlineSubtle),
+              SettingsSwitchTile(
+                value: _overtimeEnabled,
+                onChanged: (value) {
+                  setState(() => _overtimeEnabled = value);
+                  _edited();
+                },
+                title: 'Pay overtime',
+                subtitle: 'Pays time beyond scheduled daily hours at the regular hourly rate.',
+              ),
+            ],
+          ),
+        ),
         SettingsSectionCard(
           icon: Icons.business_outlined,
           title: 'Organization Information',

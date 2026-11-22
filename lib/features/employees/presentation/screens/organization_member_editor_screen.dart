@@ -93,6 +93,7 @@ class _OrganizationMemberEditorScreenState
   // Schedule & Work Hours
   late final TextEditingController _workHours;
   late final TextEditingController _shiftHours;
+  int _weeklyDayOff = 0;
 
   // Demographics & KYC
   late final TextEditingController _aadhaar;
@@ -159,6 +160,7 @@ class _OrganizationMemberEditorScreenState
     _shiftHours = TextEditingController(
       text: member?.shiftHours ?? '09:00 AM - 05:00 PM',
     );
+    _weeklyDayOff = member?.weeklyDayOff ?? 0;
 
     _aadhaar = TextEditingController(text: member?.aadhaarNumber ?? '');
     _address = TextEditingController(text: member?.address ?? '');
@@ -436,21 +438,43 @@ class _OrganizationMemberEditorScreenState
           relievingDate: _relievingDate,
           onRelievingDateChanged: (date) =>
               setState(() => _relievingDate = date),
+          includeSalary: !_editing,
           feedback: feedback,
         ),
 
         const Divider(height: 32),
 
         // 6. Work Schedule & Shift Details (Bidirectional Sync)
-        WorkHoursShiftSection(
-          workHoursController: _workHours,
-          shiftHoursController: _shiftHours,
-          initialWorkHours: widget.member?.dailyWorkHours ?? 8.0,
-          initialShiftHours: widget.member?.shiftHours ?? '09:00 AM - 05:00 PM',
-          feedback: feedback,
-        ),
-        if (feedback.errorFor(MemberField.shiftHours) case final error?)
-          _InlineError(error),
+        if (!_editing && _effectiveRole != UserRole.orgAdmin) ...[
+          WorkHoursShiftSection(
+            workHoursController: _workHours,
+            shiftHoursController: _shiftHours,
+            initialWorkHours: widget.member?.dailyWorkHours ?? 8.0,
+            initialShiftHours:
+                widget.member?.shiftHours ?? '09:00 AM - 05:00 PM',
+            feedback: feedback,
+          ),
+          if (feedback.errorFor(MemberField.shiftHours) case final error?)
+            _InlineError(error),
+          const SizedBox(height: AppSpacing.md),
+          DropdownButtonFormField<int>(
+            isExpanded: true,
+            initialValue: _weeklyDayOff,
+            decoration: const InputDecoration(labelText: 'Weekly day off'),
+            items: const [
+              DropdownMenuItem(value: 0, child: Text('Sunday')),
+              DropdownMenuItem(value: 1, child: Text('Monday')),
+              DropdownMenuItem(value: 2, child: Text('Tuesday')),
+              DropdownMenuItem(value: 3, child: Text('Wednesday')),
+              DropdownMenuItem(value: 4, child: Text('Thursday')),
+              DropdownMenuItem(value: 5, child: Text('Friday')),
+              DropdownMenuItem(value: 6, child: Text('Saturday')),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _weeklyDayOff = value);
+            },
+          ),
+        ],
 
         const Divider(height: 32),
 
@@ -698,6 +722,7 @@ class _OrganizationMemberEditorScreenState
       status: _status,
       dailyWorkHours: workHours,
       shiftHours: shiftHours,
+      weeklyDayOff: _weeklyDayOff,
       employeeCode: _employeeCode.text.trim().isNotEmpty
           ? _employeeCode.text.trim()
           : null,

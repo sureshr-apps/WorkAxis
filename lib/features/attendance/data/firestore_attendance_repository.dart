@@ -36,7 +36,7 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
 
   /// Firestore batches hold at most 500 writes (one per attendee plus the
   /// audit record).
-  static const int maxGroupAttendees = 400;
+  static const int maxGroupAttendees = 200;
 
   /// How far back a manager may record a group check-in (see rules).
   static const int maxBackdateDays = 6;

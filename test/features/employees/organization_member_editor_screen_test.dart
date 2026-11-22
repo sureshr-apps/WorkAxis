@@ -6,6 +6,7 @@ import 'package:workaxis/features/authentication/domain/models/account_status.da
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_card.dart';
+import 'package:workaxis/features/employees/presentation/screens/widgets/work_hours_shift_section.dart';
 import 'package:workaxis/features/employees/presentation/screens/organization_member_editor_screen.dart';
 
 import '../../helpers/access_controller_fixture.dart';
@@ -84,6 +85,9 @@ void main() {
   ) async {
     final saved = await pumpEditor(tester, onSave: (draft) async => draft);
 
+    expect(find.byType(WorkHoursShiftSection), findsNothing);
+    expect(find.text('Monthly Salary'), findsNothing);
+
     await tester.tap(find.text('Save changes'));
     await tester.pump();
 
@@ -126,21 +130,22 @@ void main() {
     expect(find.text('Enter a valid email address.'), findsOneWidget);
   });
 
-  testWidgets('submits configured daily work hours and shift window on save', (
+  testWidgets('new employee creation includes the initial schedule controls', (
     tester,
   ) async {
-    final saved = await pumpEditor(tester, onSave: (draft) async => draft);
+    await pumpEditor(tester, onSave: (draft) async => draft, member: null);
 
-    // Tap preset '6 hrs'
+    expect(find.byType(WorkHoursShiftSection), findsOneWidget);
+    expect(find.text('Weekly day off'), findsOneWidget);
+
     await tester.tap(find.text('6 hrs'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Save changes'));
-    await tester.pump();
-
-    expect(saved, hasLength(1));
-    expect(saved.single.dailyWorkHours, 6.0);
-    expect(saved.single.shiftHours, '09:00 AM - 03:00 PM');
+    final schedule = tester.widget<WorkHoursShiftSection>(
+      find.byType(WorkHoursShiftSection),
+    );
+    expect(schedule.workHoursController.text, '6');
+    expect(schedule.shiftHoursController.text, '09:00 AM - 03:00 PM');
   });
 
   testWidgets('submits rich employee profile fields on save', (tester) async {
@@ -151,20 +156,18 @@ void main() {
       'Senior Fruit Associate',
     );
     await tester.enterText(
-      find.widgetWithText(AppTextField, 'Monthly Salary'),
-      '32000',
-    );
-    await tester.enterText(
       find.widgetWithText(AppTextField, 'Aadhaar Number'),
       '123456789012',
     );
+
+    expect(find.text('Monthly Salary'), findsNothing);
 
     await tester.tap(find.text('Save changes'));
     await tester.pump();
 
     expect(saved, hasLength(1));
     expect(saved.single.designation, 'Senior Fruit Associate');
-    expect(saved.single.salary, 32000.0);
+    expect(saved.single.salary, isNull);
     expect(saved.single.aadhaarNumber, '123456789012');
     // No ID is fabricated client-side; the stored one (none here) is kept.
     expect(saved.single.employeeCode, isNull);

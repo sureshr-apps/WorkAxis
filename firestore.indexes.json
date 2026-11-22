@@ -4,6 +4,22 @@
       "collectionGroup": "attendance_entries",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "workDateString", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "attendance_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "workDateString", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "attendance_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
         {
           "fieldPath": "organizationId",
           "order": "ASCENDING"

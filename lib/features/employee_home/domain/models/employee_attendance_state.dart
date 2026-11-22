@@ -30,7 +30,7 @@ enum AttendanceStatus {
       case AttendanceStatus.onBreak:
         return 'End Break';
       case AttendanceStatus.checkedOut:
-        return 'Completed For Today';
+        return 'Check In';
     }
   }
 
@@ -43,7 +43,7 @@ enum AttendanceStatus {
       case AttendanceStatus.onBreak:
         return AttendanceAction.endBreak;
       case AttendanceStatus.checkedOut:
-        return null;
+        return AttendanceAction.checkIn;
     }
   }
 }

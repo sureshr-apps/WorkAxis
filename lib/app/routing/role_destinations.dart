@@ -98,6 +98,12 @@ abstract final class RoleDestinations {
       route: AppRoutes.orgAdminReports,
     ),
     AppNavDestination(
+      label: 'Payslips',
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long,
+      route: AppRoutes.orgAdminPayslips,
+    ),
+    AppNavDestination(
       label: 'Settings',
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
@@ -154,6 +160,12 @@ abstract final class RoleDestinations {
       selectedIcon: Icons.assessment,
       route: AppRoutes.branchManagerReports,
     ),
+    AppNavDestination(
+      label: 'Payslips',
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long,
+      route: AppRoutes.branchManagerPayslips,
+    ),
   ];
 
   static const List<AppNavDestination> employee = [
@@ -168,6 +180,12 @@ abstract final class RoleDestinations {
       icon: Icons.access_time_outlined,
       selectedIcon: Icons.access_time_filled,
       route: AppRoutes.employeeAttendance,
+    ),
+    AppNavDestination(
+      label: 'Payslips',
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long,
+      route: AppRoutes.employeePayslips,
     ),
     AppNavDestination(
       label: 'Leaves',

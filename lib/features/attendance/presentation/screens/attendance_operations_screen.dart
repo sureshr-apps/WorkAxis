@@ -18,10 +18,9 @@ import 'package:workaxis/core/widgets/kpi/responsive_kpi_section.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
-import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
+import 'package:workaxis/features/attendance/domain/models/attendance_day_summary.dart';
 import 'package:workaxis/features/attendance/presentation/controllers/attendance_controller.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_date_selector.dart';
-import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_dialogs.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_records_sliver.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
@@ -51,7 +50,9 @@ class _AttendanceOperationsScreenState
     if (access == null) return;
     await context.read<AttendanceController>().loadAttendance(
       access: access,
-      activeBranchId: _branchId,
+      activeBranchId: access.user.role == UserRole.branchManager
+          ? _branchId
+          : null,
       date: date,
     );
   }
@@ -66,7 +67,7 @@ class _AttendanceOperationsScreenState
     final isManager = role == UserRole.branchManager;
     final canReview =
         role == UserRole.orgAdmin || role == UserRole.branchManager;
-    final entries = controller.entries;
+    final summaries = AttendanceDaySummary.fromEntries(controller.entries);
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -107,9 +108,8 @@ class _AttendanceOperationsScreenState
                     sliver: _buildBody(
                       controller,
                       access,
-                      entries: entries,
+                      summaries: summaries,
                       needsBranch: isManager && branchContext == null,
-                      canReview: canReview,
                     ),
                   ),
                   const SliverToBoxAdapter(
@@ -235,9 +235,8 @@ class _AttendanceOperationsScreenState
   Widget _buildBody(
     AttendanceController controller,
     UserAccessContext? access, {
-    required List<AttendanceEntry> entries,
+    required List<AttendanceDaySummary> summaries,
     required bool needsBranch,
-    required bool canReview,
   }) {
     if (needsBranch) {
       return _message(
@@ -261,7 +260,7 @@ class _AttendanceOperationsScreenState
         ErrorState(message: controller.errorMessage!, onRetry: _load),
       );
     }
-    if (entries.isEmpty) {
+    if (summaries.isEmpty) {
       return _message(
         const EmptyState(
           icon: Icons.event_available_outlined,
@@ -271,18 +270,14 @@ class _AttendanceOperationsScreenState
       );
     }
     return AttendanceRecordsSliver(
-      entries: entries,
-      branchNameFor: (id) => _branchName(id, access),
-      canReview: canReview,
-      isSaving: controller.isSaving,
-      onReview: canReview
-          ? (entry, decision) {
-              _review(entry, access!, decision);
-            }
-          : null,
-      onDetails: (entry) {
+      summaries: summaries,
+      branchNamesFor: (summary) =>
+          summary.branchIds.map((id) => _branchName(id, access)).join(', '),
+      onDetails: (summary) {
         final role = access?.user.role;
-        if (role != null) context.push(_detailsPath(role, entry.id));
+        if (role != null && summary.sessions.isNotEmpty) {
+          context.push(_detailsPath(role, summary.sessions.first.id));
+        }
       },
     );
   }
@@ -309,46 +304,5 @@ class _AttendanceOperationsScreenState
       if (branch.id == id) return branch.name;
     }
     return 'Unknown branch';
-  }
-
-  void _showSnack(String message, {required bool isError}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError
-            ? AppColors.statusUrgentText
-            : AppColors.statusActiveText,
-      ),
-    );
-  }
-
-  Future<void> _review(
-    AttendanceEntry entry,
-    UserAccessContext access,
-    AttendanceReviewDecision decision,
-  ) async {
-    final controller = context.read<AttendanceController>();
-    final confirmed = await confirmAttendanceReview(
-      context,
-      entry: entry,
-      decision: decision,
-      onConfirm: () async {
-        controller.clearActionError();
-        return await controller.reviewException(
-          access: access,
-          entryId: entry.id,
-          activeBranchId: entry.branchId,
-          decision: decision,
-        );
-      },
-      failureMessage: () => controller.actionErrorMessage,
-    );
-    if (!confirmed || !mounted) return;
-    _showSnack(
-      decision == AttendanceReviewDecision.verify
-          ? 'Attendance verified.'
-          : 'Exception dismissed.',
-      isError: false,
-    );
   }
 }

@@ -23,8 +23,10 @@ export interface ProvisionPlan {
   role: Role;
   organizationId?: string;
   branchIds: string[];
+  createdByUid?: string;
   dailyWorkHours?: number;
   shiftHours?: string;
+  weeklyDayOff?: number;
   employeeCode?: string;
   aadhaarNumber?: string;
   aadhaarPhotoUrl?: string;
@@ -70,6 +72,16 @@ export async function runProvision(plan: ProvisionPlan): Promise<ProvisionResult
           employeeCode: plan.employeeCode,
         },
         plan.branchIds,
+        plan.role === "employee" || plan.role === "branchManager"
+          ? {
+              createdByUid: plan.createdByUid,
+              effectiveFrom: plan.joiningDate,
+              dailyWorkHours: plan.dailyWorkHours,
+              shiftHours: plan.shiftHours,
+              weeklyDayOff: plan.weeklyDayOff ?? 0,
+              monthlySalary: plan.salary,
+            }
+          : undefined,
       );
     } catch (e) {
       if (isUniqueViolation(e)) {

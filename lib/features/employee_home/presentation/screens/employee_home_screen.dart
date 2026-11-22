@@ -4,11 +4,16 @@ import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
+import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
+import 'package:workaxis/features/access/domain/models/branch_summary.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 import 'package:workaxis/features/employee_home/presentation/controllers/employee_home_controller.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/active_geofence_card.dart';
@@ -19,6 +24,7 @@ import 'package:workaxis/features/employee_home/presentation/screens/widgets/hom
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/shift_simulator_bar.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/today_assignment_card.dart';
 import 'package:workaxis/features/employee_home/presentation/services/self_attendance_action_coordinator.dart';
+import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
 /// Employee Home screen implementing the approved Stitch design.
 class EmployeeHomeScreen extends StatefulWidget {
@@ -45,8 +51,11 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   Future<void> _load({bool requestLocationPermission = false}) async {
     final access = context.read<AccessController>().accessContext;
     if (access == null) return;
+    final activeBranch = context.read<BranchContextController>().activeBranch;
     await context.read<EmployeeHomeController>().loadHomeSummary(
-      access: access,
+      access: activeBranch == null
+          ? access
+          : access.copyWith(activeBranch: activeBranch),
       requestLocationPermission: requestLocationPermission,
     );
   }
@@ -55,6 +64,11 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<EmployeeHomeController>();
     final summary = controller.summary;
+    final access = context.watch<AccessController>().accessContext;
+    final branchContext = context.watch<BranchContextController>();
+    final employeeBranches = access?.user.role == UserRole.employee
+        ? access!.activeAssignedBranches
+        : <BranchSummary>[];
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -69,6 +83,20 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                 children: [
                   if (summary != null) ...[
                     _header(controller, summary),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
+                  if (employeeBranches.length > 1) ...[
+                    _employeeBranchSelector(
+                      branches: employeeBranches,
+                      selectedBranchId:
+                          branchContext.activeBranch?.branchId ??
+                          access?.activeBranch?.branchId,
+                      summary: summary,
+                      isBusy:
+                          controller.isLoading ||
+                          controller.isActionProcessing ||
+                          _isPreparingAttendanceAction,
+                    ),
                     const SizedBox(height: AppSpacing.lg),
                   ],
                   if (controller.isLoading)
@@ -95,6 +123,84 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
         ),
       ),
     );
+  }
+
+  Widget _employeeBranchSelector({
+    required List<BranchSummary> branches,
+    required String? selectedBranchId,
+    required EmployeeHomeSummary? summary,
+    required bool isBusy,
+  }) {
+    final sessionOpen =
+        summary?.currentStatus == AttendanceStatus.checkedIn ||
+        summary?.currentStatus == AttendanceStatus.onBreak;
+    final selectedBranchIsAssigned = branches.any(
+      (branch) => branch.id == selectedBranchId,
+    );
+
+    return DashboardSurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Work location', style: AppTypography.titleMedium),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            sessionOpen
+                ? 'This session is tied to ${summary!.branchName}. Check out here before switching branches.'
+                : 'Choose the branch for your next attendance session.',
+            style: AppTypography.bodySmall,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (sessionOpen)
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Current session branch',
+                border: OutlineInputBorder(),
+              ),
+              child: Text(summary!.branchName),
+            )
+          else
+            DropdownButtonFormField<String>(
+              key: ValueKey(selectedBranchId),
+              initialValue: selectedBranchIsAssigned ? selectedBranchId : null,
+              decoration: const InputDecoration(
+                labelText: 'Branch for your next check-in',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final branch in branches)
+                  DropdownMenuItem(
+                    value: branch.id,
+                    child: Text(
+                      branch.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: isBusy ? null : _selectEmployeeBranch,
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _selectEmployeeBranch(String? branchId) {
+    if (branchId == null) return;
+    final branches = context
+        .read<AccessController>()
+        .accessContext
+        ?.activeAssignedBranches;
+    if (branches == null) return;
+    for (final branch in branches) {
+      if (branch.id == branchId) {
+        final selected = context.read<BranchContextController>().selectBranch(
+          branch,
+        );
+        if (selected) _load();
+        return;
+      }
+    }
   }
 
   Widget _header(

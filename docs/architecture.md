@@ -540,7 +540,7 @@ Repositories take the caller's `UserAccessContext` (and the active branch where 
 - **Returns**: `ReturnsScope` (domain) holds the shared authorization rules used by the mock and the real repository. Employees use `ListMyReturns`, Branch Managers `ListReturnsByBranchPaged` for the active branch, Org Admins `ListReturnsByOrgPaged` (optionally narrowed to a branch). The remote seam accepts offset/limit; repositories traverse all 100-row pages with stable createdAt/id ordering rather than silently truncating the operational queue. The current complete-list contracts keep counts/search accurate, at the cost of loading the whole scoped result; explicit UI paging can replace them when needed. `SubmitReturn` and `UpdateReturnRecordReview` take no identity (the server derives submitter/reviewer). The seam `ReturnsRemote` is faked in tests.
 - **Leaves**: `LeaveScope` applies shared client-side rules to the mock and SQL repositories, with `dataOp` repeating authorization against its SQL-resolved actor. Employees and Branch Managers submit for an active assigned branch; employees see their own requests, Branch Managers see their own requests plus employee requests for the active branch, and Organization Admins see organization requests. A Branch Manager may review employee requests in the active assigned branch; only an Organization Admin may review a Branch Manager's request. Applicants may update pending requests only. Approved requests are immutable in the API and protected by a PostgreSQL update trigger. `functions/db/migrations/005_leave_requests.sql` owns the relational schema.
 - **Assets**: assets, assignment snapshots, and acknowledgment state are authoritative in PostgreSQL. The `requireEmployeeAssetAcknowledgement` policy is stored in the organization's Firestore settings document and read by trusted `dataOp` code when an asset is created or transferred. With the policy enabled, the asset enters `pending`; only its assigned Employee can acknowledge it, and SQL records the Firebase UID, name snapshot, and server timestamp. Assignment/reassignment similarly records the manager UID, name snapshot, and server time; metadata-only edits preserve that attribution. The UI also displays serial number and notes when present. Older assignments keep a null assigner/time because those details were not previously recorded. With policy disabled, new assignments are `not_required`. The setting affects new assignments/transfers only; existing assets are not retroactively changed, and an already-pending acknowledgment remains pending if the organization later turns the policy off. Managers cannot set acknowledgment fields. Branch Manager operations remain scoped to the active managed branch. Migrations `006_asset_acknowledgement.sql` and `007_asset_assignment_details.sql` own acknowledgment state and audit snapshots.
-- **Dashboards**: `dataOp` SQL aggregates only (`GetOrganizationDashboardCounts`, `GetBranchStats`, `GetPlatformStats`, `GetOrganizationStats` for the 5 most recent organizations) plus Firestore count queries (`AttendanceDayCounter`) for today's attendance. `AttentionItem` is a pure domain model (`AttentionKind`/`AttentionSeverity`); `attention_item_presentation.dart` maps it to icons and `StatusType`. `AttendanceSummary.onLeave` is null (no leave data); per-branch adherence snapshots are not provided.
+- **Dashboards**: `dataOp` SQL aggregates (`GetOrganizationDashboardCounts`, `GetBranchStats`, `GetPlatformStats`, `GetOrganizationStats` for the 5 most recent organizations) plus Firestore count queries (`AttendanceDayCounter`) for today's attendance. Scheduled headcounts are filtered through effective schedule history in Asia/Kolkata, so recurring weekly days off do not inflate absences. `AttentionItem` is a pure domain model (`AttentionKind`/`AttentionSeverity`); `attention_item_presentation.dart` maps it to icons and `StatusType`. `AttendanceSummary.onLeave` is null (no leave data); per-branch adherence snapshots are not provided.
 - **Reports**: return totals per branch and per reason come from `GetReturnCountsByBranch` (Org Admin, whole organization) or `GetBranchStats` (Branch Manager, or an Org Admin narrowed to one branch), both scoped by optional `$from`/`$to` (`[from, to)` in the business timezone). Preset periods and inclusive custom date ranges resolve to the same timestamp filters, so `returnCountsCoverPeriod` is true and `returnCategories` is filled (percentages of the filtered total; unknown legacy reasons count as Other). Organization return volume sums the authoritative aggregate, including history from suspended branches; active branch assignments do not restrict historical organization totals. Attendance rates, hours, exceptions and trends are null/empty until the backend can compute them. `ReportPeriod` includes preset periods and the custom-range selection.
 - **Settings**: SettingsRepository (mock in memory; FirestoreSettingsRepository on organization_settings/{orgId} and platform_settings/global), typed OrganizationSettings/PlatformSettings with SettingsValidators (geofence 10-5000 m, grace 0-120 min, session timeout 5-1440 min, lockout attempts 3-10), and SettingsController (load/save, field errors, lastSaveSucceeded, SessionScoped). Organization Admins manage organization settings; platform roles read and only the Platform Owner writes platform settings. Missing asset acknowledgment and attendance selfie settings default to enabled; explicit saved false values are preserved. Branch Manager self-attendance defaults to disabled and is enabled per organization. GPS requirement, break recording, and the two operational-digest preferences are editable and saved. GPS, break, and Branch Manager self-attendance settings are enforced by the attendance callable; operational-digest preferences currently have no dispatch job wired to them. Organization radius is used as the attendance geofence fallback when a branch has no positive radius. Firestore rules enforce the organization settings field whitelist and audit checks; platform_settings/global is writable only by platformOwner with the same checks and numeric ranges.
 - **Test seams**: remote interfaces (`ReturnsRemote`, `OrganizationDashboardRemote`, `BranchDashboardRemote`, `PlatformDashboardRemote`, `ReportsRemote`) wrap the `DataGateway`; Firestore-backed repositories are tested with `FakeFirebaseFirestore`; the punch callable with a fake `CallableFunctions`. Contract suites run the same assertions against the mock and the real repository.
@@ -641,3 +641,55 @@ Organization deletion removes off-site assignments along with other relational
 history and deletes all organization Storage objects. Branch deletion and
 employee deletion are blocked once their off-site history exists, preserving
 the assignment and event audit trail.
+
+## 24. Employee Schedules, Attendance Sessions, and Payslips
+
+Employee schedules and compensation are effective-dated PostgreSQL history in
+`employee_schedule_history` and `employee_compensation_history` (migration
+`010_employee_workforce_history.sql`). PostgreSQL is the source of truth after
+backfill. New employee provisioning writes the initial schedule and salary
+version; later edits use separate Schedule & Shifts and Salary tabs so those
+saves do not update general employee fields. Schedule periods carry the
+employee's recurring weekday off and are independent of branch assignments.
+
+`BackfillEmployeeWorkforceHistory` is an Organization Admin-scoped,
+idempotent operation. It imports existing Firestore work-hour, shift, and
+salary values with Asia/Kolkata cutover-date effective dates and Sunday as the
+weekly day off. Missing legacy shifts use the existing 8-hour default. The
+operation removes each legacy schedule or salary field only after its
+corresponding SQL history row was inserted successfully; invalid or missing
+values remain available for correction. Apply migration 010 before deploying
+code that references these tables, then use the Payslips page's **Import
+existing history** action once per organization. Neither action has been run
+against production as part of local implementation.
+
+The `GetEmployeeWorkforceHistory`, `SaveEmployeeSchedule`, and
+`SaveEmployeeCompensation` data operations resolve membership scope on the
+server. Organization Admins are limited to their organization. Branch
+Managers must provide their active assigned branch and can edit only employees
+assigned there. Effective edits are today or future dated; schedule and salary
+histories are independent and preserve prior versions.
+
+Self-service attendance continues to use Firestore for its high-volume event
+history. Each punch session has a distinct `attendance_entries` document, and a
+server-controlled `attendance_session_state/{uid}_{workDate}` document keeps
+the single-open-session invariant. Checkout is bound to that session's branch;
+a later session can start at another assigned branch. Punches use the
+employee's effective schedule to block their weekly day off. Manager group
+attendance uses the same weekly-off rule. Employee home aggregates worked time
+across sessions and allows branch selection before each new check-in.
+
+Organization pay settings select hours or workdays and whether overtime is
+paid. Defaults are hours-based and overtime off. `GetMonthlyPayroll` applies
+the effective salary, schedule, attendance, and approved-leave history for the
+selected Asia/Kolkata calendar month. Organization Admin results are limited
+to their organization; Branch Manager results require an active assigned
+branch and include the manager plus employees in that branch. Employees can
+read their own result. The Flutter Payslips page creates individual PDF
+payslips and scoped monthly XLSX exports from the authorized result set; it
+does not initiate payroll approval or payment.
+
+Local validation covers payroll calculation and history operations using
+`FakeDb`. Production rollout still requires applying migration 010, deploying
+the Cloud Functions, Firestore rules/indexes, and Flutter app, then running the
+organization-scoped backfill before employees use the new history screens.
