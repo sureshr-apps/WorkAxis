@@ -162,5 +162,5 @@ section 21c).
   not be run on the machine that wrote them. The first CI run is their first
   execution; if that job fails, fix the test or the rules before deploys can
   proceed.
-- The `database` job's keyless Cloud SQL login (IAM authentication through the
-  federated identity) has been configured but not exercised by a real run.
+- The keyless Cloud SQL migration job successfully applied migration 010 on
+  22 November 2026 using GitHub Actions Workload Identity Federation.

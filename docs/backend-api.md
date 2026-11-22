@@ -641,5 +641,6 @@ XLSX report are generated in Flutter from this already scoped result; exports
 do not call a separate backend operation.
 
 Local tests cover the calculator, history operations, access checks, and
-attendance session rules with `FakeDb`. Migration 010 and the organization
-backfill have not been applied in production as part of this implementation.
+attendance session rules with `FakeDb`. Migration 010 was applied to production
+on 22 November 2026. The organization-scoped backfill remains to be run from
+the Payslips page by an Organization Admin for each organization.

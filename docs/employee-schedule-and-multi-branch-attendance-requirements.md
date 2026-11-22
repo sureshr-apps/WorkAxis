@@ -1,6 +1,6 @@
 # Employee Scheduling, Compensation, and Multi-Branch Attendance
 
-**Status:** Implemented locally. Production migration, deployment, and organization backfill are pending.
+**Status:** Deployed on 22 November 2026. Migration 010 and the application deployment succeeded; organization backfill remains pending.
 
 This file is the working specification for employee details, schedules, weekly days off, salary history, and multi-branch attendance. Add further requirements here for the next implementation batch.
 
@@ -61,7 +61,7 @@ This file is the working specification for employee details, schedules, weekly d
 - Employee self-service can select an assigned active branch for each new attendance session. Each session retains its own branch, and checkout is tied to the open session.
 - Attendance views group sessions into one employee/day summary. Session history and review actions remain available from the summary, and employee history spans all branches.
 - Effective weekly days off block self-service and group attendance punches. Organization pay settings choose hours or workdays and default overtime to off. Payslips and scoped exports are available in the app.
-- Local tests and analysis validate the implementation. Before release, apply migration 010, deploy Functions/rules/indexes and the app, then run the backfill for each organization. Production migration and backfill have not been run.
+- Local and GitHub Actions validation passed. Migration 010, Functions/rules/indexes, web hosting, and the Android release were deployed on 22 November 2026. Run the Org Admin backfill from Payslips once for each organization before existing employees use the new schedule and salary history.
 
 ## Implementation Details
 
@@ -129,6 +129,6 @@ This file is the working specification for employee details, schedules, weekly d
 - [x] Post-creation schedule and salary edits are isolated from general employee details.
 - [ ] Backfilled shift and salary values match existing records, and all existing employees have Sunday seeded as their weekly day off.
 
-The checked items are implemented and locally validated. The final item remains
-open until the migration and backfill have been run and their real data has
-been checked in the target environment.
+The checked items are implemented and validated. The final item remains open
+until every organization has run the backfill and its real data has been
+checked in the target environment.

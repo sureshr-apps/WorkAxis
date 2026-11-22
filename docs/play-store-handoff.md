@@ -1,6 +1,6 @@
 # WorkAxis: Play Store handoff
 
-Status as of 19 November 2026. Written so the work can continue in a new chat.
+Status as of 22 November 2026. Written so the work can continue in a new chat.
 
 Sections: [Completed](#completed) · [Pending](#pending) · [Known gaps](#known-gaps-to-be-aware-of) · [Key facts](#key-facts) · [Where things are](#where-things-are) · [Next steps](#next-steps-in-order)
 
@@ -25,8 +25,8 @@ Sections: [Completed](#completed) · [Pending](#pending) · [Known gaps](#known-
 - **Upload keystore created:** `android/upload-keystore.jks`, RSA 2048, alias `upload`, validity 10,000 days. It is git-ignored.
 - **`android/key.properties` created** with the passwords the developer chose. It is git-ignored. Do not paste its contents into chats or commits.
 - **Closed-test version 1.0.0 (1):** `build/app/outputs/bundle/release/app-release-v1.0.0+1-original.aab` (60.8 MB), signed with the upload certificate. A device log confirmed this build starts in mock mode and throws `Mock backend is not permitted in release builds` before Flutter renders its first frame.
-- **Latest closed-test upload:** the automated GitHub Actions workflow uploaded version name `1.0.0` to the `Alpha-1` track on 19 November 2026. It built the signed App Bundle with `BACKEND_MODE=firebase` and a unique Android version code.
-- **Automatic version names:** future closed-test uploads increment the patch version automatically. The next app release will be `1.0.1`, followed by `1.0.2`; successful uploads are recorded with `play-vX.Y.Z` Git tags. See [CI/CD](ci-cd.md#google-play-closed-test-publishing).
+- **Latest closed-test upload:** GitHub Actions uploaded version name `1.0.12` to `Alpha-1` on 22 November 2026 (run [45009531746](https://github.com/sureshr-apps/WorkAxis/actions/runs/45009531746), tag `play-v1.0.12`). The signed App Bundle uses `BACKEND_MODE=firebase` and a unique Android version code. Play processing/review and tester availability still need confirmation in Play Console.
+- **Automatic version names:** future closed-test uploads increment the patch version automatically. The next app release will be `1.0.13`; successful uploads are recorded with `play-vX.Y.Z` Git tags. See [CI/CD](ci-cd.md#google-play-closed-test-publishing).
 - Every local release build must include `--dart-define=BACKEND_MODE=firebase`; without it, release startup aborts before the app UI appears. The CI App Bundle workflow already supplies this define. Each Play upload also needs a higher version code.
 - `pubspec.yaml` is now `1.0.0+2`, matching the corrected bundle.
 
@@ -35,7 +35,7 @@ Sections: [Completed](#completed) · [Pending](#pending) · [Known gaps](#known-
 - **Developer account:** Personal. The 14-day closed-test requirement applies.
 - **App created** with package name `com.sureshrapps.workaxis`.
 - **Play App Signing:** accepted as the default at first upload.
-- The original `1.0.0 (1)` closed-test release was superseded by the automated `1.0.0` upload. The Play workflow uploads directly to `Alpha-1`; check the console for Google's processing/review status.
+- The original `1.0.0 (1)` closed-test release was superseded by automated uploads. Version `1.0.12` was uploaded to `Alpha-1` on 22 November; check the console for Google's processing/review status.
 - **Store listing text drafted** (short and full description). Confirm the text is entered in the console.
   - Short description: "Employee attendance, branch management and returns for your organization."
 - **Play store icon:** `store-assets/play-icon-512.png`, converted to 32-bit RGBA with full opacity to match Play's requirement. The change is not committed yet.

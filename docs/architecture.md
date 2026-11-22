@@ -658,10 +658,10 @@ salary values with Asia/Kolkata cutover-date effective dates and Sunday as the
 weekly day off. Missing legacy shifts use the existing 8-hour default. The
 operation removes each legacy schedule or salary field only after its
 corresponding SQL history row was inserted successfully; invalid or missing
-values remain available for correction. Apply migration 010 before deploying
-code that references these tables, then use the Payslips page's **Import
-existing history** action once per organization. Neither action has been run
-against production as part of local implementation.
+values remain available for correction. Migration 010 and the backend, rules,
+indexes, and web deployment completed on 22 November 2026. An Organization
+Admin still needs to use the Payslips page's **Import existing history**
+action once per organization.
 
 The `GetEmployeeWorkforceHistory`, `SaveEmployeeSchedule`, and
 `SaveEmployeeCompensation` data operations resolve membership scope on the
@@ -690,6 +690,6 @@ payslips and scoped monthly XLSX exports from the authorized result set; it
 does not initiate payroll approval or payment.
 
 Local validation covers payroll calculation and history operations using
-`FakeDb`. Production rollout still requires applying migration 010, deploying
-the Cloud Functions, Firestore rules/indexes, and Flutter app, then running the
-organization-scoped backfill before employees use the new history screens.
+`FakeDb`. Production migration and application deployment completed on
+22 November 2026. Run and verify the organization-scoped backfill before
+existing employees use the new history screens.
