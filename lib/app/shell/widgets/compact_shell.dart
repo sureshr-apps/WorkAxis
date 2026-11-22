@@ -9,6 +9,8 @@ import 'package:workaxis/app/shell/widgets/app_navigation_drawer.dart';
 import 'package:workaxis/app/shell/widgets/user_profile_menu.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
+import 'package:workaxis/core/widgets/attachment_image.dart';
+import 'package:workaxis/features/access/domain/models/organization_summary.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
@@ -56,7 +58,10 @@ class CompactShell extends StatelessWidget {
           ),
         ),
         centerTitle: true,
-        title: const _BrandTitle(),
+        title: _BrandTitle(
+          role: user?.role,
+          organization: accessContext?.organization,
+        ),
         actions: [
           if (canChangeBranch)
             IconButton(
@@ -90,36 +95,76 @@ class CompactShell extends StatelessWidget {
 }
 
 class _BrandTitle extends StatelessWidget {
-  const _BrandTitle();
+  const _BrandTitle({this.role, this.organization});
+
+  final UserRole? role;
+  final OrganizationSummary? organization;
 
   @override
   Widget build(BuildContext context) {
+    final organizationName = organization?.name.trim() ?? '';
+    final showOrganizationBrand =
+        role?.isCustomerLevel == true && organizationName.isNotEmpty;
+    final organizationLogo = organization?.logoUrl?.trim();
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.xs),
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        if (showOrganizationBrand)
+          _OrganizationLogo(reference: organizationLogo)
+        else
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.xs),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            ),
+            child: const Icon(
+              Icons.shield_outlined,
+              color: AppColors.onPrimary,
+              size: 18,
+            ),
           ),
-          child: const Icon(
-            Icons.shield_outlined,
-            color: AppColors.onPrimary,
-            size: 18,
-          ),
-        ),
         const SizedBox(width: AppSpacing.sm),
-        Text(
-          'WorkAxis',
-          style: GoogleFonts.inter(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-            color: AppColors.onSurface,
+        Flexible(
+          child: Text(
+            showOrganizationBrand ? organizationName : 'WorkAxis',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              color: AppColors.onSurface,
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _OrganizationLogo extends StatelessWidget {
+  const _OrganizationLogo({required this.reference});
+
+  final String? reference;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(AppSpacing.radiusSm);
+
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(color: AppColors.primary, borderRadius: radius),
+      clipBehavior: Clip.antiAlias,
+      child: reference == null || reference.isEmpty
+          ? const Icon(
+              Icons.business_outlined,
+              color: AppColors.onPrimary,
+              size: 18,
+            )
+          : AttachmentImage(reference: reference, fit: BoxFit.cover),
     );
   }
 }

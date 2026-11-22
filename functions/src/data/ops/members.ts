@@ -43,7 +43,8 @@ export const membersOps: OperationRegistry = {
     const rows = await select<Row>(
       db,
       `SELECT ${LIST_COLS},
-              o.id AS "orgId", o.name AS "orgName", o.code AS "orgCode", o.status AS "orgStatus"
+              o.id AS "orgId", o.name AS "orgName", o.code AS "orgCode",
+              o.status AS "orgStatus", o.logo_url AS "orgLogoUrl"
          FROM organization_member m
          LEFT JOIN organization o ON o.id = m.organization_id
         WHERE m.auth_uid = $1
@@ -51,10 +52,16 @@ export const membersOps: OperationRegistry = {
       [actor.uid],
     );
     const organizationMembers = rows.map(
-      ({ orgId, orgName, orgCode, orgStatus, ...member }) => ({
+      ({ orgId, orgName, orgCode, orgStatus, orgLogoUrl, ...member }) => ({
         ...member,
         organization: orgId
-          ? { id: orgId, name: orgName, code: orgCode, status: orgStatus }
+          ? {
+              id: orgId,
+              name: orgName,
+              code: orgCode,
+              status: orgStatus,
+              logoUrl: orgLogoUrl,
+            }
           : null,
       }),
     );

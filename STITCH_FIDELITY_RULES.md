@@ -76,7 +76,7 @@ Before writing Flutter code for **any** visual component or card, execute this 5
   - Left: "Operations Hub" (16px bold `#191c20`) + uppercase role console pill badge (e.g., `PLATFORM CONSOLE`, `ORGANIZATION CONSOLE`, `BRANCH OPERATIONS`, `EMPLOYEE PORTAL` in `JetBrains Mono` 10px bold `#003ea8` on `#dbe1ff` container).
   - Right: **User Profile Section** (Name in 13px bold `#191c20`, role subtitle in 11px `#004ac6`, and circular blue avatar 34dp `#003594` with white person icon).
 - **Mobile & Tablet Header Bar (Compact <600dp and Medium 600–839dp)**:
-  - Top AppBar with hamburger button on the left, centered WorkAxis branding, and **Profile Icon on the right** (`Icons.person` circular blue avatar).
+  - Top AppBar with hamburger button on the left, centered branding, and **Profile Icon on the right** (`Icons.person` circular blue avatar). Platform users see WorkAxis branding; customer users see their organization name and logo, with a business icon when no logo is configured.
   - **No standalone Sign Out icon button in the header**: Sign Out is integrated within the Profile Icon's dropdown menu.
   - **No profile or Sign Out at bottom of side pane**: Both the collapsible drawer (phone/tablet) and desktop sidebar are strictly dedicated to navigation destinations, with no profile or signout at the bottom.
 

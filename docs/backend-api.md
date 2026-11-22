@@ -229,6 +229,8 @@ Branch Manager (BM) = assigned branches only. Paged operations take
 | `GetMemberById` | Self; Platform; Org Admin of its org; BM sharing a branch | `id` | `organizationMember` |
 | `ListPlatformMembersPaged` | Platform | `nameContains`, `status` | `organizationMembers`, `total` |
 
+`GetMyMember` includes the member's organization summary (`id`, `name`, `code`, `status`, and `logoUrl`) when the member belongs to a customer organization.
+
 ### Returns (`ops/returns.ts`)
 
 | Operation | Who may call | Key vars | Response keys |

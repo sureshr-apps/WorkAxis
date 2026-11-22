@@ -33,6 +33,7 @@ class SqlConnectAccessRemoteDataSource implements AccessRemoteDataSource {
               id: org.string('id'),
               name: org.string('name'),
               code: org.string('code'),
+              logoUrl: org.optString('logoUrl'),
               isActive: org.string('status') == 'active',
             ),
     );
