@@ -294,7 +294,6 @@ class _OrganizationSettingsScreenState
               SettingsFieldPair(
                 first: AppTextField(
                   controller: _geofenceRadiusController,
-                  enabled: false,
                   label: 'Default Geofence Radius (Meters)',
                   errorText: errors[SettingsField.geofenceRadius],
                   keyboardType: TextInputType.number,
@@ -302,7 +301,6 @@ class _OrganizationSettingsScreenState
                 ),
                 second: AppTextField(
                   controller: _gracePeriodController,
-                  enabled: false,
                   label: 'Check-in Grace Period (Minutes)',
                   errorText: errors[SettingsField.gracePeriod],
                   keyboardType: TextInputType.number,

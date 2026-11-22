@@ -22,6 +22,8 @@ class PayslipsController extends ChangeNotifier implements SessionScoped {
     required UserAccessContext access,
     required String month,
     String? activeBranchId,
+    PayrollView view = PayrollView.self,
+    String? selectedMemberId,
   }) async {
     final generation = ++_generation;
     _isLoading = true;
@@ -32,6 +34,8 @@ class PayslipsController extends ChangeNotifier implements SessionScoped {
         access: access,
         month: month,
         activeBranchId: activeBranchId,
+        view: view,
+        selectedMemberId: selectedMemberId,
       );
       if (generation != _generation) return;
       _payroll = result;

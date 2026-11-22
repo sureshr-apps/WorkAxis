@@ -103,7 +103,7 @@ class MockBranchManagementRepository implements BranchManagementRepository {
         'A selected branch manager is outside your organization.',
       );
     }
-    BranchManagementPolicy.validate(branch);
+    BranchManagementPolicy.validate(branch, requireLocation: branch.id.isEmpty);
     final normalizedCode = branch.code.trim().toLowerCase();
     if (normalizedCode.isNotEmpty &&
         accessDataSource.getAllBranches().any(

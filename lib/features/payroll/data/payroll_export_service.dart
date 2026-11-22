@@ -9,6 +9,65 @@ import 'package:workaxis/features/payroll/domain/models/monthly_payroll.dart';
 class PayrollExportService {
   const PayrollExportService();
 
+  Future<void> exportSummaryXlsx(MonthlyPayroll payroll) async {
+    final workbook = Excel.createExcel();
+    workbook.rename('Sheet1', 'Payroll Summary');
+    final sheet = workbook['Payroll Summary'];
+    sheet.appendRow([
+      TextCellValue(
+        'Multi-branch employees are allocated evenly across active assigned branches.',
+      ),
+    ]);
+    sheet.appendRow([
+      for (final label in [
+        'Branch',
+        'Employees',
+        'Scheduled hours',
+        'Payable hours',
+        'Unpaid leave days',
+        'Overtime hours',
+        'Overtime pay (INR)',
+        'Gross pay (INR)',
+      ])
+        TextCellValue(label),
+    ]);
+    final total = payroll.summary;
+    if (total != null) {
+      sheet.appendRow([
+        TextCellValue('All branches'),
+        IntCellValue(total.employeeCount),
+        DoubleCellValue(total.scheduledHours),
+        DoubleCellValue(total.payableHours),
+        DoubleCellValue(total.unpaidLeaveDays),
+        DoubleCellValue(total.overtimeHours),
+        DoubleCellValue(total.overtimePay),
+        DoubleCellValue(total.grossPay),
+      ]);
+    }
+    for (final branch in payroll.branchSummaries) {
+      final summary = branch.summary;
+      sheet.appendRow([
+        TextCellValue(branch.branchName),
+        IntCellValue(summary.employeeCount),
+        DoubleCellValue(summary.scheduledHours),
+        DoubleCellValue(summary.payableHours),
+        DoubleCellValue(summary.unpaidLeaveDays),
+        DoubleCellValue(summary.overtimeHours),
+        DoubleCellValue(summary.overtimePay),
+        DoubleCellValue(summary.grossPay),
+      ]);
+    }
+    final bytes = workbook.encode();
+    if (bytes == null) throw StateError('Could not create the summary export.');
+    await FileSaver.instance.saveToDownloads(
+      name: 'workaxis-payroll-summary-${payroll.month}',
+      bytes: Uint8List.fromList(bytes),
+      fileExtension: 'xlsx',
+      mimeType: MimeType.microsoftExcel,
+      subfolder: 'WorkAxis',
+    );
+  }
+
   Future<void> exportMonthlyXlsx(MonthlyPayroll payroll) async {
     final workbook = Excel.createExcel();
     workbook.rename('Sheet1', 'Monthly Payroll');

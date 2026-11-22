@@ -27,8 +27,11 @@ class ReturnsOperationsScreen extends StatefulWidget {
       _ReturnsOperationsScreenState();
 }
 
+enum _ReturnQueue { mine, others }
+
 class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
   late final TextEditingController _searchController;
+  _ReturnQueue _queue = _ReturnQueue.mine;
 
   @override
   void initState() {
@@ -88,6 +91,15 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
     final canReview =
         role == UserRole.orgAdmin || role == UserRole.branchManager;
     final hasPending = controller.pendingCount > 0;
+    final visibleItems = isManager
+        ? controller.filteredItems
+              .where(
+                (item) => _queue == _ReturnQueue.mine
+                    ? item.wasSubmittedBy(access!.user.id)
+                    : !item.wasSubmittedBy(access!.user.id),
+              )
+              .toList(growable: false)
+        : controller.filteredItems;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -156,6 +168,28 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
+            if (isManager)
+              SliverToBoxAdapter(
+                child: SegmentedButton<_ReturnQueue>(
+                  segments: const [
+                    ButtonSegment(
+                      value: _ReturnQueue.mine,
+                      label: Text('My returns'),
+                      icon: Icon(Icons.person_outline),
+                    ),
+                    ButtonSegment(
+                      value: _ReturnQueue.others,
+                      label: Text('Returns filed by others'),
+                      icon: Icon(Icons.groups_outlined),
+                    ),
+                  ],
+                  selected: {_queue},
+                  onSelectionChanged: (selection) =>
+                      setState(() => _queue = selection.first),
+                ),
+              ),
+            if (isManager)
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
             SliverToBoxAdapter(
               child: ReturnsFilterBar(
                 controller: controller,
@@ -166,12 +200,17 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
             SliverReturnsBody(
               controller: controller,
+              visibleItems: visibleItems,
               showReviewAction: canReview,
               reviewerUid: isManager ? access?.user.id : null,
               onOpen: _openDetails,
               onRetry: _loadData,
-              emptyTitle: 'No return requests found',
-              emptyMessage: 'There are no returned products matching your filter criteria.',
+              emptyTitle: isManager && _queue == _ReturnQueue.mine
+                  ? 'No returns filed by you'
+                  : 'No return requests found',
+              emptyMessage: isManager && _queue == _ReturnQueue.mine
+                  ? 'Returns you submit will appear here.'
+                  : 'There are no returned products matching your filter criteria.',
               columns: [
                 ReturnsTableColumn.product(),
                 ReturnsTableColumn.quantity(),

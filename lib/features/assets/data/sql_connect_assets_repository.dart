@@ -33,6 +33,24 @@ class SqlConnectAssetsRepository implements AssetsRepository {
       vars['branchId'] = branchId;
       vars['activeBranchId'] = branchId;
     }
+    if (role == UserRole.branchManager) {
+      final own = await gateway.call('ListMyEmployeeAssets', vars);
+      final team = await gateway.call(operation, vars);
+      final ownRows = own['employeeAssets'];
+      final teamRows = team['employeeAssets'];
+      if (ownRows is! List || teamRows is! List) {
+        throw const DatabaseException(
+          'Asset listing returned an invalid payload.',
+        );
+      }
+      final unique = <String, EmployeeAsset>{};
+      for (final row in [...ownRows, ...teamRows]) {
+        if (row is! Map) continue;
+        final asset = _fromJson(row);
+        unique[asset.id] = asset;
+      }
+      return List.unmodifiable(unique.values);
+    }
     final data = await gateway.call(operation, vars);
     final rows = data['employeeAssets'];
     if (rows is! List) {
@@ -133,6 +151,7 @@ class SqlConnectAssetsRepository implements AssetsRepository {
       branchName: requiredString('branchName'),
       employeeId: requiredString('employeeId'),
       employeeName: requiredString('employeeName'),
+      employeeUid: row['employeeUid'] as String?,
       name: requiredString('name'),
       category: requiredString('category'),
       assetTag: requiredString('assetTag'),

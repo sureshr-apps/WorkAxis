@@ -104,7 +104,8 @@ class MockAssetsRepository implements AssetsRepository {
         _assets.where(
           (asset) =>
               asset.organizationId == orgId &&
-              asset.employeeId == access.user.id,
+              (asset.employeeUid == access.user.id ||
+                  asset.employeeId == access.user.id),
         ),
       );
     }
@@ -130,7 +131,8 @@ class MockAssetsRepository implements AssetsRepository {
           (asset) =>
               asset.organizationId == orgId &&
               asset.branchId == branchId &&
-              employeeIds.contains(asset.employeeId),
+              (asset.employeeUid == access.user.id ||
+                  employeeIds.contains(asset.employeeId)),
         ),
       );
     }
@@ -156,9 +158,15 @@ class MockAssetsRepository implements AssetsRepository {
           ? activeBranchId
           : null,
     );
-    if (employee == null ||
-        employee.role != UserRole.employee ||
-        !employee.branchIds.contains(branchId)) {
+    final canAssignToMember =
+        employee != null &&
+        (employee.role == UserRole.employee ||
+            (access.user.role == UserRole.orgAdmin &&
+                employee.role == UserRole.branchManager));
+    if (!canAssignToMember ||
+        !employee.branchIds.contains(branchId) ||
+        (access.user.role == UserRole.branchManager &&
+            employee.role != UserRole.employee)) {
       throw const AccessDeniedException(
         'The selected employee is not assigned to this branch.',
         'Choose an employee who belongs to the selected outlet.',
@@ -196,6 +204,7 @@ class MockAssetsRepository implements AssetsRepository {
         assignmentChanged || clearPendingAcknowledgement;
     final acknowledgementRequired = resetAcknowledgement
         ? asset.status != AssetStatus.returned &&
+              employee.role == UserRole.employee &&
               isAcknowledgementRequired(orgId)
         : existing.acknowledgementRequired;
     final saved = EmployeeAsset(
@@ -205,6 +214,7 @@ class MockAssetsRepository implements AssetsRepository {
       branchName: branch.isEmpty ? asset.branchName : branch.first.name,
       employeeId: employee.id,
       employeeName: employee.fullName,
+      employeeUid: employee.authUid,
       name: asset.name.trim(),
       category: asset.category.trim(),
       assetTag: asset.assetTag.trim(),

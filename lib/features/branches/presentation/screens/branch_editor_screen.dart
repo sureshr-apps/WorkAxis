@@ -281,6 +281,10 @@ class _BranchEditorScreenState extends State<BranchEditorScreen> {
       setState(() => _error = 'Enter valid geofence coordinates.');
       return;
     }
+    if (!_editing && (latitude == null || longitude == null)) {
+      setState(() => _error = 'Select the branch location on the map.');
+      return;
+    }
     try {
       BranchGeofenceValidator.validate(
         latitude: latitude,
@@ -353,6 +357,7 @@ class _CoordinatesRow extends StatelessWidget {
         child: AppTextField(
           controller: latitude,
           label: 'Latitude',
+          enabled: false,
           keyboardType: _keyboard,
         ),
       ),
@@ -361,6 +366,7 @@ class _CoordinatesRow extends StatelessWidget {
         child: AppTextField(
           controller: longitude,
           label: 'Longitude',
+          enabled: false,
           keyboardType: _keyboard,
         ),
       ),

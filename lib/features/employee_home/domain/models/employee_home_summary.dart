@@ -11,6 +11,7 @@ class EmployeeHomeSummary {
 
   final String employeeId;
   final String employeeName;
+  final String? branchId;
   final String branchName;
   final String organizationName;
   final String shiftCode;
@@ -61,6 +62,7 @@ class EmployeeHomeSummary {
   const EmployeeHomeSummary({
     required this.employeeId,
     required this.employeeName,
+    this.branchId,
     required this.branchName,
     this.organizationName = unavailable,
     this.shiftCode = unavailable,
@@ -153,6 +155,7 @@ class EmployeeHomeSummary {
     return EmployeeHomeSummary(
       employeeId: employeeId,
       employeeName: employeeName,
+      branchId: branchId,
       branchName: branchName,
       organizationName: organizationName,
       shiftCode: shiftCode,

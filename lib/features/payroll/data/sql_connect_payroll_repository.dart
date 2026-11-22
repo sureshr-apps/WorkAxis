@@ -17,11 +17,20 @@ class SqlConnectPayrollRepository implements PayrollRepository {
     required UserAccessContext access,
     required String month,
     String? activeBranchId,
+    PayrollView view = PayrollView.self,
+    String? selectedMemberId,
   }) async {
     try {
       final response = await _gateway.call('GetMonthlyPayroll', {
         'month': month,
         'activeBranchId': ?activeBranchId,
+        'view': switch (view) {
+          PayrollView.self => 'self',
+          PayrollView.employee => 'employee',
+          PayrollView.branchSummary => 'branchSummary',
+          PayrollView.organizationSummary => 'organizationSummary',
+        },
+        'selectedMemberId': ?selectedMemberId,
       });
       return MonthlyPayroll.fromJson(response);
     } catch (error, stackTrace) {

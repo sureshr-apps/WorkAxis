@@ -95,7 +95,7 @@ class SqlConnectBranchManagementRepository
         'A branch cannot be moved to another organization.',
       );
     }
-    BranchManagementPolicy.validate(branch);
+    BranchManagementPolicy.validate(branch, requireLocation: branch.id.isEmpty);
 
     final response = await _functions.call('saveBranch', {
       if (branch.id.isEmpty)

@@ -4,7 +4,7 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/features/access/domain/models/active_branch_context.dart';
 
-/// Shows the Branch Manager's active branch with an optional change action.
+/// Shows the user's active branch with an optional change action.
 class BranchContextCard extends StatelessWidget {
   const BranchContextCard({
     super.key,
@@ -14,7 +14,7 @@ class BranchContextCard extends StatelessWidget {
 
   final ActiveBranchContext branch;
 
-  /// When non-null (manager has several branches) a change button is shown.
+  /// When non-null (the user has several branches) a change button is shown.
   final VoidCallback? onChangeBranch;
 
   @override

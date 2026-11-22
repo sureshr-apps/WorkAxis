@@ -2,7 +2,7 @@ import { getFirestore, type DocumentData, type Query } from "firebase-admin/fire
 import { denied, invalid, notFound } from "../../errors";
 import type { Actor } from "../../auth/roles";
 import type { SqlExecutor } from "../../db/executor";
-import { calculatePayroll, type ApprovedLeaveRange, type CompensationVersion, type PayrollAttendanceSession, type ScheduleVersion } from "../../payroll/calculatePayroll";
+import { calculatePayroll, type ApprovedLeaveRange, type CompensationVersion, type PayrollAttendanceSession, type PayrollCalculation, type ScheduleVersion } from "../../payroll/calculatePayroll";
 import { requireRole } from "../authz";
 import type { OperationRegistry } from "../operation";
 import { reqId } from "../vars";
@@ -15,6 +15,21 @@ interface MemberRow extends Row {
   fullName: string;
   role: string;
   employeeCode?: string | null;
+}
+interface PayrollSummaryRow {
+  employeeCount: number;
+  availableCount: number;
+  scheduledHours: number;
+  payableHours: number;
+  actualHours: number;
+  scheduledWorkdays: number;
+  payableWorkdays: number;
+  unpaidLeaveDays: number;
+  unpaidLeaveImpact: number;
+  overtimeHours: number;
+  overtimePay: number;
+  basePay: number;
+  grossPay: number;
 }
 interface ScheduleRow extends Row {
   memberId: string;
@@ -42,16 +57,66 @@ export const payrollOps: OperationRegistry = {
       throw invalid("month must use YYYY-MM format.");
     }
     const { monthStart, nextMonth } = monthBounds(month);
-    const members = await payrollMembers(db, actor, vars);
+    const view = typeof vars.view === "string" ? vars.view : "self";
+    if (!["self", "employee", "branchSummary", "organizationSummary"].includes(view)) {
+      throw invalid("Unknown payslip view.");
+    }
+    let members = await payrollMembers(db, actor, vars);
+    if (view === "self") {
+      members = members.filter((member) => member.authUid === actor.uid);
+    } else if (view === "employee") {
+      if (actor.role !== "orgAdmin" && actor.role !== "branchManager") throw denied();
+      const selectedId = reqId(vars, "selectedMemberId");
+      const selected = members.find((member) => member.id === selectedId && member.role === "employee");
+      if (!selected) throw denied("Employee payslip is outside your authorized scope.");
+      members = [selected];
+    } else if (view === "branchSummary") {
+      if (actor.role !== "branchManager") throw denied();
+      members = members.filter((member) => member.role === "employee");
+    } else {
+      if (actor.role !== "orgAdmin") throw denied();
+      members = members.filter((member) => member.role === "employee");
+    }
+    const isSummaryView =
+      view === "branchSummary" || view === "organizationSummary";
     if (members.length === 0) {
       const settings = await getFirestore().collection("organization_settings")
         .doc(actor.organizationId!).get();
       const basis = settings.get("payCalculationBasis");
+      let branchSummaries: (PayrollSummaryRow & { branchId: string; branchName: string })[] = [];
+      if (view === "branchSummary") {
+        const branchId = reqId(vars, "activeBranchId");
+        const branches = await db.query<{ id: string; name: string }>(
+          `SELECT id, name FROM branch
+            WHERE id = $1 AND organization_id = $2 AND status = 'active'
+            LIMIT 1`,
+          [branchId, actor.organizationId],
+        );
+        branchSummaries = branches.map((branch) => ({
+          branchId: branch.id,
+          branchName: branch.name,
+          ...emptySummary(),
+        }));
+      } else if (view === "organizationSummary") {
+        const branches = await db.query<{ id: string; name: string }>(
+          `SELECT id, name FROM branch
+            WHERE organization_id = $1 AND status = 'active'
+            ORDER BY name`,
+          [actor.organizationId],
+        );
+        branchSummaries = branches.map((branch) => ({
+          branchId: branch.id,
+          branchName: branch.name,
+          ...emptySummary(),
+        }));
+      }
       return {
         month,
         basis: basis === "workdays" ? "workdays" : "hours",
         overtimeEnabled: settings.get("overtimeEnabled") === true,
         paySlips: [],
+        summary: isSummaryView ? emptySummary() : null,
+        branchSummaries,
       };
     }
 
@@ -109,15 +174,141 @@ export const payrollOps: OperationRegistry = {
       });
       return {
         memberId: member.id,
+        authUid: member.authUid,
         fullName: member.fullName,
         role: member.role,
         employeeCode: member.employeeCode ?? null,
         calculation,
       };
     });
-    return { month, basis, overtimeEnabled, paySlips };
+    if (view === "branchSummary") {
+      const branchId = reqId(vars, "activeBranchId");
+      const branch = await db.query<{ name: string }>(
+        `SELECT name FROM branch WHERE id = $1 AND organization_id = $2 AND status = 'active' LIMIT 1`,
+        [branchId, actor.organizationId],
+      );
+      const assignments = await db.query<{ memberId: string; branchCount: number }>(
+        `SELECT a.member_id AS "memberId", count(*)::int AS "branchCount"
+           FROM user_branch_assignment a
+           JOIN branch b ON b.id = a.branch_id
+          WHERE b.organization_id = $1 AND b.status = 'active'
+            AND a.member_id = ANY($2::text[])
+          GROUP BY a.member_id`,
+        [actor.organizationId, memberIds],
+      );
+      const branchCountByMember = new Map(
+        assignments.map((row) => [row.memberId, row.branchCount]),
+      );
+      const allocatedSlips = paySlips.map((slip) => ({
+        ...slip,
+        calculation: scaleCalculation(
+          slip.calculation,
+          1 / Math.max(1, branchCountByMember.get(slip.memberId) ?? 1),
+        ),
+      }));
+      const summary = sumCalculations(allocatedSlips);
+      return {
+        month,
+        basis,
+        overtimeEnabled,
+        paySlips: [],
+        summary,
+        branchSummaries: branch[0] ? [{ branchId, branchName: branch[0].name, ...summary }] : [],
+      };
+    }
+    if (view === "organizationSummary") {
+      const branches = await db.query<{ id: string; name: string }>(
+        `SELECT id, name FROM branch
+          WHERE organization_id = $1 AND status = 'active'
+          ORDER BY name`,
+        [actor.organizationId],
+      );
+      const assignments = await db.query<{ memberId: string; branchId: string; branchName: string }>(
+        `SELECT a.member_id AS "memberId", a.branch_id AS "branchId", b.name AS "branchName"
+           FROM user_branch_assignment a
+           JOIN branch b ON b.id = a.branch_id
+          WHERE b.organization_id = $1 AND b.status = 'active'
+            AND a.member_id = ANY($2::text[])
+          ORDER BY b.name, a.member_id`,
+        [actor.organizationId, memberIds],
+      );
+      const memberBranches = new Map<string, { branchId: string; branchName: string }[]>();
+      for (const assignment of assignments) {
+        const list = memberBranches.get(assignment.memberId) ?? [];
+        list.push({ branchId: assignment.branchId, branchName: assignment.branchName });
+        memberBranches.set(assignment.memberId, list);
+      }
+      const groups = new Map<string, { branchId: string; branchName: string; rows: typeof paySlips }>(
+        branches.map((branch) => [branch.id, {
+          branchId: branch.id,
+          branchName: branch.name,
+          rows: [],
+        }]),
+      );
+      for (const slip of paySlips) {
+        const branches = memberBranches.get(slip.memberId) ?? [];
+        if (branches.length === 0) continue;
+        const share = 1 / branches.length;
+        for (const branch of branches) {
+          const group = groups.get(branch.branchId) ?? { ...branch, rows: [] };
+          group.rows.push({ ...slip, calculation: scaleCalculation(slip.calculation, share) });
+          groups.set(branch.branchId, group);
+        }
+      }
+      return {
+        month,
+        basis,
+        overtimeEnabled,
+        paySlips: [],
+        summary: sumCalculations(paySlips),
+        branchSummaries: [...groups.values()].map((group) => ({
+          branchId: group.branchId,
+          branchName: group.branchName,
+          ...sumCalculations(group.rows),
+        })),
+      };
+    }
+    return { month, basis, overtimeEnabled, paySlips, summary: null, branchSummaries: [] };
   },
 };
+
+function emptySummary(): PayrollSummaryRow {
+  return {
+    employeeCount: 0, availableCount: 0, scheduledHours: 0, payableHours: 0,
+    actualHours: 0, scheduledWorkdays: 0, payableWorkdays: 0, unpaidLeaveDays: 0,
+    unpaidLeaveImpact: 0, overtimeHours: 0, overtimePay: 0, basePay: 0, grossPay: 0,
+  };
+}
+
+function sumCalculations(rows: readonly { calculation: PayrollCalculation }[]): PayrollSummaryRow {
+  const summary = emptySummary();
+  summary.employeeCount = rows.length;
+  for (const { calculation } of rows) {
+    if (calculation.available === true) summary.availableCount++;
+    for (const key of ["scheduledHours", "payableHours", "actualHours", "scheduledWorkdays", "payableWorkdays", "unpaidLeaveDays", "unpaidLeaveImpact", "overtimeHours", "overtimePay", "basePay", "grossPay"] as const) {
+      summary[key] += calculation[key];
+    }
+  }
+  return summary;
+}
+
+function scaleCalculation(calculation: PayrollCalculation, share: number): PayrollCalculation {
+  const scale = (value: number) => Math.round(value * share * 100) / 100;
+  return {
+    ...calculation,
+    scheduledHours: scale(calculation.scheduledHours),
+    payableHours: scale(calculation.payableHours),
+    actualHours: scale(calculation.actualHours),
+    scheduledWorkdays: scale(calculation.scheduledWorkdays),
+    payableWorkdays: scale(calculation.payableWorkdays),
+    unpaidLeaveDays: scale(calculation.unpaidLeaveDays),
+    unpaidLeaveImpact: scale(calculation.unpaidLeaveImpact),
+    overtimeHours: scale(calculation.overtimeHours),
+    overtimePay: scale(calculation.overtimePay),
+    basePay: scale(calculation.basePay),
+    grossPay: scale(calculation.grossPay),
+  };
+}
 
 async function payrollMembers(db: SqlExecutor, actor: Actor, vars: Row): Promise<MemberRow[]> {
   const orgId = actor.organizationId;

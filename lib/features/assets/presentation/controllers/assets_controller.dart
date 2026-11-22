@@ -78,7 +78,12 @@ class AssetsController extends ChangeNotifier
       }
       _assets = assets;
       _members = members
-          .where((member) => member.role == UserRole.employee)
+          .where(
+            (member) =>
+                member.role == UserRole.employee ||
+                (access.user.role == UserRole.orgAdmin &&
+                    member.role == UserRole.branchManager),
+          )
           .toList(growable: false);
     } catch (error, stackTrace) {
       if (!_requests.isCurrent(request) ||

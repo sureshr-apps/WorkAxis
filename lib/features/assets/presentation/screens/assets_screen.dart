@@ -27,8 +27,11 @@ class AssetsScreen extends StatefulWidget {
   State<AssetsScreen> createState() => _AssetsScreenState();
 }
 
+enum _AssetQueue { mine, employees }
+
 class _AssetsScreenState extends State<AssetsScreen> {
   final _searchController = TextEditingController();
+  _AssetQueue _queue = _AssetQueue.mine;
   String? _loadedScope;
 
   @override
@@ -87,11 +90,20 @@ class _AssetsScreenState extends State<AssetsScreen> {
     final activeBranch = isManager && activeBranches.isNotEmpty
         ? activeBranches.first
         : null;
-    final visibleAssets = controller.filteredAssets;
+    final scopedAssets = controller.filteredAssets;
+    final visibleAssets = isManager
+        ? scopedAssets
+              .where(
+                (asset) => _queue == _AssetQueue.mine
+                    ? asset.employeeUid == access.user.id
+                    : asset.employeeUid != access.user.id,
+              )
+              .toList(growable: false)
+        : scopedAssets;
     final padding = context.responsivePagePadding;
     Widget buildAssetCard(EmployeeAsset asset) => EmployeeAssetCard(
       asset: asset,
-      canEdit: canEdit,
+      canEdit: canEdit && !(isManager && asset.employeeUid == access.user.id),
       isEmployeeView: isEmployee,
       canAcknowledge: isEmployee,
       isAcknowledging: controller.isAcknowledging,
@@ -170,6 +182,26 @@ class _AssetsScreenState extends State<AssetsScreen> {
                         : 'Search assets, employees, or tags',
                     onChanged: controller.setQuery,
                   ),
+                  if (isManager) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    SegmentedButton<_AssetQueue>(
+                      segments: const [
+                        ButtonSegment(
+                          value: _AssetQueue.mine,
+                          label: Text('My assets'),
+                          icon: Icon(Icons.person_outline),
+                        ),
+                        ButtonSegment(
+                          value: _AssetQueue.employees,
+                          label: Text('Employee assets'),
+                          icon: Icon(Icons.groups_outlined),
+                        ),
+                      ],
+                      selected: {_queue},
+                      onSelectionChanged: (selection) =>
+                          setState(() => _queue = selection.first),
+                    ),
+                  ],
                   if (controller.actionErrorMessage != null) ...[
                     const SizedBox(height: AppSpacing.md),
                     _ActionError(
@@ -216,8 +248,9 @@ class _AssetsScreenState extends State<AssetsScreen> {
                 child: _EmptyAssets(
                   hasSearch: controller.query.trim().isNotEmpty,
                   isEmployee: isEmployee,
-                  canEdit: canEdit,
-                  onAdd: canEdit
+                  canEdit:
+                      canEdit && !(isManager && _queue == _AssetQueue.mine),
+                  onAdd: canEdit && !(isManager && _queue == _AssetQueue.mine)
                       ? () => _openEditor(
                           access: access,
                           controller: controller,
@@ -297,6 +330,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
         organizationId: organizationId,
         branches: access.assignedBranches,
         employees: controller.members,
+        canAssignManagers: access.user.role == UserRole.orgAdmin,
         asset: asset,
         fixedBranchId: access.user.role == UserRole.branchManager
             ? activeBranchId

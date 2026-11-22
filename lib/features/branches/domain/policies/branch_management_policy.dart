@@ -43,12 +43,16 @@ class BranchManagementPolicy {
   }
 
   /// Validates a branch draft (name, location and geofence).
-  static void validate(BranchRecord branch) {
+  static void validate(BranchRecord branch, {bool requireLocation = false}) {
     if (branch.name.trim().isEmpty) {
       throw ValidationException('Enter the branch name.');
     }
     if (branch.location.trim().isEmpty) {
       throw ValidationException('Enter the branch location.');
+    }
+    if (requireLocation &&
+        (branch.latitude == null || branch.longitude == null)) {
+      throw ValidationException('Select the branch location on the map.');
     }
     BranchGeofenceValidator.validate(
       latitude: branch.latitude,

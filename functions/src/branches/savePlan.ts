@@ -36,6 +36,9 @@ export function parseBranchSave(actor: Actor, input: unknown) {
   ) {
     throw invalid("Enter both coordinates or leave both empty.");
   }
+  if (!existingId && (latitude == null || longitude == null)) {
+    throw invalid("Select the branch location on the map.");
+  }
   if (typeof bag.isMainBranch !== "boolean")
     throw invalid("Invalid main branch flag.");
   const data = {

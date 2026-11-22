@@ -35,7 +35,8 @@ class CompactShell extends StatelessWidget {
     final accessContext = context.watch<AccessController>().accessContext;
     final user = accessContext?.user;
     final canChangeBranch =
-        user?.role == UserRole.branchManager &&
+        (user?.role == UserRole.branchManager ||
+            user?.role == UserRole.employee) &&
         (accessContext?.hasMultipleAssignedBranches ?? false);
 
     return Scaffold(

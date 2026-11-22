@@ -34,7 +34,7 @@ class ShellSidebar extends StatelessWidget {
   final String? organizationName;
   final ActiveBranchContext? activeBranch;
 
-  /// Non-null only when the manager has more than one branch to switch to.
+  /// Non-null only when the user has more than one branch to switch to.
   final VoidCallback? onChangeBranch;
 
   @override
@@ -58,7 +58,8 @@ class ShellSidebar extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-          if (role == UserRole.branchManager && branch != null) ...[
+          if ((role == UserRole.branchManager || role == UserRole.employee) &&
+              branch != null) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               child: BranchContextCard(

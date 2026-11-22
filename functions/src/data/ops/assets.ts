@@ -22,6 +22,7 @@ const ASSET_COLUMNS = `
   b.name AS "branchName",
   ea.employee_member_id AS "employeeId",
   m.full_name AS "employeeName",
+  m.auth_uid AS "employeeUid",
   ea.name,
   ea.category,
   ea.asset_tag AS "assetTag",
@@ -115,26 +116,28 @@ async function listAssets(
   return { employeeAssets };
 }
 
-async function requireEmployeeAtBranch(
+async function requireAssigneeAtBranch(
   db: SqlExecutor,
   organizationId: string,
   branchId: string,
-  employeeId: string,
-): Promise<void> {
-  const rows = await db.query<{ id: string }>(
-    `SELECT m.id
+  memberId: string,
+  roles: readonly string[],
+): Promise<string> {
+  const rows = await db.query<{ id: string; role: string }>(
+    `SELECT m.id, m.role
        FROM organization_member m
        JOIN user_branch_assignment a ON a.member_id = m.id
       WHERE m.id = $1
         AND m.organization_id = $2
-        AND m.role = 'employee'
+        AND m.role = ANY($4::text[])
         AND a.branch_id = $3
       LIMIT 1`,
-    [employeeId, organizationId, branchId],
+    [memberId, organizationId, branchId, roles],
   );
   if (!rows[0]) {
-    throw denied("Employee is not assigned to this branch.");
+    throw denied("Assignee is not authorized for this branch.");
   }
+  return rows[0].role;
 }
 
 async function ensureAssetScope(
@@ -153,15 +156,20 @@ async function ensureAssetScope(
 }
 
 export const assetsOps: OperationRegistry = {
-  ListMyEmployeeAssets: async ({ db, actor }) => {
-    if (actor.role !== "employee") throw denied();
+  ListMyEmployeeAssets: async ({ db, actor }, vars) => {
+    if (
+      (actor.role !== "employee" && actor.role !== "branchManager") ||
+      !actor.organizationId
+    ) throw denied();
+    const branchId = actor.role === "branchManager" ? reqId(vars, "branchId") : null;
+    if (branchId) await validateActiveBranch(db, actor, vars, branchId);
     return listAssets(
       db,
       `ea.employee_member_id IN (
          SELECT m.id FROM organization_member m
-          WHERE m.auth_uid = $1 AND m.role = 'employee'
-       )`,
-      [actor.uid],
+          WHERE m.auth_uid = $1 AND m.organization_id = $2 AND m.role = $3
+       ) AND ($4::text IS NULL OR ea.branch_id = $4)`,
+      [actor.uid, actor.organizationId, actor.role, branchId],
     );
   },
 
@@ -215,7 +223,18 @@ export const assetsOps: OperationRegistry = {
       const branch = await requireManagedBranch(tx, actor, branchId);
       if (branch.organizationId !== organizationId) throw denied();
       await validateActiveBranch(tx, actor, vars, branchId);
-      await requireEmployeeAtBranch(tx, organizationId, branchId, employeeId);
+      const assigneeRole = await requireAssigneeAtBranch(
+        tx,
+        organizationId,
+        branchId,
+        employeeId,
+        actor.role === "orgAdmin" ? ["employee", "branchManager"] : ["employee"],
+      );
+      // Asset acknowledgement is an employee self-service step. Managers can
+      // receive assets, but should not be left with an acknowledgement they
+      // cannot complete in the current workflow.
+      const assignmentAcknowledgementEnabled =
+        requireAcknowledgement && assigneeRole === "employee";
 
       const duplicate = await tx.query<{ id: string }>(
         `SELECT id FROM employee_asset
@@ -251,11 +270,12 @@ export const assetsOps: OperationRegistry = {
           throw denied("Asset is outside the active branch.");
         }
         if (actor.role === "branchManager") {
-          await requireEmployeeAtBranch(
+          await requireAssigneeAtBranch(
             tx,
             organizationId,
             existing[0].branchId,
             existing[0].employeeId,
+            ["employee"],
           );
         }
         const assignmentChanged =
@@ -270,7 +290,7 @@ export const assetsOps: OperationRegistry = {
         const assignmentAcknowledgementRequired =
           resetAcknowledgement &&
           status !== "returned" &&
-          requireAcknowledgement;
+          assignmentAcknowledgementEnabled;
         const assignedByName = assignmentChanged
           ? await assignmentActorName(tx, actor, organizationId)
           : null;
@@ -344,8 +364,8 @@ export const assetsOps: OperationRegistry = {
           serialNumber ?? null,
           status,
           notes ?? null,
-          requireAcknowledgement && status !== "returned",
-          requireAcknowledgement && status !== "returned"
+          assignmentAcknowledgementEnabled && status !== "returned",
+          assignmentAcknowledgementEnabled && status !== "returned"
             ? "pending"
             : "not_required",
           actor.uid,
@@ -432,11 +452,12 @@ export const assetsOps: OperationRegistry = {
       if (actor.role === "branchManager") {
         const activeBranchId = reqId(vars, "activeBranchId");
         if (activeBranchId !== existing[0].branchId) throw denied();
-        await requireEmployeeAtBranch(
+        await requireAssigneeAtBranch(
           tx,
           organizationId,
           existing[0].branchId,
           existing[0].employeeId,
+          ["employee"],
         );
       }
       const deleted = await tx.query<{ id: string }>(

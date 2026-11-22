@@ -41,6 +41,7 @@ class EmployeeAsset {
     required this.branchName,
     required this.employeeId,
     required this.employeeName,
+    this.employeeUid,
     required this.name,
     required this.category,
     required this.assetTag,
@@ -64,6 +65,7 @@ class EmployeeAsset {
   final String branchName;
   final String employeeId;
   final String employeeName;
+  final String? employeeUid;
   final String name;
   final String category;
   final String assetTag;
@@ -82,6 +84,7 @@ class EmployeeAsset {
   EmployeeAsset copyWith({
     String? employeeId,
     String? employeeName,
+    String? employeeUid,
     String? branchId,
     String? branchName,
     AssetStatus? status,
@@ -101,6 +104,7 @@ class EmployeeAsset {
     branchName: branchName ?? this.branchName,
     employeeId: employeeId ?? this.employeeId,
     employeeName: employeeName ?? this.employeeName,
+    employeeUid: employeeUid ?? this.employeeUid,
     name: name,
     category: category,
     assetTag: assetTag,

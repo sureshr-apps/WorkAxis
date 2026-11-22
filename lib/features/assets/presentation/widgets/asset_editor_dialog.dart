@@ -7,6 +7,7 @@ import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/assets/domain/models/employee_asset.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
 class AssetEditorDialog extends StatefulWidget {
   const AssetEditorDialog({
@@ -16,6 +17,7 @@ class AssetEditorDialog extends StatefulWidget {
     required this.employees,
     required this.onSave,
     required this.actionErrorMessage,
+    this.canAssignManagers = false,
     this.asset,
     this.fixedBranchId,
   });
@@ -27,6 +29,7 @@ class AssetEditorDialog extends StatefulWidget {
   final String? fixedBranchId;
   final Future<bool> Function(EmployeeAsset asset) onSave;
   final String? Function() actionErrorMessage;
+  final bool canAssignManagers;
 
   @override
   State<AssetEditorDialog> createState() => _AssetEditorDialogState();
@@ -65,7 +68,13 @@ class _AssetEditorDialogState extends State<AssetEditorDialog> {
             .toList(growable: false);
 
   List<OrganizationMember> get _employeesForBranch => widget.employees
-      .where((employee) => employee.branchIds.contains(_branchId))
+      .where(
+        (member) =>
+            member.branchIds.contains(_branchId) &&
+            (member.role == UserRole.employee ||
+                (widget.canAssignManagers &&
+                    member.role == UserRole.branchManager)),
+      )
       .toList(growable: false);
 
   @override
@@ -131,7 +140,7 @@ class _AssetEditorDialogState extends State<AssetEditorDialog> {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                'Assign an organization asset to an employee at an outlet.',
+                'Assign an organization asset to an employee or Branch Manager at an outlet.',
                 style: AppTypography.bodySmall.copyWith(
                   color: AppColors.onSurfaceVariant,
                 ),
@@ -217,7 +226,9 @@ class _AssetEditorDialogState extends State<AssetEditorDialog> {
                 initialValue: _employeeId,
                 isExpanded: true,
                 decoration: InputDecoration(
-                  labelText: 'Employee',
+                  labelText: widget.canAssignManagers
+                      ? 'Employee or Branch Manager'
+                      : 'Employee',
                   errorText: _employeeError,
                 ),
                 items: [

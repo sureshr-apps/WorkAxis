@@ -17,6 +17,9 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/payroll/data/payroll_export_service.dart';
 import 'package:workaxis/features/payroll/domain/models/monthly_payroll.dart';
 import 'package:workaxis/features/payroll/presentation/controllers/payslips_controller.dart';
+import 'package:workaxis/features/payroll/domain/repositories/payroll_repository.dart';
+import 'package:workaxis/features/employees/domain/models/organization_member.dart';
+import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 
 class PayslipsScreen extends StatefulWidget {
   const PayslipsScreen({super.key});
@@ -25,9 +28,16 @@ class PayslipsScreen extends StatefulWidget {
   State<PayslipsScreen> createState() => _PayslipsScreenState();
 }
 
+enum _PayslipTab { mine, employee, summary }
+
 class _PayslipsScreenState extends State<PayslipsScreen> {
   final _exports = const PayrollExportService();
   late DateTime _month;
+  _PayslipTab _tab = _PayslipTab.mine;
+  String? _selectedEmployeeId;
+  List<OrganizationMember> _members = const [];
+  bool _loadingMembers = false;
+  String? _membersError;
 
   String get _monthKey => DateFormat('yyyy-MM').format(_month);
 
@@ -41,14 +51,85 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   Future<void> _load() async {
     final access = context.read<AccessController>().accessContext;
     if (access == null) return;
+    final activeBranchId = context
+        .read<BranchContextController>()
+        .activeBranch
+        ?.branchId;
+    if (_tab == _PayslipTab.employee && _selectedEmployeeId == null) {
+      context.read<PayslipsController>().reset();
+      return;
+    }
+    final view = switch (_tab) {
+      _PayslipTab.mine => PayrollView.self,
+      _PayslipTab.employee => PayrollView.employee,
+      _PayslipTab.summary =>
+        access.user.role == UserRole.branchManager
+            ? PayrollView.branchSummary
+            : PayrollView.organizationSummary,
+    };
     await context.read<PayslipsController>().load(
       access: access,
       month: _monthKey,
-      activeBranchId: context
+      activeBranchId: activeBranchId,
+      view: view,
+      selectedMemberId: _selectedEmployeeId,
+    );
+  }
+
+  Future<void> _loadMembers() async {
+    final access = context.read<AccessController>().accessContext;
+    if (access == null) return;
+    setState(() {
+      _loadingMembers = true;
+      _membersError = null;
+    });
+    try {
+      final activeBranchId = context
           .read<BranchContextController>()
           .activeBranch
-          ?.branchId,
-    );
+          ?.branchId;
+      final members = await context
+          .read<OrganizationMembersRepository>()
+          .getMembers(
+            access: access,
+            activeBranchId: access.user.role == UserRole.branchManager
+                ? activeBranchId
+                : null,
+            maxItems: 500,
+          );
+      if (!mounted) return;
+      setState(() {
+        _members = members;
+        _loadingMembers = false;
+        if (_selectedEmployeeId != null &&
+            !_employees.any((member) => member.id == _selectedEmployeeId)) {
+          _selectedEmployeeId = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMembers = false;
+        _membersError = 'Employee list could not be loaded. Try again.';
+      });
+    }
+  }
+
+  List<OrganizationMember> get _employees => _members
+      .where((member) => member.role == UserRole.employee)
+      .toList(growable: false);
+
+  Future<void> _selectTab(_PayslipTab tab) async {
+    setState(() {
+      _tab = tab;
+      _selectedEmployeeId = null;
+    });
+    context.read<PayslipsController>().reset();
+    if (tab == _PayslipTab.employee) {
+      await _loadMembers();
+    } else {
+      await _load();
+    }
   }
 
   void _moveMonth(int months) {
@@ -74,10 +155,19 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     final access = context.watch<AccessController>().accessContext;
     final controller = context.watch<PayslipsController>();
     final payroll = controller.payroll;
+    final role = access?.user.role;
+    final hasEmployeeViews =
+        role == UserRole.branchManager || role == UserRole.orgAdmin;
+    final isSummaryView = _tab == _PayslipTab.summary;
     final total =
+        payroll?.summary?.grossPay ??
         payroll?.records
             .where((record) => record.available)
             .fold<double>(0, (sum, record) => sum + record.grossPay) ??
+        0;
+    final payslipCount =
+        payroll?.summary?.employeeCount ??
+        payroll?.records.where((record) => record.available).length ??
         0;
 
     return Scaffold(
@@ -101,6 +191,67 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 _monthControls(controller, payroll),
+                if (hasEmployeeViews) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  SegmentedButton<_PayslipTab>(
+                    segments: [
+                      const ButtonSegment(
+                        value: _PayslipTab.mine,
+                        label: Text('My payslips'),
+                        icon: Icon(Icons.person_outline),
+                      ),
+                      const ButtonSegment(
+                        value: _PayslipTab.employee,
+                        label: Text('Employee payslip'),
+                        icon: Icon(Icons.groups_outlined),
+                      ),
+                      ButtonSegment(
+                        value: _PayslipTab.summary,
+                        label: Text(
+                          role == UserRole.orgAdmin
+                              ? 'All branches'
+                              : 'Branch summary',
+                        ),
+                        icon: Icon(Icons.summarize_outlined),
+                      ),
+                    ],
+                    selected: {_tab},
+                    onSelectionChanged: (selection) =>
+                        _selectTab(selection.first),
+                  ),
+                ],
+                if (_tab == _PayslipTab.employee) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  if (_loadingMembers)
+                    const LinearProgressIndicator()
+                  else if (_membersError != null)
+                    _MessagePanel(
+                      message: _membersError!,
+                      icon: Icons.error_outline,
+                      color: AppColors.statusUrgent,
+                      onRetry: _loadMembers,
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedEmployeeId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Select employee',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (final employee in _employees)
+                          DropdownMenuItem(
+                            value: employee.id,
+                            child: Text(employee.fullName),
+                          ),
+                      ],
+                      onChanged: (memberId) {
+                        setState(() => _selectedEmployeeId = memberId);
+                        _load();
+                      },
+                    ),
+                ],
                 if (controller.errorMessage != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   _MessagePanel(
@@ -110,60 +261,105 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                     onRetry: _load,
                   ),
                 ],
-                if (controller.isLoading) ...[
+                if (controller.isLoading || _loadingMembers) ...[
                   const SizedBox(height: AppSpacing.xl),
                   const Center(child: CircularProgressIndicator()),
+                ] else if (_tab == _PayslipTab.employee &&
+                    _selectedEmployeeId == null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  const _MessagePanel(
+                    message: 'Select an employee to view one monthly payslip.',
+                    icon: Icons.person_search_outlined,
+                    color: AppColors.onSurfaceVariant,
+                  ),
                 ] else if (payroll != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   _PayrollSummary(
                     totalGross: total,
-                    count: payroll.records
-                        .where((record) => record.available)
-                        .length,
+                    count: payslipCount,
                     basis: payroll.basis,
                     overtimeEnabled: payroll.overtimeEnabled,
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Monthly records',
-                          style: AppTypography.titleLarge,
+                  if (isSummaryView) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            role == UserRole.orgAdmin
+                                ? 'Organization payroll summary'
+                                : 'Current branch payroll summary',
+                            style: AppTypography.titleLarge,
+                          ),
                         ),
-                      ),
-                      AppButton.outlined(
-                        text: 'Export XLSX',
-                        iconData: Icons.download_outlined,
-                        isFullWidth: false,
-                        onPressed: payroll.records.isEmpty
-                            ? null
-                            : () => _exportXlsx(payroll),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  if (payroll.records.isEmpty)
-                    const _EmptyPayroll()
-                  else
-                    LayoutBuilder(
-                      builder: (context, constraints) =>
-                          constraints.maxWidth >= AppBreakpoints.wideContent
-                          ? _PayrollTable(
-                              records: payroll.records,
-                              month: payroll.month,
-                              basis: payroll.basis,
-                              overtimeEnabled: payroll.overtimeEnabled,
-                              onExportPdf: _exportPdf,
-                            )
-                          : _PayrollCards(
-                              records: payroll.records,
-                              month: payroll.month,
-                              basis: payroll.basis,
-                              overtimeEnabled: payroll.overtimeEnabled,
-                              onExportPdf: _exportPdf,
-                            ),
+                        AppButton.outlined(
+                          text: 'Export summary',
+                          iconData: Icons.download_outlined,
+                          isFullWidth: false,
+                          onPressed: () => _exportSummaryXlsx(payroll),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'Employees assigned to multiple branches are allocated evenly across those branches.',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    if (payroll.branchSummaries.isEmpty)
+                      const _EmptyPayroll()
+                    else
+                      for (final branch in payroll.branchSummaries) ...[
+                        _BranchPayrollSummaryCard(branch: branch),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
+                  ] else ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _tab == _PayslipTab.employee
+                                ? 'Employee payslip'
+                                : 'My payslip',
+                            style: AppTypography.titleLarge,
+                          ),
+                        ),
+                        AppButton.outlined(
+                          text: 'Export XLSX',
+                          iconData: Icons.download_outlined,
+                          isFullWidth: false,
+                          onPressed: payroll.records.isEmpty
+                              ? null
+                              : () => _exportXlsx(payroll),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    if (payroll.records.isEmpty)
+                      const _EmptyPayroll()
+                    else
+                      LayoutBuilder(
+                        builder: (context, constraints) =>
+                            constraints.maxWidth >= AppBreakpoints.wideContent
+                            ? _PayrollTable(
+                                records: payroll.records,
+                                month: payroll.month,
+                                basis: payroll.basis,
+                                overtimeEnabled: payroll.overtimeEnabled,
+                                onExportPdf: _exportPdf,
+                              )
+                            : _PayrollCards(
+                                records: payroll.records,
+                                month: payroll.month,
+                                basis: payroll.basis,
+                                overtimeEnabled: payroll.overtimeEnabled,
+                                onExportPdf: _exportPdf,
+                              ),
+                      ),
+                  ],
                 ],
                 const SizedBox(height: AppSpacing.xxl),
               ],
@@ -220,6 +416,15 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       if (mounted) _toast('Monthly XLSX exported.');
     } catch (_) {
       if (mounted) _toast('The XLSX export could not be saved.');
+    }
+  }
+
+  Future<void> _exportSummaryXlsx(MonthlyPayroll payroll) async {
+    try {
+      await _exports.exportSummaryXlsx(payroll);
+      if (mounted) _toast('Payroll summary exported.');
+    } catch (_) {
+      if (mounted) _toast('The payroll summary export could not be saved.');
     }
   }
 
@@ -289,6 +494,63 @@ class _PayrollSummary extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _BranchPayrollSummaryCard extends StatelessWidget {
+  const _BranchPayrollSummaryCard({required this.branch});
+
+  final BranchPayrollSummary branch;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = branch.summary;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.outlineSubtle),
+        borderRadius: AppSpacing.roundedMd,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  branch.branchName,
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                _money(summary.grossPay),
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.lg,
+            runSpacing: AppSpacing.xs,
+            children: [
+              Text('${summary.employeeCount} employees'),
+              Text('${summary.payableHours.toStringAsFixed(2)} payable hours'),
+              Text(
+                '${summary.unpaidLeaveDays.toStringAsFixed(1)} unpaid leave days',
+              ),
+              Text(
+                '${summary.overtimeHours.toStringAsFixed(2)} overtime hours',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Metric extends StatelessWidget {

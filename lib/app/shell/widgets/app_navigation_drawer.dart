@@ -55,7 +55,8 @@ class AppNavigationDrawer extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _DrawerHeader(role: role),
-            if (role == UserRole.branchManager && activeBranch != null)
+            if ((role == UserRole.branchManager || role == UserRole.employee) &&
+                activeBranch != null)
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md,

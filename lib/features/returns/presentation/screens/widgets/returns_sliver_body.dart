@@ -19,6 +19,7 @@ class SliverReturnsBody extends StatelessWidget {
     required this.emptyMessage,
     this.showReviewAction = false,
     this.reviewerUid,
+    this.visibleItems,
   });
 
   final ReturnsController controller;
@@ -29,6 +30,7 @@ class SliverReturnsBody extends StatelessWidget {
   final String emptyMessage;
   final bool showReviewAction;
   final String? reviewerUid;
+  final List<ReturnItem>? visibleItems;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +48,7 @@ class SliverReturnsBody extends StatelessWidget {
         child: ErrorState(message: error, onRetry: onRetry),
       );
     }
-    final items = controller.filteredItems;
+    final items = visibleItems ?? controller.filteredItems;
     if (items.isEmpty) {
       return SliverToBoxAdapter(
         child: EmptyState(

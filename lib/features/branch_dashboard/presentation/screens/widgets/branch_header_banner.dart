@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
-import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/features/access/domain/models/active_branch_context.dart';
-import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 
-/// Prominently yet compactly displays the active branch context,
-/// including a "Change Branch" action for managers with multiple assigned branches.
+/// Prominently yet compactly displays the active branch context.
 class BranchHeaderBanner extends StatelessWidget {
   const BranchHeaderBanner({super.key, required this.activeBranch});
 
@@ -18,13 +12,6 @@ class BranchHeaderBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasMultipleBranches =
-        context
-            .watch<AccessController>()
-            .accessContext
-            ?.hasMultipleAssignedBranches ??
-        false;
-
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -32,22 +19,7 @@ class BranchHeaderBanner extends StatelessWidget {
         borderRadius: AppSpacing.roundedMd,
         border: Border.all(color: AppColors.outlineSubtle),
       ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: AppSpacing.md,
-        runSpacing: AppSpacing.sm,
-        children: [
-          _BranchIdentity(activeBranch: activeBranch),
-          if (hasMultipleBranches)
-            AppButton.outlined(
-              text: 'Change Branch',
-              iconData: Icons.swap_horiz,
-              isFullWidth: false,
-              onPressed: () => context.go(AppRoutes.selectBranch),
-            ),
-        ],
-      ),
+      child: _BranchIdentity(activeBranch: activeBranch),
     );
   }
 }

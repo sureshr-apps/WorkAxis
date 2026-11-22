@@ -11,10 +11,15 @@ import 'package:workaxis/core/responsive/responsive_container.dart';
 import 'package:workaxis/core/widgets/app_icon_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
+import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/access/presentation/screens/widgets/branch_list_tile.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
+import 'package:workaxis/features/employee_home/presentation/controllers/employee_home_controller.dart';
 
-/// Branch Selection screen for Branch Managers with multiple assigned branches.
+/// Branch Selection screen for employees and Branch Managers with multiple
+/// assigned branches.
 ///
 /// Follows the refined compact smartphone layout from Stitch project 600623576580245702.
 class BranchSelectionScreen extends StatefulWidget {
@@ -36,9 +41,40 @@ class _BranchSelectionScreenState extends State<BranchSelectionScreen> {
 
   void _onBranchSelected(BranchSummary branch) {
     final branchController = context.read<BranchContextController>();
+    final access = context.read<AccessController>().accessContext;
+    final isEmployee = access?.user.role == UserRole.employee;
+    final employeeSummary = isEmployee
+        ? context.read<EmployeeHomeController>().summary
+        : null;
+    final hasOpenSession =
+        employeeSummary?.currentStatus == AttendanceStatus.checkedIn ||
+        employeeSummary?.currentStatus == AttendanceStatus.onBreak;
+    final sessionBranchId =
+        employeeSummary?.branchId ?? branchController.activeBranch?.branchId;
+
+    if (isEmployee &&
+        hasOpenSession &&
+        sessionBranchId != null &&
+        branch.id != sessionBranchId) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Check out from ${employeeSummary?.branchName} before switching branches.',
+            ),
+          ),
+        );
+      return;
+    }
+
     final success = branchController.selectBranch(branch);
     if (success && mounted) {
-      context.go(AppRoutes.branchManagerWorkspace);
+      context.go(
+        isEmployee
+            ? AppRoutes.employeeWorkspace
+            : AppRoutes.branchManagerWorkspace,
+      );
     }
   }
 

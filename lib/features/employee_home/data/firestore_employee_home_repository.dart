@@ -102,9 +102,21 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       _requireAttendanceUser(access);
       final todayEntries = await _todayEntries(access.user.id);
       final activeEntry = _activeEntry(todayEntries);
+      final selectedBranch = _punchBranch(access);
+      final sessionBranch = _branchForEntry(access, activeEntry);
+      if (access.user.role == UserRole.employee &&
+          action != AttendanceAction.checkIn &&
+          sessionBranch != null &&
+          selectedBranch.id != sessionBranch.id) {
+        throw BranchAuthorizationException(
+          'The selected branch does not match the open attendance session.',
+          userMessage:
+              'Switch back to ${sessionBranch.name} to finish this attendance session.',
+        );
+      }
       final branch = action == AttendanceAction.checkIn
-          ? _punchBranch(access)
-          : _branchForEntry(access, activeEntry) ?? _punchBranch(access);
+          ? selectedBranch
+          : sessionBranch ?? selectedBranch;
       final attendancePolicy = policy ?? await _fetchAttendancePolicy();
       _requireManagerAttendanceEnabled(access, attendancePolicy);
       String? selfiePath;
@@ -414,6 +426,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     return EmployeeHomeSummary(
       employeeId: access.user.id,
       employeeName: access.user.name,
+      branchId: branch?.id,
       branchName: branch?.name ?? EmployeeHomeSummary.unavailable,
       organizationName: access.organization!.name,
       shiftName: EmployeeHomeSummary.unavailable,
