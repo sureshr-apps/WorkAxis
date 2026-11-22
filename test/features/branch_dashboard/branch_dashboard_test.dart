@@ -131,9 +131,9 @@ void main() {
         expect(find.text('Downtown Flagship'), findsOneWidget);
         expect(find.text('BR-101'), findsOneWidget);
 
-        // Verify "Change" action exists because manager has multiple assigned branches
-        expect(find.textContaining('Change'), findsOneWidget);
-        expect(find.byIcon(Icons.swap_horiz), findsOneWidget);
+        // Branch switching belongs in the shared navigation, not the home page.
+        expect(find.textContaining('Change'), findsNothing);
+        expect(find.byIcon(Icons.swap_horiz), findsNothing);
 
         // Verify branch-scoped attendance metrics
         expect(find.text("Today's Attendance"), findsOneWidget);

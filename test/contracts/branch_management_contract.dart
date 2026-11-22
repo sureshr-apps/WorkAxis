@@ -94,14 +94,14 @@ void runBranchManagementContract(
       expect(await repo.getBranch(orgAdminAccess(), saved.id), isNotNull);
     });
 
-    test('a branch without coordinates is saved as not configured', () async {
-      final saved = await repo.saveBranch(
-        access: orgAdminAccess(),
-        branch: branchDraft(latitude: null, longitude: null),
+    test('a new branch without map coordinates is rejected', () async {
+      await expectLater(
+        repo.saveBranch(
+          access: orgAdminAccess(),
+          branch: branchDraft(latitude: null, longitude: null),
+        ),
+        throwsA(isA<ValidationException>()),
       );
-      expect(saved.latitude, isNull);
-      expect(saved.longitude, isNull);
-      expect(saved.hasGeofence, isFalse);
     });
 
     test('rejects invalid geofence input', () async {

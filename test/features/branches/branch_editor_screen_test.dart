@@ -43,12 +43,7 @@ void main() {
     return saved;
   }
 
-  const fieldIndex = {
-    'Branch name': 0,
-    'District or address': 2,
-    'Latitude': 4,
-    'Longitude': 5,
-  };
+  const fieldIndex = {'Branch name': 0, 'District or address': 2};
 
   Future<void> fill(WidgetTester tester, String label, String text) async {
     await tester.enterText(find.byType(TextField).at(fieldIndex[label]!), text);
@@ -63,42 +58,33 @@ void main() {
     expect(texts[5], '');
   });
 
-  testWidgets('rejects 0, 0 coordinates without saving', (tester) async {
+  testWidgets('requires a map location before creating a branch', (
+    tester,
+  ) async {
     final saved = await pumpEditor(tester);
     await fill(tester, 'Branch name', 'Test');
     await fill(tester, 'District or address', 'Somewhere');
-    await fill(tester, 'Latitude', '0');
-    await fill(tester, 'Longitude', '0');
     await tester.tap(find.text('Create branch'));
     await tester.pump();
 
-    expect(find.textContaining('not a real location'), findsOneWidget);
+    expect(find.text('Select the branch location on the map.'), findsOneWidget);
     expect(saved, isEmpty);
   });
 
-  testWidgets('rejects a single coordinate', (tester) async {
+  testWidgets('saves coordinates selected through the map picker', (
+    tester,
+  ) async {
     final saved = await pumpEditor(tester);
     await fill(tester, 'Branch name', 'Test');
     await fill(tester, 'District or address', 'Somewhere');
-    await fill(tester, 'Latitude', '12.9');
-    await tester.tap(find.text('Create branch'));
+    await tester.tap(find.byKey(const Key('test_select_location_btn')));
     await tester.pump();
-
-    expect(find.textContaining('both latitude and longitude'), findsOneWidget);
-    expect(saved, isEmpty);
-  });
-
-  testWidgets('saves a valid geofence', (tester) async {
-    final saved = await pumpEditor(tester);
-    await fill(tester, 'Branch name', 'Test');
-    await fill(tester, 'District or address', 'Somewhere');
-    await fill(tester, 'Latitude', '12.9716');
-    await fill(tester, 'Longitude', '77.5946');
     await tester.tap(find.text('Create branch'));
     await tester.pump();
 
     expect(saved, hasLength(1));
     expect(saved.single.latitude, 12.9716);
+    expect(saved.single.longitude, 77.5946);
     expect(saved.single.hasGeofence, isTrue);
   });
 

@@ -111,7 +111,7 @@ describe("employee asset acknowledgments", () => {
         return [{ fullName: "Organization Owner" }];
       }
       if (query.includes("from organization_member m") && query.includes("user_branch_assignment")) {
-        return [{ id: "member-e1" }];
+        return [{ id: "member-e1", role: "employee" }];
       }
       if (query.includes("lower(asset_tag)")) return [];
       if (query.includes("insert into employee_asset")) return [{ id: "asset-1" }];

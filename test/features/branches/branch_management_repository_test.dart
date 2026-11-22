@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/errors/validation_exception.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/domain/models/organization_summary.dart';
 import 'package:workaxis/features/branches/data/mock_branch_management_repository.dart';
@@ -119,14 +120,19 @@ void main() {
       expect(w.branches.updated, isEmpty);
     });
 
-    test('create sends no coordinates when none are configured', () async {
-      final saved = await w.repo.saveBranch(
-        access: orgAdminAccess(),
-        branch: branchDraft(latitude: null, longitude: null),
-      );
-      expect(saved.hasGeofence, isFalse);
-      expect(w.branches.added.single.latitude, isNull);
-    });
+    test(
+      'create rejects missing coordinates before calling the server',
+      () async {
+        await expectLater(
+          w.repo.saveBranch(
+            access: orgAdminAccess(),
+            branch: branchDraft(latitude: null, longitude: null),
+          ),
+          throwsA(isA<ValidationException>()),
+        );
+        expect(w.functions.payloadsOf('saveBranch'), isEmpty);
+      },
+    );
 
     test('server-assigned ids are used', () async {
       final saved = await w.repo.saveBranch(

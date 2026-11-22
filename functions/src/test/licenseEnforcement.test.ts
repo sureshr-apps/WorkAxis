@@ -265,8 +265,8 @@ describe("store capacity", () => {
     location: "City",
     isMainBranch: false,
     geofenceRadiusMeters: 100,
-    latitude: null,
-    longitude: null,
+    latitude: 12.9716,
+    longitude: 77.5946,
     managerIds: [] as string[],
   };
   const BRANCH_LOCK = "FROM branch WHERE id = $1 FOR UPDATE";

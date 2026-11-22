@@ -32,7 +32,7 @@ it("branch manager validation completes before any persistence", () => {
   );
 });
 
-it("branch save validates both nullable coordinates and caller scope", () => {
+it("branch save requires coordinates and validates caller scope", () => {
   const actor = {
     uid: "a",
     role: "orgAdmin" as const,
@@ -47,15 +47,18 @@ it("branch save validates both nullable coordinates and caller scope", () => {
     status: "active",
     isMainBranch: false,
     geofenceRadiusMeters: 100,
-    latitude: null,
-    longitude: null,
+    latitude: 12.9716,
+    longitude: 77.5946,
     managerIds: [],
   };
-  assert.equal(parseBranchSave(actor, draft).data.latitude, null);
+  assert.equal(parseBranchSave(actor, draft).data.latitude, 12.9716);
+  assert.throws(() =>
+    parseBranchSave(actor, { ...draft, latitude: null, longitude: null }),
+  );
   assert.throws(() =>
     parseBranchSave({ ...actor, role: "branchManager" }, draft),
   );
-  assert.throws(() => parseBranchSave(actor, { ...draft, latitude: 1 }));
+  assert.throws(() => parseBranchSave(actor, { ...draft, longitude: null }));
   assert.throws(() =>
     parseBranchSave(actor, { ...draft, latitude: 0, longitude: 0 }),
   );

@@ -188,6 +188,10 @@ void main() {
         );
 
         expect(find.text('Branch Returns'), findsOneWidget);
+        final otherReturnsTab = find.text('Returns filed by others');
+        await tester.ensureVisible(otherReturnsTab);
+        await tester.tap(otherReturnsTab);
+        await tester.pumpAndSettle();
         expect(find.byType(ReturnCardItem), findsWidgets);
         expect(tester.takeException(), isNull);
       },
