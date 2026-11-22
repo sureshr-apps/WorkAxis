@@ -24,8 +24,8 @@ const draft = {
   status: "active",
   isMainBranch: false,
   geofenceRadiusMeters: 100,
-  latitude: null,
-  longitude: null,
+  latitude: 12.9716,
+  longitude: 77.5946,
   managerIds: [] as string[],
 };
 
