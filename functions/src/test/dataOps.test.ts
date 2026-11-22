@@ -198,7 +198,7 @@ describe("employee asset acknowledgments", () => {
         return [{ id: "b1", organizationId: "o1" }];
       }
       if (query.includes("from organization_member m") && query.includes("user_branch_assignment")) {
-        return [{ id: "member-e2" }];
+        return [{ id: "member-e2", role: "employee" }];
       }
       if (query.includes("lower(asset_tag)")) return [];
       if (query.includes("from employee_asset") && query.includes("for update")) {
