@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Firestore } from "firebase-admin/firestore";
 import type { Actor } from "../auth/roles";
 import { runOperation } from "../data/dispatch";
 import { operations } from "../data/registry";
-import { backfillEmployeeWorkforceHistory } from "../data/ops/workforce";
 import { FakeDb } from "./fakeDb";
 
 const admin: Actor = {
@@ -60,108 +58,14 @@ function baseDb({
     if (normalized.includes("from organization_member") && normalized.includes("where id = $1")) {
       return [member];
     }
-    if (normalized.includes("from organization_member") && normalized.includes("role in ('employee', 'branchmanager')")) {
-      return [{ id: member.id, authUid: member.authUid, role: member.role }];
-    }
     if (normalized.includes("from employee_schedule_history")) return schedules;
     if (normalized.includes("from employee_compensation_history")) return compensations;
     return undefined;
   });
 }
 
-class MemoryFirestore {
-  readonly values = new Map<string, Record<string, unknown>>();
-  readonly writes: Array<{ path: string; data: Record<string, unknown> }> = [];
-
-  collection(name: string) {
-    return {
-      doc: (id: string) => {
-        const path = `${name}/${id}`;
-        return {
-          get: async () => {
-            const value = this.values.get(path);
-            return { exists: value != null, data: () => value };
-          },
-          set: async (data: Record<string, unknown>) => {
-            this.writes.push({ path, data });
-            this.values.set(path, { ...(this.values.get(path) ?? {}), ...data });
-          },
-        };
-      },
-    };
-  }
-}
-
-test("workforce backfill imports current values with Sunday off from cutover date", async () => {
-  const now = new Date("2026-11-22T10:00:00.000Z");
-  const firestore = new MemoryFirestore();
-  firestore.values.set("users/employee-uid", {
-    joiningDate: "2019-07-01",
-    dailyWorkHours: 7.5,
-    shiftHours: "08:30 AM - 04:00 PM",
-  });
-  firestore.values.set("employee_private/employee-uid", { salary: 45_000 });
-  const db = baseDb();
-
-  const result = await backfillEmployeeWorkforceHistory({
-    db,
-    actor: admin,
-    firestore: firestore as unknown as Firestore,
-    now,
-  });
-
-  assert.equal(result.membersProcessed, 1);
-  assert.equal(result.schedulesCreated, 1);
-  assert.equal(result.salariesCreated, 1);
-  assert.equal(result.legacyProfilesCleaned, 1);
-  assert.equal(result.effectiveFrom, "2026-11-22");
-  const schedule = db.calls.find((call) => call.sql.includes("INSERT INTO employee_schedule_history"));
-  const compensation = db.calls.find((call) => call.sql.includes("INSERT INTO employee_compensation_history"));
-  assert.ok(schedule);
-  assert.ok(compensation);
-  assert.deepEqual(schedule.params, [
-    member.id,
-    "2026-11-22",
-    7.5,
-    "08:30 AM - 04:00 PM",
-    admin.uid,
-  ]);
-  assert.deepEqual(compensation.params, [member.id, "2026-11-22", 45_000, admin.uid]);
-  assert.ok(firestore.writes.some((write) => write.path === "users/employee-uid"));
-  assert.ok(firestore.writes.some((write) => write.path === "employee_private/employee-uid"));
-});
-
-test("backfill preserves a legacy salary when no valid salary history was imported", async () => {
-  const firestore = new MemoryFirestore();
-  firestore.values.set("users/employee-uid", { dailyWorkHours: 8 });
-  firestore.values.set("employee_private/employee-uid", { salary: "not-a-salary" });
-
-  const result = await backfillEmployeeWorkforceHistory({
-    db: baseDb(),
-    actor: admin,
-    firestore: firestore as unknown as Firestore,
-    now: new Date("2026-11-22T10:00:00.000Z"),
-  });
-
-  assert.equal(result.salariesCreated, 0);
-  assert.equal(result.legacyProfilesCleaned, 1);
-  assert.equal(
-    firestore.writes.some((write) => write.path === "employee_private/employee-uid"),
-    false,
-  );
-});
-
-test("backfill does not count members without legacy documents as cleaned", async () => {
-  const result = await backfillEmployeeWorkforceHistory({
-    db: baseDb(),
-    actor: admin,
-    firestore: new MemoryFirestore() as unknown as Firestore,
-    now: new Date("2026-11-22T10:00:00.000Z"),
-  });
-
-  assert.equal(result.membersProcessed, 1);
-  assert.equal(result.schedulesCreated, 1);
-  assert.equal(result.legacyProfilesCleaned, 0);
+test("legacy workforce backfill operation is no longer registered", () => {
+  assert.equal(Object.hasOwn(operations, "BackfillEmployeeWorkforceHistory"), false);
 });
 
 test("schedule edits close surrounding ranges without touching compensation or member fields", async () => {

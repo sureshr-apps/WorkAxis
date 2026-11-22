@@ -607,17 +607,13 @@ history indexes rather than scanning the table.
 | `GetEmployeeWorkforceHistory` | Employee (self); Org Admin (own org); Branch Manager (self or employee in active assigned branch) | `memberId` for another member; Branch Manager supplies `activeBranchId` | `{ member, schedules, compensations }` |
 | `SaveEmployeeSchedule` | Org Admin (own org); Branch Manager (employee assigned to active branch) | `memberId`, `effectiveFrom` (`YYYY-MM-DD`), `dailyWorkHours`, `shiftHours`, `weeklyDayOff`; Branch Manager supplies `activeBranchId` | `{ saved: true }` |
 | `SaveEmployeeCompensation` | Org Admin (own org); Branch Manager (employee assigned to active branch) | `memberId`, `effectiveFrom` (`YYYY-MM-DD`), `monthlySalary`; Branch Manager supplies `activeBranchId` | `{ saved: true }` |
-| `BackfillEmployeeWorkforceHistory` | Org Admin (own organization) | none | `{ membersProcessed, schedulesCreated, salariesCreated, legacyProfilesCleaned, effectiveFrom }` |
 | `GetMonthlyPayroll` | Employee (self); Org Admin (own org); Branch Manager (self and employees in active assigned branch) | `month` (`YYYY-MM`); Branch Manager supplies `activeBranchId` | `{ month, basis, overtimeEnabled, paySlips }` |
 
 Schedule and salary changes are separate operations and cannot be backdated.
-Schedule writes include the recurring weekday off. Existing employees are
-backfilled with Sunday off and their current Firestore shift and salary values,
-effective from the Asia/Kolkata cutover date because earlier history is not
-available. The backfill callable is idempotent and is not exposed in the app.
-Keep it for controlled recovery of legacy organizations after migration and
-Functions deployment; newly created employees receive history during
-provisioning.
+Schedule writes include the recurring weekday off. New employees receive
+initial schedule and salary history during provisioning. The legacy Firestore
+backfill operation was removed after verifying that the Cloud SQL organization
+table was empty on 22 November 2026.
 
 Self-service attendance entries remain in Firestore. Each session is a
 separate `attendance_entries` document. The trusted punch callable maintains
@@ -644,5 +640,4 @@ do not call a separate backend operation.
 
 Local tests cover the calculator, history operations, access checks, and
 attendance session rules with `FakeDb`. Migration 010 was applied to production
-on 22 November 2026. The optional legacy recovery backfill is not available
-from the Payslips page.
+on 22 November 2026. The legacy Firestore backfill callable has been removed.

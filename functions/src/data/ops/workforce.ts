@@ -1,11 +1,5 @@
-import {
-  FieldValue,
-  getFirestore,
-  type Firestore,
-} from "firebase-admin/firestore";
 import { denied, invalid, notFound, precondition } from "../../errors";
 import type { Actor } from "../../auth/roles";
-import type { SqlExecutor } from "../../db/executor";
 import { requireRole } from "../authz";
 import type { OperationRegistry } from "../operation";
 import { parseDate, reqDate, reqId, reqInt } from "../vars";
@@ -32,14 +26,6 @@ interface HistoryRow {
 }
 
 export const workforceOps: OperationRegistry = {
-  BackfillEmployeeWorkforceHistory: async ({ db, actor }) =>
-    backfillEmployeeWorkforceHistory({
-      db,
-      actor,
-      firestore: getFirestore(),
-      now: new Date(),
-    }),
-
   GetEmployeeWorkforceHistory: async ({ db, actor }, vars) => {
     const member = await memberInScope(db, actor, vars);
     const [schedules, compensations] = await Promise.all([
@@ -104,140 +90,6 @@ export const workforceOps: OperationRegistry = {
     return { saved: true };
   },
 };
-
-export async function backfillEmployeeWorkforceHistory({
-  db,
-  actor,
-  firestore,
-  now,
-}: {
-  db: SqlExecutor;
-  actor: Actor;
-  firestore: Firestore;
-  now: Date;
-}): Promise<{
-  membersProcessed: number;
-  schedulesCreated: number;
-  salariesCreated: number;
-  legacyProfilesCleaned: number;
-  effectiveFrom: string;
-}> {
-    requireRole(actor, ["orgAdmin"]);
-    if (!actor.organizationId) throw denied("Organization context is required.");
-    const members = await db.query<{
-      id: string;
-      authUid: string;
-      role: string;
-    }>(
-      `SELECT id, auth_uid AS "authUid", role FROM organization_member
-        WHERE organization_id = $1 AND role IN ('employee', 'branchManager')`,
-      [actor.organizationId],
-    );
-    const today = businessDate(now);
-    let schedulesCreated = 0;
-    let salariesCreated = 0;
-    let legacyProfilesCleaned = 0;
-
-    for (const member of members) {
-      const profileRef = firestore.collection("users").doc(member.authUid);
-      const privateRef = firestore.collection("employee_private").doc(member.authUid);
-      const [profile, privateData, scheduleRows, salaryRows] = await Promise.all([
-        profileRef.get(),
-        privateRef.get(),
-        db.query<{ id: string }>(
-          `SELECT id FROM employee_schedule_history WHERE member_id = $1 LIMIT 1`,
-          [member.id],
-        ),
-        db.query<{ id: string }>(
-          `SELECT id FROM employee_compensation_history WHERE member_id = $1 LIMIT 1`,
-          [member.id],
-        ),
-      ]);
-      const legacyProfile = profile.data() ?? {};
-      const legacyPrivate = privateData.data() ?? {};
-      // The current Firestore values carry no history. Start them at cutover
-      // rather than guessing that today's shift and salary were valid from the
-      // employee's joining date.
-      const effectiveFrom = today;
-      let hasScheduleHistory = scheduleRows.length > 0;
-      let hasSalaryHistory = salaryRows.length > 0;
-      if (scheduleRows.length === 0) {
-        const legacyHours = Number(legacyProfile.dailyWorkHours);
-        const dailyWorkHours = Number.isFinite(legacyHours) && legacyHours >= 0.5 && legacyHours <= 24
-          ? legacyHours
-          : 8;
-        const shiftHours = typeof legacyProfile.shiftHours === "string" && legacyProfile.shiftHours.trim()
-          ? legacyProfile.shiftHours.trim()
-          : "09:00 AM - 05:00 PM";
-        await db.transaction(async (tx) => {
-          await lockMember(tx, member.id);
-          await tx.query(
-            `INSERT INTO employee_schedule_history
-              (member_id, effective_from, daily_work_hours, shift_hours, weekly_day_off, created_by_uid)
-             VALUES ($1, $2, $3, $4, 0, $5)
-             ON CONFLICT (member_id, effective_from) DO NOTHING`,
-            [member.id, effectiveFrom, dailyWorkHours, shiftHours, actor.uid],
-          );
-        });
-        schedulesCreated++;
-        hasScheduleHistory = true;
-      }
-      if (salaryRows.length === 0) {
-        const candidate = legacyPrivate.salary ?? legacyProfile.salary;
-        const monthlySalary = typeof candidate === "number"
-          ? candidate
-          : typeof candidate === "string" ? Number(candidate) : Number.NaN;
-        if (Number.isFinite(monthlySalary) && monthlySalary >= 0) {
-          await db.transaction(async (tx) => {
-            await lockMember(tx, member.id);
-            await tx.query(
-              `INSERT INTO employee_compensation_history
-                (member_id, effective_from, monthly_salary, created_by_uid)
-               VALUES ($1, $2, $3, $4)
-               ON CONFLICT (member_id, effective_from) DO NOTHING`,
-              [member.id, effectiveFrom, monthlySalary, actor.uid],
-            );
-          });
-          salariesCreated++;
-          hasSalaryHistory = true;
-        }
-      }
-
-      let cleanedLegacyProfile = false;
-      if (profile.exists) {
-        const legacyFields: Row = {};
-        if (hasScheduleHistory) {
-          if (legacyProfile.dailyWorkHours !== undefined) {
-            legacyFields.dailyWorkHours = FieldValue.delete();
-          }
-          if (legacyProfile.shiftHours !== undefined) {
-            legacyFields.shiftHours = FieldValue.delete();
-          }
-          if (legacyProfile.weeklyDayOff !== undefined) {
-            legacyFields.weeklyDayOff = FieldValue.delete();
-          }
-        }
-        if (hasSalaryHistory && legacyProfile.salary !== undefined) {
-          legacyFields.salary = FieldValue.delete();
-        }
-        if (Object.keys(legacyFields).length > 0) {
-          await profileRef.set(legacyFields, { merge: true });
-          cleanedLegacyProfile = true;
-        }
-      }
-      if (
-        privateData.exists &&
-        hasSalaryHistory &&
-        legacyPrivate.salary !== undefined
-      ) {
-        await privateRef.set({ salary: FieldValue.delete() }, { merge: true });
-        cleanedLegacyProfile = true;
-      }
-      if (cleanedLegacyProfile) legacyProfilesCleaned++;
-    }
-
-    return { membersProcessed: members.length, schedulesCreated, salariesCreated, legacyProfilesCleaned, effectiveFrom: today };
-}
 
 async function memberInScope(
   db: Parameters<OperationRegistry[string]>[0]["db"],

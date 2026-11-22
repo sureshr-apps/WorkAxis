@@ -1,6 +1,6 @@
 # Employee Scheduling, Compensation, and Multi-Branch Attendance
 
-**Status:** Deployed on 22 November 2026. Migration 010 and the application deployment succeeded. Existing legacy data can be recovered with the backend backfill callable; new employees are initialized directly in PostgreSQL history.
+**Status:** Deployed on 22 November 2026. Migration 010 and the application deployment succeeded. The Cloud SQL `organization` table was verified empty after all organizations were deleted, so the legacy backfill callable was removed; new employees are initialized directly in PostgreSQL history.
 
 This file is the working specification for employee details, schedules, weekly days off, salary history, and multi-branch attendance. Add further requirements here for the next implementation batch.
 
@@ -61,7 +61,7 @@ This file is the working specification for employee details, schedules, weekly d
 - Employee self-service can select an assigned active branch for each new attendance session. Each session retains its own branch, and checkout is tied to the open session.
 - Attendance views group sessions into one employee/day summary. Session history and review actions remain available from the summary, and employee history spans all branches.
 - Effective weekly days off block self-service and group attendance punches. Organization pay settings choose hours or workdays and default overtime to off. Payslips and scoped exports are available in the app.
-- Local and GitHub Actions validation passed. Migration 010, Functions/rules/indexes, web hosting, and the Android release were deployed on 22 November 2026. The app does not expose an import control; retain the Org Admin-scoped backfill callable only for controlled recovery of existing legacy organizations.
+- Local and GitHub Actions validation passed. Migration 010, Functions/rules/indexes, web hosting, and the Android release were deployed on 22 November 2026. The Cloud SQL organization count was verified as zero; the app import control and backend backfill callable were removed.
 
 ## Implementation Details
 
@@ -72,8 +72,8 @@ This file is the working specification for employee details, schedules, weekly d
 - Use non-overlapping half-open effective date ranges per employee: a version applies from its effective date through, but not including, its end date. Index employee ID and effective dates so the applicable schedule and compensation are found without a full-table scan.
 - Route reads and writes through authorized Cloud Functions and the existing SQL data-access layer. Organization Admin access is organization-scoped. Branch Manager access is limited to employees assigned to their active branch. Do not expose salary in manager-readable profile projections.
 - New employee provisioning writes the initial schedule and compensation versions. Post-creation schedule and salary changes use separate tab actions and backend operations.
-- Backfill existing employees’ current shift and daily work hours from Firestore, and seed Sunday as their weekly day off. Backfill each available current salary value from the private Firestore profile. Use the Asia/Kolkata business date at cutover as the first effective date because prior history is unavailable.
-- After validating the backfill and switching reads and writes, stop treating Firestore schedule and salary fields as authoritative. Remove legacy schedule or salary fields only when the corresponding SQL history was imported successfully. Keep Aadhaar data in its existing private storage.
+- Legacy Firestore schedules and salary values are not imported. All pre-existing customer organizations were deleted before these history screens were used, and the SQL organization count was verified as zero on 22 November 2026.
+- New employees receive their initial schedule and salary history in PostgreSQL during provisioning. Keep Aadhaar data in its existing private storage.
 
 ### Payslip and payroll calculation
 
@@ -127,8 +127,8 @@ This file is the working specification for employee details, schedules, weekly d
 - [x] Monthly XLSX exports contain every employee in scope for the selected calendar month; individual payslips can be exported as PDF.
 - [x] The employee creation form retains schedule and salary entry and adds weekly-day-off selection.
 - [x] Post-creation schedule and salary edits are isolated from general employee details.
-- [ ] Backfilled shift and salary values match existing records, and all existing employees have Sunday seeded as their weekly day off.
+- [x] Verified there were no existing organizations to backfill and removed the legacy Firestore import callable.
 
-The checked items are implemented and validated. The final item remains open
-for any legacy organization that needs recovery; newly created organizations
-and employees do not need the import operation.
+The checked items are implemented and validated. The legacy migration is out
+of scope because the organization table was empty when the new history feature
+was deployed.

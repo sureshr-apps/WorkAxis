@@ -652,16 +652,11 @@ version; later edits use separate Schedule & Shifts and Salary tabs so those
 saves do not update general employee fields. Schedule periods carry the
 employee's recurring weekday off and are independent of branch assignments.
 
-`BackfillEmployeeWorkforceHistory` is an Organization Admin-scoped,
-idempotent operation. It imports existing Firestore work-hour, shift, and
-salary values with Asia/Kolkata cutover-date effective dates and Sunday as the
-weekly day off. Missing legacy shifts use the existing 8-hour default. The
-operation removes each legacy schedule or salary field only after its
-corresponding SQL history row was inserted successfully; invalid or missing
-values remain available for correction. Migration 010 and the backend, rules,
-indexes, and web deployment completed on 22 November 2026. The app does not
-expose the backfill action; the callable remains a controlled recovery path
-for organizations with legacy Firestore-only employee data.
+Migration 010 and the backend, rules, indexes, and web deployment completed
+on 22 November 2026. All customer organizations were deleted before the new
+history screens went into use; the Cloud SQL `organization` table was verified
+empty on that date. The legacy Firestore import callable has been removed.
+New employee provisioning writes the initial SQL schedule and salary versions.
 
 The `GetEmployeeWorkforceHistory`, `SaveEmployeeSchedule`, and
 `SaveEmployeeCompensation` data operations resolve membership scope on the
@@ -692,5 +687,4 @@ does not initiate payroll approval or payment.
 Local validation covers payroll calculation and history operations using
 `FakeDb`. Production migration and application deployment completed on
 22 November 2026. New employees receive schedule and compensation history
-during provisioning. Legacy organizations can use the recovery backfill before
-existing employees use the new history screens.
+during provisioning. Legacy Firestore history is not imported.
