@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,6 +12,8 @@ import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/attendance/data/attendance_entry_mapper.dart';
+import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart'
+    hide AttendanceStatus;
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employee_home/domain/models/attendance_session.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
@@ -19,7 +22,11 @@ import 'package:workaxis/features/employee_home/domain/models/employee_home_summ
 import 'package:workaxis/features/employee_home/domain/models/location_peek.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/services/attendance_location_provider.dart';
+import 'package:workaxis/features/employee_home/domain/services/monthly_attendance_summary_calculator.dart';
+import 'package:workaxis/features/employees/domain/models/employee_workforce_history.dart';
 import 'package:workaxis/features/employees/domain/repositories/employee_workforce_repository.dart';
+import 'package:workaxis/features/returns/domain/models/return_item.dart';
+import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
 
 /// Production [EmployeeHomeRepository].
 ///
@@ -35,6 +42,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     this._selfieStorage,
     AttendanceLocationProvider? locationProvider,
     this._workforceRepository,
+    this._returnsRepository,
     Now? now,
   }) : _customFirestore = firestore,
        _customFunctions = functions,
@@ -51,6 +59,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   final ScopedAttachmentStorage? _selfieStorage;
   final AttendanceLocationProvider _location;
   final EmployeeWorkforceRepository? _workforceRepository;
+  final ReturnsRepository? _returnsRepository;
   final Now _now;
 
   FirebaseFirestore get _firestore =>
@@ -65,14 +74,21 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   }) async {
     try {
       _requireAttendanceUser(access);
-      final policy = await _fetchAttendancePolicy();
+      final policyFuture = _fetchAttendancePolicy();
+      final entriesFuture = _todayEntries(access.user.id);
+      final monthlyEntriesFuture = _monthlyEntries(access.user.id);
+      final policy = await policyFuture;
       _requireManagerAttendanceEnabled(access, policy);
-      final entries = await _todayEntries(access.user.id);
+      final returnCountsFuture = _loadOwnReturnCounts(access);
+      final entries = await entriesFuture;
+      final monthlyEntries = await monthlyEntriesFuture;
       return await _summarize(
         access,
         entries,
+        monthlyEntries: monthlyEntries,
         policy: policy,
         requestLocationPermission: requestLocationPermission,
+        returnCounts: await returnCountsFuture,
       );
     } catch (e, st) {
       throw mapBackendError(e, st);
@@ -258,6 +274,35 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     return entries;
   }
 
+  Future<List<AttendanceEntry>?> _monthlyEntries(String uid) async {
+    final today = BusinessTime.today(_now);
+    final startKey = BusinessTime.keyOfDate(DateTime(today.year, today.month));
+    final endKey = BusinessTime.keyOfDate(today);
+    try {
+      final snapshot = await _firestore
+          .collection('attendance_entries')
+          .where('employeeId', isEqualTo: uid)
+          .where('workDateString', isGreaterThanOrEqualTo: startKey)
+          .where('workDateString', isLessThanOrEqualTo: endKey)
+          .orderBy('workDateString')
+          .get();
+      return snapshot.docs
+          .map(
+            (document) =>
+                AttendanceEntryMapper.fromData(document.id, document.data()),
+          )
+          .toList(growable: false);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Unable to load monthly attendance entries for Employee Home.',
+        name: 'workaxis.employee_home',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
   Map<String, dynamic>? _activeEntry(List<Map<String, dynamic>> entries) {
     for (final entry in entries.reversed) {
       if (AttendanceEntryMapper.instant(entry['checkInAt']) != null &&
@@ -303,8 +348,10 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   Future<EmployeeHomeSummary> _summarize(
     UserAccessContext access,
     List<Map<String, dynamic>> entries, {
+    required List<AttendanceEntry>? monthlyEntries,
     required EmployeeAttendancePolicy policy,
     required bool requestLocationPermission,
+    required ({int pending, int approved})? returnCounts,
   }) async {
     final current =
         _activeEntry(entries) ?? (entries.isEmpty ? null : entries.last);
@@ -367,6 +414,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
 
     double dailyWorkHours = 8.0;
     String shiftHours = EmployeeHomeSummary.unavailable;
+    List<ScheduleVersion>? scheduleHistory;
     try {
       final workforceRepository = _workforceRepository;
       if (workforceRepository != null) {
@@ -375,6 +423,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
           memberId: '',
           activeBranchId: access.activeBranch?.branchId,
         );
+        scheduleHistory = history.schedules;
         final todayKey = BusinessTime.keyOfInstant(_now());
         final schedule = history.schedules.where((version) {
           final from = _dateKey(version.effectiveFrom);
@@ -392,6 +441,15 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     } catch (_) {
       // Defaults keep the dashboard usable if history is not yet backfilled.
     }
+
+    final MonthlyAttendanceMetrics monthlyMetrics =
+        monthlyEntries == null || scheduleHistory == null
+        ? MonthlyAttendanceSummaryCalculator.unavailable
+        : MonthlyAttendanceSummaryCalculator.calculate(
+            today: BusinessTime.today(_now),
+            schedules: scheduleHistory,
+            entries: monthlyEntries,
+          );
 
     final totalMinutes = (dailyWorkHours * 60).round();
     final stdHours = totalMinutes ~/ 60;
@@ -445,6 +503,12 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       isWithinGeofence: isWithinGeofence,
       requireGeolocation: policy.requireGeolocation,
       allowBreaks: policy.allowBreaks,
+      pendingReturnsCount: returnCounts?.pending,
+      approvedReturnsCount: returnCounts?.approved,
+      monthlyDaysPresent: monthlyMetrics.present,
+      monthlyDaysLate: monthlyMetrics.late,
+      monthlyDaysAbsent: monthlyMetrics.absent,
+      monthlyAdherencePercentage: monthlyMetrics.adherencePercentage,
       latitude: branch?.latitude,
       longitude: branch?.longitude,
       geofenceRadiusMeters: branch == null
@@ -455,6 +519,33 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
                 : policy.defaultGeofenceRadiusMeters),
       session: session,
     );
+  }
+
+  Future<({int pending, int approved})?> _loadOwnReturnCounts(
+    UserAccessContext access,
+  ) async {
+    final repository = _returnsRepository;
+    if (repository == null) return null;
+
+    try {
+      final returns = await repository.getReturns(access: access);
+      var pending = 0;
+      var approved = 0;
+      for (final item in returns) {
+        if (!item.wasSubmittedBy(access.user.id)) continue;
+        if (item.status == ReturnStatus.pending) pending++;
+        if (item.status == ReturnStatus.approved) approved++;
+      }
+      return (pending: pending, approved: approved);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Unable to load the signed-in user’s return counts for Employee Home.',
+        name: 'workaxis.employee_home',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
   }
 
   /// Passive read by default (never prompts). Only an explicit user action

@@ -167,6 +167,11 @@ class BackendFactory {
       final workforceRepository = SqlConnectEmployeeWorkforceRepository(
         gateway: data,
       );
+      final returnsRepository = SqlConnectReturnsRepository(
+        gateway: data,
+        now: now,
+        attachments: attachments,
+      );
       final platformOrganizationsRepository =
           SqlConnectPlatformOrganizationsRepository(
             dataSource: SqlConnectPlatformOrganizationsRemoteDataSource(
@@ -216,6 +221,7 @@ class BackendFactory {
           selfieStorage: attachmentStorage,
           locationProvider: resolvedLocationProvider,
           workforceRepository: workforceRepository,
+          returnsRepository: returnsRepository,
           now: now,
         ),
         branchManagementRepository: SqlConnectBranchManagementRepository(
@@ -235,11 +241,7 @@ class BackendFactory {
           firestore: firestore,
           now: now,
         ),
-        returnsRepository: SqlConnectReturnsRepository(
-          gateway: data,
-          now: now,
-          attachments: attachments,
-        ),
+        returnsRepository: returnsRepository,
         leavesRepository: SqlConnectLeavesRepository(gateway: data),
         offSiteWorkRepository: SqlConnectOffSiteWorkRepository(
           remote: OffSiteWorkRemoteDataSource(gateway: data),

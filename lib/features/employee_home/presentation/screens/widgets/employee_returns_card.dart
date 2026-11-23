@@ -68,12 +68,12 @@ class EmployeeReturnsCard extends StatelessWidget {
                 runSpacing: AppSpacing.xs,
                 children: [
                   StatusChip(
-                    label: '${summary.pendingReturnsCount ?? '—'} Pending',
+                    label: 'Pending (${summary.pendingReturnsCount ?? '—'})',
                     type: StatusType.pending,
                     width: null,
                   ),
                   StatusChip(
-                    label: '${summary.approvedReturnsCount ?? '—'} Approved',
+                    label: 'Approved (${summary.approvedReturnsCount ?? '—'})',
                     type: StatusType.active,
                     width: null,
                   ),

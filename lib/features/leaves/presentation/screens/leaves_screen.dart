@@ -389,10 +389,8 @@ class _StatusFilters extends StatelessWidget {
   final List<LeaveRequest> requests;
 
   @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: AppSpacing.sm,
-    runSpacing: AppSpacing.xs,
-    children: [
+  Widget build(BuildContext context) {
+    final filters = [
       FilterChip(
         label: Text('All (${requests.length})'),
         selected: selected == null,
@@ -406,8 +404,20 @@ class _StatusFilters extends StatelessWidget {
           selected: selected == status,
           onSelected: (_) => onSelected(status),
         ),
-    ],
-  );
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var index = 0; index < filters.length; index++) ...[
+            if (index > 0) const SizedBox(width: AppSpacing.xs),
+            filters[index],
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _EmptyLeavesState extends StatelessWidget {
