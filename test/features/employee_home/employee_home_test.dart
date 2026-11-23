@@ -208,8 +208,8 @@ void main() {
         // 7. Verify My Returns Card
         expect(find.byType(EmployeeReturnsCard), findsOneWidget);
         expect(find.text('My Returns'), findsOneWidget);
-        expect(find.text('1 Pending'), findsOneWidget);
-        expect(find.text('4 Approved'), findsOneWidget);
+        expect(find.text('Pending (1)'), findsOneWidget);
+        expect(find.text('Approved (4)'), findsOneWidget);
         expect(
           find.text('Safety Helmet & High-Vis Vest Replacement'),
           findsOneWidget,
