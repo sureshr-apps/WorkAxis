@@ -176,6 +176,43 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
   }
 
   @override
+  Future<void> updateReturn({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required ReturnItem returnItem,
+    required CreateReturnInput input,
+  }) async {
+    try {
+      final branch = _scope.forUpdate(access, activeBranchId, returnItem);
+      final billImage =
+          await _attachments?.ensureStored(
+            input.billImageUrl,
+            organizationId: access.organization!.id,
+            kind: AttachmentKind.returnBill,
+          ) ??
+          input.billImageUrl;
+      await _remote.update(
+        returnId: returnItem.id,
+        input: CreateReturnInput(
+          invoiceNumber: input.invoiceNumber.trim(),
+          productTitle: input.productTitle.trim(),
+          quantity: input.quantity,
+          unit: input.unit,
+          reason: input.reason,
+          billImageUrl: billImage,
+          remarks: input.remarks?.trim().isEmpty ?? true
+              ? null
+              : input.remarks?.trim(),
+          branchId: branch.id,
+          branchName: branch.name,
+        ),
+      );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
   Future<ReturnItem> reviewReturn({
     required UserAccessContext access,
     String? activeBranchId,

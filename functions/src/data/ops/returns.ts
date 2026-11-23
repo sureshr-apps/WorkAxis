@@ -156,6 +156,87 @@ async function review(
   });
 }
 
+async function updateReturnRecord(
+  { db, actor }: OperationContext,
+  vars: Row,
+): Promise<unknown> {
+  requireRole(actor, SUBMITTER_ROLES);
+  const id = reqId(vars, "id");
+  const productTitle = reqString(vars, "productTitle", 1, 200);
+  const quantity = reqNumber(vars, "quantity", Number.MIN_VALUE, 1e9);
+  const unit = reqString(vars, "unit", 1, 32);
+  const invoiceNumber = reqString(vars, "invoiceNumber", 1, 100);
+  const returnReason = reqString(vars, "returnReason", 1, 1000);
+  const billImageUrl = optText(vars, "billImageUrl", 2048);
+  const remarks = optText(vars, "remarks", 2000);
+  const organizationId = actor.organizationId;
+  if (!organizationId) throw denied();
+
+  return db.transaction(async (tx) => {
+    const member = await findMe(tx, actor.uid);
+    if (!member) throw denied("Return submitter not found.");
+    const existing = await selectOne<{
+      status: string;
+      organizationId: string;
+      branchId: string;
+      employeeId: string | null;
+      submitterUid: string | null;
+    }>(
+      tx,
+      `SELECT status,
+              organization_id AS "organizationId",
+              branch_id AS "branchId",
+              employee_id AS "employeeId",
+              employee_uid AS "submitterUid"
+         FROM return_record WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    const isSubmitter = existing?.submitterUid != null
+      ? existing.submitterUid === actor.uid
+      : existing?.employeeId === actor.uid || existing?.employeeId === member.id;
+    if (
+      !existing ||
+      existing.status !== "pending" ||
+      existing.organizationId !== organizationId ||
+      !isSubmitter ||
+      !actor.branchIds.includes(existing.branchId)
+    ) {
+      throw denied("Return not found, already reviewed, or access denied.");
+    }
+    await requireActiveBranchOf(tx, existing.branchId, organizationId);
+
+    const rows = await tx.query<{ id: string }>(
+      `UPDATE return_record
+          SET customer_name = $2,
+              amount = $3,
+              product_title = $2,
+              quantity = $3,
+              unit = $4,
+              invoice_number = $5,
+              return_reason = $6,
+              bill_image_url = $7,
+              remarks = $8
+        WHERE id = $1 AND organization_id = $9 AND branch_id = $10
+          AND status = 'pending'
+        RETURNING id`,
+      [
+        id,
+        productTitle,
+        quantity,
+        unit,
+        invoiceNumber,
+        returnReason,
+        billImageUrl ?? null,
+        remarks ?? null,
+        organizationId,
+        existing.branchId,
+      ],
+    );
+    if (!rows[0]) throw denied("Return not found, already reviewed, or access denied.");
+    return { returnRecord_update: { id: rows[0].id } };
+  });
+}
+
 export const returnsOps: OperationRegistry = {
   // Org Admin: branches of own org. Branch Manager: only assigned branches.
   ListReturnsByBranch: async ({ db, actor }, vars) => {
@@ -298,6 +379,9 @@ export const returnsOps: OperationRegistry = {
       return { returnRecord_insert };
     });
   },
+
+  // The submitter may edit the row only while it remains pending.
+  UpdateReturnRecord: (ctx, vars) => updateReturnRecord(ctx, vars),
 
   // Only an Org Admin of the org or another Branch Manager assigned to the
   // return's branch may review it. Only pending returns are reviewable.

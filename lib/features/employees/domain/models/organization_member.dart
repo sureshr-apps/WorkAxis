@@ -11,6 +11,7 @@ class OrganizationMember {
     required this.email,
     required this.role,
     required this.branchIds,
+    this.branchNamesById = const {},
     required this.status,
     this.phone,
     this.authUid,
@@ -44,6 +45,7 @@ class OrganizationMember {
   final String? phone;
   final UserRole role;
   final List<String> branchIds;
+  final Map<String, String> branchNamesById;
   final AccountStatus status;
   final double dailyWorkHours;
   final String? shiftHours;
@@ -108,6 +110,7 @@ class OrganizationMember {
     bool clearPhone = false,
     UserRole? role,
     List<String>? branchIds,
+    Map<String, String>? branchNamesById,
     AccountStatus? status,
     double? dailyWorkHours,
     String? shiftHours,
@@ -136,6 +139,7 @@ class OrganizationMember {
     phone: clearPhone ? null : phone ?? this.phone,
     role: role ?? this.role,
     branchIds: branchIds ?? this.branchIds,
+    branchNamesById: branchNamesById ?? this.branchNamesById,
     status: status ?? this.status,
     dailyWorkHours: dailyWorkHours ?? this.dailyWorkHours,
     shiftHours: shiftHours ?? this.shiftHours,

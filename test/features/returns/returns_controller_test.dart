@@ -41,6 +41,14 @@ class _ConstListReturnsRepository implements ReturnsRepository {
   }
 
   @override
+  Future<void> updateReturn({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required ReturnItem returnItem,
+    required CreateReturnInput input,
+  }) async {}
+
+  @override
   Future<ReturnItem> reviewReturn({
     required UserAccessContext access,
     String? activeBranchId,

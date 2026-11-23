@@ -101,6 +101,29 @@ class DataConnectReturnsRemote implements ReturnsRemote {
   }
 
   @override
+  Future<void> update({
+    required String returnId,
+    required CreateReturnInput input,
+  }) async {
+    final billImageUrl = input.billImageUrl;
+    final remarks = input.remarks?.trim();
+    final data = await _gateway.call('UpdateReturnRecord', {
+      'id': returnId,
+      'productTitle': input.productTitle.trim(),
+      'quantity': input.quantity,
+      'unit': input.unit,
+      'invoiceNumber': input.invoiceNumber.trim(),
+      'returnReason': input.reason.name,
+      if (billImageUrl != null && billImageUrl.isNotEmpty)
+        'billImageUrl': billImageUrl,
+      if (remarks != null && remarks.isNotEmpty) 'remarks': remarks,
+    });
+    if (data.optObject('returnRecord_update') == null) {
+      throw const NotFoundException('Return not found.');
+    }
+  }
+
+  @override
   Future<void> review({
     required String returnId,
     required ReturnStatus decision,

@@ -91,13 +91,15 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
     final canReview =
         role == UserRole.orgAdmin || role == UserRole.branchManager;
     final hasPending = controller.pendingCount > 0;
+    bool isInSelectedQueue(ReturnItem item) => _queue == _ReturnQueue.mine
+        ? item.wasSubmittedBy(access!.user.id)
+        : !item.wasSubmittedBy(access!.user.id);
+    final countItems = isManager
+        ? controller.items.where(isInSelectedQueue).toList(growable: false)
+        : controller.items;
     final visibleItems = isManager
         ? controller.filteredItems
-              .where(
-                (item) => _queue == _ReturnQueue.mine
-                    ? item.wasSubmittedBy(access!.user.id)
-                    : !item.wasSubmittedBy(access!.user.id),
-              )
+              .where(isInSelectedQueue)
               .toList(growable: false)
         : controller.filteredItems;
 
@@ -195,6 +197,7 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
                 controller: controller,
                 searchController: _searchController,
                 searchHint: 'Search product, invoice, or employee...',
+                countItems: countItems,
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),

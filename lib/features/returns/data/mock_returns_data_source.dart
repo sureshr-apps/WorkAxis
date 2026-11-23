@@ -151,6 +151,36 @@ class MockReturnsDataSource {
     _returns.insert(0, item);
   }
 
+  ReturnItem updateReturn({
+    required String returnId,
+    required CreateReturnInput input,
+  }) {
+    final index = _returns.indexWhere((r) => r.id == returnId);
+    if (index == -1) {
+      throw const NotFoundException('Return not found.');
+    }
+    final current = _returns[index];
+    if (current.status != ReturnStatus.pending) {
+      throw const DatabaseException(
+        'A reviewed return cannot be edited.',
+        userMessage: 'Only pending returns can be edited.',
+      );
+    }
+    final updated = current.copyWith(
+      invoiceNumber: input.invoiceNumber,
+      productTitle: input.productTitle,
+      quantity: input.quantity,
+      unit: input.unit,
+      reason: input.reason,
+      billImageUrl: input.billImageUrl,
+      clearBillImageUrl: input.billImageUrl == null,
+      remarks: input.remarks,
+      clearRemarks: input.remarks == null,
+    );
+    _returns[index] = updated;
+    return updated;
+  }
+
   ReturnItem updateStatus({
     required String returnId,
     required ReturnStatus status,

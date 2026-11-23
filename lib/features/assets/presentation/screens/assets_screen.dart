@@ -101,46 +101,54 @@ class _AssetsScreenState extends State<AssetsScreen> {
               .toList(growable: false)
         : scopedAssets;
     final padding = context.responsivePagePadding;
-    Widget buildAssetCard(EmployeeAsset asset) => EmployeeAssetCard(
-      asset: asset,
-      canEdit: canEdit && !(isManager && asset.employeeUid == access.user.id),
-      isEmployeeView: isEmployee,
-      canAcknowledge: isEmployee,
-      isAcknowledging: controller.isAcknowledging,
-      onEdit: canEdit
-          ? () {
-              _openEditor(
-                access: access,
-                controller: controller,
-                activeBranchId: activeBranchId,
-                asset: asset,
-              );
-            }
-          : null,
-      onDelete: canEdit
-          ? () {
-              _confirmDelete(
-                access: access,
-                controller: controller,
-                activeBranchId: activeBranchId,
-                asset: asset,
-              );
-            }
-          : null,
-      onAcknowledge:
-          isEmployee &&
-              asset.status != AssetStatus.returned &&
-              asset.acknowledgementRequired &&
-              asset.acknowledgementStatus == AssetAcknowledgementStatus.pending
-          ? () {
-              _confirmReceipt(
-                access: access,
-                controller: controller,
-                asset: asset,
-              );
-            }
-          : null,
-    );
+    Widget buildAssetCard(EmployeeAsset asset) {
+      final canManageAsset =
+          canEdit &&
+          !(isManager &&
+              (asset.employeeUid == access.user.id ||
+                  asset.branchId != activeBranchId));
+      return EmployeeAssetCard(
+        asset: asset,
+        canEdit: canManageAsset,
+        isEmployeeView: isEmployee,
+        canAcknowledge: isEmployee,
+        isAcknowledging: controller.isAcknowledging,
+        onEdit: canManageAsset
+            ? () {
+                _openEditor(
+                  access: access,
+                  controller: controller,
+                  activeBranchId: activeBranchId,
+                  asset: asset,
+                );
+              }
+            : null,
+        onDelete: canManageAsset
+            ? () {
+                _confirmDelete(
+                  access: access,
+                  controller: controller,
+                  activeBranchId: activeBranchId,
+                  asset: asset,
+                );
+              }
+            : null,
+        onAcknowledge:
+            isEmployee &&
+                asset.status != AssetStatus.returned &&
+                asset.acknowledgementRequired &&
+                asset.acknowledgementStatus ==
+                    AssetAcknowledgementStatus.pending
+            ? () {
+                _confirmReceipt(
+                  access: access,
+                  controller: controller,
+                  asset: asset,
+                );
+              }
+            : null,
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,

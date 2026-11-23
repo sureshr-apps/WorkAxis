@@ -34,6 +34,15 @@ abstract interface class ReturnsRepository {
     required CreateReturnBatchInput input,
   });
 
+  /// Updates one pending return filed by the current employee or Branch
+  /// Manager. The server verifies ownership and pending status again.
+  Future<void> updateReturn({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required ReturnItem returnItem,
+    required CreateReturnInput input,
+  });
+
   /// Approves or rejects a pending [returnItem]. Organization Admins of its
   /// organization, or another Branch Manager assigned to its branch, may review
   /// it. A Branch Manager cannot review their own submission. The reviewer is

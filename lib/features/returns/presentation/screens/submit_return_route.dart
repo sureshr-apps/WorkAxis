@@ -22,11 +22,13 @@ class SubmitReturnRoute extends StatefulWidget {
     super.key,
     required this.listRoute,
     required this.listLabel,
+    this.returnId,
   });
 
   /// The list this form belongs to, which scopes the back link.
   final String listRoute;
   final String listLabel;
+  final String? returnId;
 
   @override
   State<SubmitReturnRoute> createState() => _SubmitReturnRouteState();
@@ -34,6 +36,7 @@ class SubmitReturnRoute extends StatefulWidget {
 
 class _SubmitReturnRouteState extends State<SubmitReturnRoute> {
   UserAccessContext? _access;
+  ReturnItem? _item;
   bool _loading = true;
 
   @override
@@ -49,9 +52,20 @@ class _SubmitReturnRouteState extends State<SubmitReturnRoute> {
     final accessController = context.read<AccessController>();
     await accessController.refreshAccess();
     if (!mounted) return;
-    context.read<ReturnsController>().clearActionError();
+    final controller = context.read<ReturnsController>()..clearActionError();
+    final access = accessController.accessContext;
+    ReturnItem? item;
+    if (widget.returnId != null && access != null) {
+      await controller.loadReturns(
+        access: access,
+        activeBranchId: _branchScope(access),
+      );
+      if (!mounted) return;
+      item = controller.items.where((r) => r.id == widget.returnId).firstOrNull;
+    }
     setState(() {
-      _access = accessController.accessContext;
+      _access = access;
+      _item = item;
       _loading = false;
     });
   }
@@ -65,6 +79,7 @@ class _SubmitReturnRouteState extends State<SubmitReturnRoute> {
   /// Employees start on their first assigned branch; managers and admins start
   /// on the active branch.
   String? _initialBranchId(UserAccessContext access) {
+    if (_item != null) return _item!.branchId;
     if (access.user.role == UserRole.employee) {
       return access.activeAssignedBranches.firstOrNull?.id;
     }
@@ -87,6 +102,33 @@ class _SubmitReturnRouteState extends State<SubmitReturnRoute> {
           'The return request could not be submitted.';
     }
     if (mounted) _showSubmittedMessage(access.user.role, batch.items.length);
+    return null;
+  }
+
+  Future<String?> _update(
+    UserAccessContext access,
+    ReturnItem item,
+    CreateReturnInput input,
+  ) async {
+    final controller = context.read<ReturnsController>();
+    final saved = await controller.updateReturn(
+      access: access,
+      activeBranchId: _branchScope(access),
+      item: item,
+      input: input,
+    );
+    if (!saved) {
+      return controller.actionErrorMessage ??
+          'The return request could not be updated.';
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Return request updated.'),
+          backgroundColor: AppColors.statusActive,
+        ),
+      );
+    }
     return null;
   }
 
@@ -127,9 +169,22 @@ class _SubmitReturnRouteState extends State<SubmitReturnRoute> {
     if (access == null) {
       return RecordNotFoundPage(
         backLabel: widget.listLabel,
-        currentLabel: 'New return',
+        currentLabel: widget.returnId == null ? 'New return' : 'Edit return',
         onBack: _leave,
         message: 'The return form could not be opened.',
+        onRetry: _load,
+      );
+    }
+    final item = _item;
+    if (widget.returnId != null &&
+        (item == null ||
+            item.status != ReturnStatus.pending ||
+            !item.wasSubmittedBy(access.user.id))) {
+      return RecordNotFoundPage(
+        backLabel: widget.listLabel,
+        currentLabel: 'Edit return',
+        onBack: _leave,
+        message: 'Only the person who filed a pending return can edit it.',
         onRetry: _load,
       );
     }
@@ -138,7 +193,9 @@ class _SubmitReturnRouteState extends State<SubmitReturnRoute> {
       backLabel: widget.listLabel,
       availableBranches: access.activeAssignedBranches,
       initialBranchId: _initialBranchId(access),
+      initialReturn: item,
       onSubmitBatch: (batch) => _submit(access, batch),
+      onUpdate: item == null ? null : (input) => _update(access, item, input),
       onClose: _leave,
       onSaved: () => _leaveAfterSave(access),
     );

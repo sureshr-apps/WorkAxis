@@ -161,7 +161,9 @@ class ReturnItem {
     String? unit,
     ReturnStatus? status,
     String? billImageUrl,
+    bool clearBillImageUrl = false,
     String? remarks,
+    bool clearRemarks = false,
     String? reviewerNotes,
     DateTime? reviewedAt,
     String? reviewedBy,
@@ -182,8 +184,10 @@ class ReturnItem {
       quantity: quantity ?? this.quantity,
       unit: unit ?? this.unit,
       status: status ?? this.status,
-      billImageUrl: billImageUrl ?? this.billImageUrl,
-      remarks: remarks ?? this.remarks,
+      billImageUrl: clearBillImageUrl
+          ? null
+          : billImageUrl ?? this.billImageUrl,
+      remarks: clearRemarks ? null : remarks ?? this.remarks,
       reviewerNotes: reviewerNotes ?? this.reviewerNotes,
       reviewedAt: reviewedAt ?? this.reviewedAt,
       reviewedBy: reviewedBy ?? this.reviewedBy,

@@ -124,7 +124,13 @@ export const membersOps: OperationRegistry = {
       limit,
       offset,
     });
-    const members = await withMemberAssignments(db, rows);
+    // Include assignment names so managers can see the full branch list for
+    // employees who share one of the manager's branches.
+    const members = await withMemberAssignments(
+      db,
+      rows,
+      actor.role === "branchManager",
+    );
     return { userBranchAssignments: members.map((member) => ({ member })), total };
   },
 

@@ -74,6 +74,42 @@ class ReturnsScope {
     return branch;
   }
 
+  /// Validates that [access] may edit their own pending return.
+  BranchSummary forUpdate(
+    UserAccessContext access,
+    String? activeBranchId,
+    ReturnItem item,
+  ) {
+    final orgId = _requireOrganization(access);
+    final role = access.user.role;
+    if (role != UserRole.employee && role != UserRole.branchManager) {
+      throw const AccessDeniedException(
+        'Only employees and branch managers edit their own returns.',
+      );
+    }
+    if (item.organizationId != orgId || !item.wasSubmittedBy(access.user.id)) {
+      throw const AccessDeniedException(
+        'Only the return submitter may edit this request.',
+      );
+    }
+    if (item.status != ReturnStatus.pending) {
+      throw const AccessDeniedException(
+        'A reviewed return cannot be edited.',
+        'Only pending returns can be edited.',
+      );
+    }
+    if (role == UserRole.branchManager) {
+      final active = activeBranchId ?? access.activeBranch?.branchId;
+      if (active == null || active != item.branchId) {
+        throw const BranchAuthorizationException(
+          'Return is outside the active branch.',
+          userMessage: 'Switch to the branch where you filed this return.',
+        );
+      }
+    }
+    return _assigned(access, item.branchId);
+  }
+
   /// Validates that [access] may review [item]; returns its branch.
   BranchSummary forReview(
     UserAccessContext access,

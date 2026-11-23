@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:workaxis/app/routing/app_routes.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/core/widgets/record_not_found_page.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
@@ -155,6 +156,15 @@ class _ReturnDetailsRouteState extends State<ReturnDetailsRoute> {
     final isOwnBranchManagerReturn =
         role == UserRole.branchManager && item.wasSubmittedBy(access.user.id);
     final canReview = canReviewReturn(role, access.user.id, item);
+    final editPath = switch (role) {
+      UserRole.employee => AppRoutes.employeeReturnEditPath(item.id),
+      UserRole.branchManager => AppRoutes.branchManagerReturnEditPath(item.id),
+      _ => null,
+    };
+    final canEdit =
+        item.status == ReturnStatus.pending &&
+        item.wasSubmittedBy(access.user.id) &&
+        editPath != null;
     return ReturnDetailsScreen(
       item: item,
       eyebrow: returnsEyebrow(role),
@@ -168,6 +178,7 @@ class _ReturnDetailsRouteState extends State<ReturnDetailsRoute> {
           ? (decision, notes) => _review(access, item, decision, notes)
           : null,
       onReviewed: () => _leaveAfterReview(access),
+      onEdit: canEdit ? () => context.push(editPath) : null,
     );
   }
 }

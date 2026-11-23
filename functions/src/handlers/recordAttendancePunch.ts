@@ -185,7 +185,7 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
         );
       }
       const data = snap?.data();
-      if (data?.branchId !== branchId) {
+      if (kind !== "checkIn" && data?.branchId !== branchId) {
         throw precondition("This attendance session belongs to a different branch.");
       }
       const punchState = readState(data);

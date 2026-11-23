@@ -32,7 +32,7 @@ class ReturnsController extends ChangeNotifier
   /// Failure from the last load; replaces the list with an error state.
   String? get errorMessage => _errorMessage;
 
-  /// Failure from the last submit/review action; shown inline without
+  /// Failure from the last submit/update/review action; shown inline without
   /// discarding the loaded list.
   String? get actionErrorMessage => _actionErrorMessage;
   List<ReturnItem> get items => _items;
@@ -140,6 +140,42 @@ class ReturnsController extends ChangeNotifier
         e,
         st,
         fallback: 'Failed to submit return request.',
+      );
+      return false;
+    } finally {
+      if (epoch == _epoch && !isDisposed) {
+        _isSaving = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<bool> updateReturn({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required ReturnItem item,
+    required CreateReturnInput input,
+  }) async {
+    final epoch = _epoch;
+    _isSaving = true;
+    _actionErrorMessage = null;
+    notifyListeners();
+
+    try {
+      await repository.updateReturn(
+        access: access,
+        activeBranchId: activeBranchId,
+        returnItem: item,
+        input: input,
+      );
+      if (epoch != _epoch || isDisposed) return false;
+      return true;
+    } catch (e, st) {
+      if (epoch != _epoch || isDisposed) return false;
+      _actionErrorMessage = userMessageFor(
+        e,
+        st,
+        fallback: 'Failed to update return request.',
       );
       return false;
     } finally {

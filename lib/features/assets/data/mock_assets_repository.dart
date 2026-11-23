@@ -122,18 +122,21 @@ class MockAssetsRepository implements AssetsRepository {
         access: access,
         activeBranchId: branchId,
       );
-      final employeeIds = assignedEmployees
-          .where((member) => member.role == UserRole.employee)
-          .map((member) => member.id)
-          .toSet();
+      final employeesById = {
+        for (final member in assignedEmployees)
+          if (member.role == UserRole.employee) member.id: member,
+      };
       return List.unmodifiable(
-        _assets.where(
-          (asset) =>
-              asset.organizationId == orgId &&
-              asset.branchId == branchId &&
-              (asset.employeeUid == access.user.id ||
-                  employeeIds.contains(asset.employeeId)),
-        ),
+        _assets.where((asset) {
+          if (asset.organizationId != orgId) return false;
+          if (asset.employeeUid == access.user.id ||
+              asset.employeeId == access.user.id) {
+            return asset.branchId == branchId;
+          }
+          final employee = employeesById[asset.employeeId];
+          return employee != null &&
+              employee.branchIds.contains(asset.branchId);
+        }),
       );
     }
 

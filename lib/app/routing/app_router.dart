@@ -466,6 +466,16 @@ GoRouter createAppRouter({
                   listRoute: AppRoutes.branchManagerReturns,
                   listLabel: 'Branch Returns',
                 ),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    builder: (context, state) => SubmitReturnRoute(
+                      returnId: state.pathParameters['id'] ?? '',
+                      listRoute: AppRoutes.branchManagerReturns,
+                      listLabel: 'Branch Returns',
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -564,6 +574,16 @@ GoRouter createAppRouter({
                   listRoute: AppRoutes.employeeReturns,
                   listLabel: 'My Returns',
                 ),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    builder: (context, state) => SubmitReturnRoute(
+                      returnId: state.pathParameters['id'] ?? '',
+                      listRoute: AppRoutes.employeeReturns,
+                      listLabel: 'My Returns',
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -620,6 +640,9 @@ String? resolveRedirect({
 
   final role = accessContext.user.role;
   final isBranchManager = role == UserRole.branchManager;
+  final canSwitchBranches =
+      (isBranchManager || role == UserRole.employee) &&
+      accessContext.hasMultipleAssignedBranches;
 
   // 4. A Branch Manager is always gated until a branch context exists.
   if (isBranchManager && !branchController.hasActiveBranch) {
@@ -631,11 +654,12 @@ String? resolveRedirect({
     return matched == AppRoutes.selectBranch ? null : AppRoutes.selectBranch;
   }
 
-  // 5. Branch-specific utility screens are for Branch Managers only; resolved
-  //    users have nothing to do on the verification screen.
+  // Branch selection is for employees and Branch Managers with more than one
+  // active branch. Resolved users have nothing to do on the other utility
+  // screens.
   if (matched == AppRoutes.verifyAccess ||
       matched == AppRoutes.noBranchAssigned ||
-      (matched == AppRoutes.selectBranch && !isBranchManager)) {
+      (matched == AppRoutes.selectBranch && !canSwitchBranches)) {
     return defaultRouteForRole(role);
   }
 

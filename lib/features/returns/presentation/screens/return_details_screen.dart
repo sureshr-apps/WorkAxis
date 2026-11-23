@@ -38,6 +38,7 @@ class ReturnDetailsScreen extends StatefulWidget {
     this.canReview = false,
     this.onReviewDecision,
     this.onReviewed,
+    this.onEdit,
   });
 
   final ReturnItem item;
@@ -50,6 +51,7 @@ class ReturnDetailsScreen extends StatefulWidget {
   final bool canReview;
   final ReturnReviewHandler? onReviewDecision;
   final VoidCallback? onReviewed;
+  final VoidCallback? onEdit;
 
   @override
   State<ReturnDetailsScreen> createState() => _ReturnDetailsScreenState();
@@ -92,6 +94,7 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
     final item = widget.item;
     final isPending = item.status == ReturnStatus.pending;
     final showReviewActions = widget.canReview && isPending;
+    final showEditAction = widget.onEdit != null && isPending;
 
     // No leaving (system back, browser back) while a decision is in flight.
     return PopScope(
@@ -135,7 +138,7 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    _buildFooter(showReviewActions),
+                    _buildFooter(showReviewActions, showEditAction),
                     const SizedBox(height: AppSpacing.xxl),
                   ],
                 ),
@@ -203,25 +206,36 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
 
   /// The breadcrumb is the way back, so a page without review actions has no
   /// footer.
-  Widget _buildFooter(bool showReviewActions) {
-    if (!showReviewActions) return const SizedBox.shrink();
+  Widget _buildFooter(bool showReviewActions, bool showEditAction) {
+    if (!showReviewActions && !showEditAction) {
+      return const SizedBox.shrink();
+    }
     return Wrap(
       alignment: WrapAlignment.end,
       spacing: AppSpacing.md,
       runSpacing: AppSpacing.sm,
       children: [
-        AppButton.outlined(
-          text: 'Reject Request',
-          isFullWidth: false,
-          isLoading: _isSubmitting,
-          onPressed: () => _handleDecision(ReturnStatus.rejected),
-        ),
-        AppButton.primary(
-          text: 'Approve Return',
-          isFullWidth: false,
-          isLoading: _isSubmitting,
-          onPressed: () => _handleDecision(ReturnStatus.approved),
-        ),
+        if (showEditAction)
+          AppButton.outlined(
+            text: 'Edit Return',
+            iconData: Icons.edit_outlined,
+            isFullWidth: false,
+            onPressed: widget.onEdit,
+          ),
+        if (showReviewActions) ...[
+          AppButton.outlined(
+            text: 'Reject Request',
+            isFullWidth: false,
+            isLoading: _isSubmitting,
+            onPressed: () => _handleDecision(ReturnStatus.rejected),
+          ),
+          AppButton.primary(
+            text: 'Approve Return',
+            isFullWidth: false,
+            isLoading: _isSubmitting,
+            onPressed: () => _handleDecision(ReturnStatus.approved),
+          ),
+        ],
       ],
     );
   }

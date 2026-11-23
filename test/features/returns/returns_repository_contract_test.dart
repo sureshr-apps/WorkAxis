@@ -21,6 +21,7 @@ class FakeReturnsRemote implements ReturnsRemote {
   final List<String> calls = [];
   Object? failWith;
   ({String branchId, CreateReturnInput input})? lastSubmit;
+  ({String id, CreateReturnInput input})? lastUpdate;
   ({String id, ReturnStatus decision, String? notes})? lastReview;
 
   void _maybeFail() {
@@ -92,6 +93,16 @@ class FakeReturnsRemote implements ReturnsRemote {
     _maybeFail();
     lastSubmit = (branchId: branchId, input: input);
     return 'RET-FAKE-${rows.length + 1}';
+  }
+
+  @override
+  Future<void> update({
+    required String returnId,
+    required CreateReturnInput input,
+  }) async {
+    calls.add('update');
+    _maybeFail();
+    lastUpdate = (id: returnId, input: input);
   }
 
   @override

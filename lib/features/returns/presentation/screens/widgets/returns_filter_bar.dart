@@ -15,6 +15,7 @@ class ReturnsFilterBar extends StatelessWidget {
     required this.controller,
     required this.searchController,
     required this.searchHint,
+    this.countItems,
   });
 
   final ReturnsController controller;
@@ -23,9 +24,14 @@ class ReturnsFilterBar extends StatelessWidget {
   final TextEditingController searchController;
   final String searchHint;
 
+  /// Optional queue-scoped rows for status counts. Filtering/search still uses
+  /// the shared controller; this only changes the displayed totals.
+  final List<ReturnItem>? countItems;
+
   @override
   Widget build(BuildContext context) {
     final isCompact = ContentWidthScope.of(context) < AppBreakpoints.mediumMin;
+    final rowsForCounts = countItems ?? controller.items;
 
     final searchField = AppTextField.search(
       controller: searchController,
@@ -38,14 +44,14 @@ class ReturnsFilterBar extends StatelessWidget {
       child: Row(
         children: [
           _StatusFilterChip(
-            label: 'All (${controller.totalCount})',
+            label: 'All (${rowsForCounts.length})',
             isSelected: controller.statusFilter == null,
             onSelected: () => controller.setFilter(null),
           ),
           const SizedBox(width: AppSpacing.xs),
           for (final status in ReturnStatus.values) ...[
             _StatusFilterChip(
-              label: '${status.label} (${_countFor(status)})',
+              label: '${status.label} (${_countFor(status, rowsForCounts)})',
               isSelected: controller.statusFilter == status,
               onSelected: () => controller.setFilter(status),
             ),
@@ -74,11 +80,8 @@ class ReturnsFilterBar extends StatelessWidget {
     );
   }
 
-  int _countFor(ReturnStatus status) => switch (status) {
-    ReturnStatus.pending => controller.pendingCount,
-    ReturnStatus.approved => controller.approvedCount,
-    ReturnStatus.rejected => controller.rejectedCount,
-  };
+  int _countFor(ReturnStatus status, List<ReturnItem> rows) =>
+      rows.where((item) => item.status == status).length;
 }
 
 class _StatusFilterChip extends StatelessWidget {

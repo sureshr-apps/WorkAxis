@@ -23,6 +23,7 @@ import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 typedef ReturnBatchSubmitHandler = Future<String?> Function(
   CreateReturnBatchInput input,
 );
+typedef ReturnUpdateHandler = Future<String?> Function(CreateReturnInput input);
 
 /// Record-return page: one bill with the items returned from it.
 ///
@@ -35,6 +36,8 @@ class SubmitReturnScreen extends StatefulWidget {
     required this.backLabel,
     required this.availableBranches,
     required this.onSubmitBatch,
+    this.onUpdate,
+    this.initialReturn,
     required this.onClose,
     required this.onSaved,
     this.initialBranchId,
@@ -47,6 +50,8 @@ class SubmitReturnScreen extends StatefulWidget {
   final List<BranchSummary> availableBranches;
   final String? initialBranchId;
   final ReturnBatchSubmitHandler onSubmitBatch;
+  final ReturnUpdateHandler? onUpdate;
+  final ReturnItem? initialReturn;
   final VoidCallback onClose;
   final VoidCallback onSaved;
 
@@ -83,8 +88,34 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
         : (widget.availableBranches.isNotEmpty
               ? widget.availableBranches.first.id
               : null);
-    // Initialize with 1 item row
-    _items.add(ReturnItemDraft());
+    final existing = widget.initialReturn;
+    if (existing == null) {
+      _items.add(ReturnItemDraft());
+    } else {
+      _invoiceController.text = existing.invoiceNumber;
+      _returnDate = existing.returnDate;
+      _imagePath = existing.billImageUrl;
+      const supportedUnits = {
+        'kg',
+        'units',
+        'boxes',
+        'crates',
+        'liters',
+        'dozens',
+        'packets',
+      };
+      _items.add(
+        ReturnItemDraft(
+          product: existing.productTitle,
+          quantity: existing.quantity.toString(),
+          unit: supportedUnits.contains(existing.unit)
+              ? existing.unit
+              : 'units',
+          reason: existing.reason,
+          remarks: existing.remarks ?? '',
+        ),
+      );
+    }
   }
 
   @override
@@ -182,32 +213,59 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
 
     if (iErr != null || hasItemErrors) return;
 
-    final selectedBranch = widget.availableBranches
-        .where((b) => b.id == _selectedBranchId)
-        .firstOrNull;
-
-    final batchInput = CreateReturnBatchInput(
-      branchId: _selectedBranchId,
-      branchName: selectedBranch?.name,
-      billNumber: bill.isEmpty ? null : bill,
-      invoiceNumber: invoice,
-      returnDate: _returnDate,
-      billImageUrl: _imagePath,
-      remarks: _generalRemarksController.text.trim().isEmpty
-          ? null
-          : _generalRemarksController.text.trim(),
-      items: _items.map((item) {
-        return ReturnLineItemInput(
-          productTitle: item.productController.text.trim(),
-          quantity: double.tryParse(item.quantityController.text.trim()) ?? 1.0,
-          unit: item.unit,
-          reason: item.reason,
-          remarks: item.remarksController.text.trim().isEmpty
-              ? null
-              : item.remarksController.text.trim(),
-        );
-      }).toList(),
-    );
+    late final CreateReturnBatchInput? batchInput;
+    late final CreateReturnInput? updateInput;
+    final existing = widget.initialReturn;
+    if (existing != null) {
+      final item = _items.single;
+      final remarks = [
+        if (item.remarksController.text.trim().isNotEmpty)
+          item.remarksController.text.trim(),
+        if (_generalRemarksController.text.trim().isNotEmpty)
+          _generalRemarksController.text.trim(),
+      ].join(' - ');
+      updateInput = CreateReturnInput(
+        branchId: existing.branchId,
+        branchName: existing.branchName,
+        invoiceNumber: invoice,
+        returnDate: existing.returnDate,
+        productTitle: item.productController.text.trim(),
+        quantity: double.tryParse(item.quantityController.text.trim()) ?? 1.0,
+        unit: item.unit,
+        reason: item.reason,
+        billImageUrl: _imagePath,
+        remarks: remarks.isEmpty ? null : remarks,
+      );
+      batchInput = null;
+    } else {
+      final selectedBranch = widget.availableBranches
+          .where((b) => b.id == _selectedBranchId)
+          .firstOrNull;
+      batchInput = CreateReturnBatchInput(
+        branchId: _selectedBranchId,
+        branchName: selectedBranch?.name,
+        billNumber: bill.isEmpty ? null : bill,
+        invoiceNumber: invoice,
+        returnDate: _returnDate,
+        billImageUrl: _imagePath,
+        remarks: _generalRemarksController.text.trim().isEmpty
+            ? null
+            : _generalRemarksController.text.trim(),
+        items: _items.map((item) {
+          return ReturnLineItemInput(
+            productTitle: item.productController.text.trim(),
+            quantity:
+                double.tryParse(item.quantityController.text.trim()) ?? 1.0,
+            unit: item.unit,
+            reason: item.reason,
+            remarks: item.remarksController.text.trim().isEmpty
+                ? null
+                : item.remarksController.text.trim(),
+          );
+        }).toList(),
+      );
+      updateInput = null;
+    }
 
     setState(() {
       _isSubmitting = true;
@@ -216,7 +274,14 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
 
     String? error;
     try {
-      error = await widget.onSubmitBatch(batchInput);
+      if (updateInput != null) {
+        final handler = widget.onUpdate;
+        error = handler == null
+            ? 'This return cannot be edited.'
+            : await handler(updateInput);
+      } else {
+        error = await widget.onSubmitBatch(batchInput!);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -231,8 +296,11 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
   @override
   Widget build(BuildContext context) {
     final itemCount = _items.length;
+    final isEditing = widget.initialReturn != null;
     final footer = FormActionRow(
-      submitLabel: itemCount == 1
+      submitLabel: isEditing
+          ? 'Save Changes'
+          : itemCount == 1
           ? 'Submit Return'
           : 'Submit Return ($itemCount items)',
       onCancel: widget.onClose,
@@ -260,14 +328,18 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
                   children: [
                     PageBreadcrumb(
                       backLabel: widget.backLabel,
-                      currentLabel: 'New return',
+                      currentLabel: isEditing
+                          ? 'Edit Return #${widget.initialReturn!.id}'
+                          : 'New return',
                       onBack: widget.onClose,
                     ),
                     const SizedBox(height: AppSpacing.md),
                     AppPageHeader(
                       eyebrow: widget.eyebrow,
-                      title: 'Record Return',
-                      subtitle: 'Capture bill details and record returned items with reasons.',
+                      title: isEditing ? 'Edit Return' : 'Record Return',
+                      subtitle: isEditing
+                          ? 'Update this pending return request.'
+                          : 'Capture bill details and record returned items with reasons.',
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     DashboardSurfaceCard(
@@ -291,6 +363,7 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
   }
 
   Widget _buildForm(int itemCount) {
+    final isEditing = widget.initialReturn != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -300,7 +373,7 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
         ],
 
         // 1. Branch Selector (when multiple branches available)
-        if (widget.availableBranches.length > 1) ...[
+        if (!isEditing && widget.availableBranches.length > 1) ...[
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -331,40 +404,51 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
         ],
 
         // 2. Bill Number & Invoice Number Row
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AppTextField(
-                controller: _billController,
-                label: 'Bill Number *',
-                hintText: 'e.g. BILL-4092',
-                prefixIcon: const Icon(Icons.receipt_outlined, size: 20),
+        if (isEditing)
+          AppTextField(
+            controller: _invoiceController,
+            label: 'Invoice Number *',
+            hintText: 'e.g. INV-2026-8812',
+            prefixIcon: const Icon(Icons.tag_rounded, size: 20),
+            errorText: _invoiceError,
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: AppTextField(
+                  controller: _billController,
+                  label: 'Bill Number *',
+                  hintText: 'e.g. BILL-4092',
+                  prefixIcon: const Icon(Icons.receipt_outlined, size: 20),
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppTextField(
-                controller: _invoiceController,
-                label: 'Invoice Number *',
-                hintText: 'e.g. INV-2026-8812',
-                prefixIcon: const Icon(Icons.tag_rounded, size: 20),
-                errorText: _invoiceError,
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppTextField(
+                  controller: _invoiceController,
+                  label: 'Invoice Number *',
+                  hintText: 'e.g. INV-2026-8812',
+                  prefixIcon: const Icon(Icons.tag_rounded, size: 20),
+                  errorText: _invoiceError,
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
+            ],
+          ),
+        if (!isEditing) const SizedBox(height: AppSpacing.md),
 
         // 3. Return Date Picker
-        AppDatePickerField(
-          label: 'Return Date *',
-          valueText: _dateFormat.format(_returnDate),
-          hintText: 'Select Date',
-          prefixIcon: const Icon(Icons.event_note_rounded, size: 20),
-          onTap: _pickReturnDate,
-        ),
-        const SizedBox(height: AppSpacing.md),
+        if (!isEditing) ...[
+          AppDatePickerField(
+            label: 'Return Date *',
+            valueText: _dateFormat.format(_returnDate),
+            hintText: 'Select Date',
+            prefixIcon: const Icon(Icons.event_note_rounded, size: 20),
+            onTap: _pickReturnDate,
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
 
         // 4. Bill Photo Upload
         ReturnImagePicker(
@@ -378,7 +462,7 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
         Row(
           children: [
             Text(
-              'Items to Return',
+              isEditing ? 'Return Item' : 'Items to Return',
               style: AppTypography.titleMedium.copyWith(
                 fontWeight: FontWeight.bold,
                 color: AppColors.onSurface,
@@ -403,16 +487,19 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
               ),
             ),
             const Spacer(),
-            TextButton.icon(
-              onPressed: _addItem,
-              icon: const Icon(Icons.add_circle_outline, size: 18),
-              label: const Text('Add Item'),
-            ),
+            if (!isEditing)
+              TextButton.icon(
+                onPressed: _addItem,
+                icon: const Icon(Icons.add_circle_outline, size: 18),
+                label: const Text('Add Item'),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Add each product being returned from this bill along with its quantity and reason.',
+          isEditing
+              ? 'Update the product details, quantity, reason, photo, or remarks.'
+              : 'Add each product being returned from this bill along with its quantity and reason.',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.onSurfaceVariant,
           ),
@@ -435,30 +522,33 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
         const SizedBox(height: AppSpacing.xs),
 
         // Add Another Item Button
-        OutlinedButton.icon(
-          onPressed: _addItem,
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            side: const BorderSide(color: AppColors.primary),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        if (!isEditing)
+          OutlinedButton.icon(
+            onPressed: _addItem,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              side: const BorderSide(color: AppColors.primary),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+            ),
+            icon: const Icon(Icons.add_circle_outline, size: 20),
+            label: Text(
+              itemCount == 1
+                  ? '+ Add Another Item from this Bill'
+                  : '+ Add Another Item',
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
-          icon: const Icon(Icons.add_circle_outline, size: 20),
-          label: Text(
-            itemCount == 1
-                ? '+ Add Another Item from this Bill'
-                : '+ Add Another Item',
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
 
         const SizedBox(height: AppSpacing.xl),
 
         // 7. General Bill-Level Remarks (Optional)
         AppTextField(
           controller: _generalRemarksController,
-          label: 'General Remarks / Notes (Optional)',
+          label: isEditing
+              ? 'Additional Remarks (Optional)'
+              : 'General Remarks / Notes (Optional)',
           hintText:
               'Overall notes, customer circumstances, or manager remarks...',
           minLines: 2,

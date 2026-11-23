@@ -104,6 +104,18 @@ class MockReturnsRepository implements ReturnsRepository {
   }
 
   @override
+  Future<void> updateReturn({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required ReturnItem returnItem,
+    required CreateReturnInput input,
+  }) async {
+    _scope.forUpdate(access, activeBranchId, returnItem);
+    await _latency();
+    _dataSource.updateReturn(returnId: returnItem.id, input: input);
+  }
+
+  @override
   Future<ReturnItem> reviewReturn({
     required UserAccessContext access,
     String? activeBranchId,

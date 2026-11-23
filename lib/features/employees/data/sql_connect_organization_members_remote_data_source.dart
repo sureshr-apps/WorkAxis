@@ -92,6 +92,17 @@ class SqlConnectOrganizationMembersRemoteDataSource
   }) {
     final role = m.string('role');
     final status = m.string('status');
+    final assignments =
+        m.optObjects('userBranchAssignments_on_member') ??
+        const <Map<String, dynamic>>[];
+    final branchNamesById = <String, String>{};
+    for (final assignment in assignments) {
+      final branch = assignment.object('branch');
+      final name = branch.optString('name');
+      if (name != null && name.trim().isNotEmpty) {
+        branchNamesById[branch.string('id')] = name;
+      }
+    }
     return OrganizationMember(
       id: m.string('id'),
       authUid: m.optString('authUid'),
@@ -105,11 +116,10 @@ class SqlConnectOrganizationMembersRemoteDataSource
           UserRole.values.where((r) => r.name == role).firstOrNull ??
           UserRole.employee,
       branchIds: List.unmodifiable([
-        for (final a
-            in m.optObjects('userBranchAssignments_on_member') ??
-                const <Map<String, dynamic>>[])
-          a.object('branch').string('id'),
+        for (final assignment in assignments)
+          assignment.object('branch').string('id'),
       ]),
+      branchNamesById: Map.unmodifiable(branchNamesById),
       status:
           AccountStatus.values.where((s) => s.name == status).firstOrNull ??
           AccountStatus.suspended,

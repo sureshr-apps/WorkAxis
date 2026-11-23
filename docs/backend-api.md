@@ -241,11 +241,13 @@ Branch Manager (BM) = assigned branches only. Paged operations take
 | `ListMyReturns` | Any signed-in member (own submissions) | `status` | `returnRecords`, `total` |
 | `SubmitReturn` | Employee, BM (own active branch) | `branchId`, `productTitle`, `quantity`, `unit`, `invoiceNumber`, `returnReason`, `billImageUrl`, `remarks` | `returnRecord_insert` |
 | `CreateReturnRecord` | Employee, BM (legacy; client-supplied id) | `id`, `orgId`, `branchId`, `employeeId`, `customerName`, `amount`, `invoiceNumber`, `returnReason` | `returnRecord_insert` |
+| `UpdateReturnRecord` | Employee or BM who filed it; pending only | `id`, `productTitle`, `quantity`, `unit`, `invoiceNumber`, `returnReason`, `billImageUrl`, `remarks` | `returnRecord_update` |
 | `UpdateReturnRecordReview` | Org Admin of its org; another BM assigned to the branch (pending only) | `id`, `status` (approved/rejected), `reviewerNotes` | `returnRecord_update` |
 | `UpdateReturnRecordStatus` | Same as review (legacy, no notes) | `id`, `status` | `returnRecord_update` |
 
 Submitter and reviewer identity, organization and timestamps are stamped server-side.
 Branch Managers cannot review returns they submitted themselves; an Organization Admin or another Branch Manager assigned to that branch must review them.
+The submitter can edit their own return only while it is pending; approved and rejected returns are immutable.
 
 ### Leaves (`ops/leaves.ts`)
 

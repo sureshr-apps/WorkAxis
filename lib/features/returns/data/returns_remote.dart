@@ -40,6 +40,12 @@ abstract interface class ReturnsRemote {
     required CreateReturnInput input,
   });
 
+  /// Updates a return submitted by the authenticated member, while pending.
+  Future<void> update({
+    required String returnId,
+    required CreateReturnInput input,
+  });
+
   /// `UpdateReturnRecordReview`; the reviewer is derived on the server.
   Future<void> review({
     required String returnId,

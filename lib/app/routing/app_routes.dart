@@ -106,6 +106,8 @@ abstract final class AppRoutes {
       '/branch-manager/returns/add';
   static String branchManagerReturnDetailsPath(String id) =>
       '/branch-manager/returns/$id';
+  static String branchManagerReturnEditPath(String id) =>
+      '/branch-manager/returns/$id/edit';
   static const String branchManagerAttendanceGroupPath =
       '/branch-manager/attendance/group';
   static String branchManagerAttendanceDetailsPath(String id) =>
@@ -124,6 +126,8 @@ abstract final class AppRoutes {
       '/employee/off-site-work/$id';
   static const String employeeReturnAddPath = '/employee/returns/add';
   static String employeeReturnDetailsPath(String id) => '/employee/returns/$id';
+  static String employeeReturnEditPath(String id) =>
+      '/employee/returns/$id/edit';
   static String employeeAttendanceDetailsPath(String id) =>
       '/employee/attendance/$id';
 }

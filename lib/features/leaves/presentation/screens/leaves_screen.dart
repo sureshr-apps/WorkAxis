@@ -163,7 +163,7 @@ class _LeavesScreenState extends State<LeavesScreen> {
     );
   }
 
-  List<LeaveRequest> _visibleRequests(
+  List<LeaveRequest> _queueRequests(
     LeavesController controller,
     UserAccessContext access,
   ) {
@@ -179,6 +179,11 @@ class _LeavesScreenState extends State<LeavesScreen> {
                   item.branchId == _currentBranchId,
             );
     }
+    return requests.toList(growable: false);
+  }
+
+  List<LeaveRequest> _visibleRequests(List<LeaveRequest> queueRequests) {
+    Iterable<LeaveRequest> requests = queueRequests;
     if (_statusFilter != null) {
       requests = requests.where((item) => item.status == _statusFilter);
     }
@@ -196,7 +201,8 @@ class _LeavesScreenState extends State<LeavesScreen> {
     final isEmployee = role == UserRole.employee;
     final isManager = role == UserRole.branchManager;
     final canApply = isEmployee || isManager;
-    final items = _visibleRequests(controller, access);
+    final queueRequests = _queueRequests(controller, access);
+    final items = _visibleRequests(queueRequests);
     final activeBranchName = _branchController.activeBranch?.branchName;
 
     return Scaffold(
@@ -261,7 +267,7 @@ class _LeavesScreenState extends State<LeavesScreen> {
                   selected: _statusFilter,
                   onSelected: (status) =>
                       setState(() => _statusFilter = status),
-                  pendingCount: controller.pendingCount,
+                  requests: queueRequests,
                 ),
               ),
             ),
@@ -375,12 +381,12 @@ class _StatusFilters extends StatelessWidget {
   const _StatusFilters({
     required this.selected,
     required this.onSelected,
-    required this.pendingCount,
+    required this.requests,
   });
 
   final LeaveStatus? selected;
   final ValueChanged<LeaveStatus?> onSelected;
-  final int pendingCount;
+  final List<LeaveRequest> requests;
 
   @override
   Widget build(BuildContext context) => Wrap(
@@ -388,16 +394,14 @@ class _StatusFilters extends StatelessWidget {
     runSpacing: AppSpacing.xs,
     children: [
       FilterChip(
-        label: Text('All'),
+        label: Text('All (${requests.length})'),
         selected: selected == null,
         onSelected: (_) => onSelected(null),
       ),
       for (final status in LeaveStatus.values)
         FilterChip(
           label: Text(
-            status == LeaveStatus.pending && pendingCount > 0
-                ? 'Pending ($pendingCount)'
-                : status.label,
+            '${status.label} (${requests.where((request) => request.status == status).length})',
           ),
           selected: selected == status,
           onSelected: (_) => onSelected(status),

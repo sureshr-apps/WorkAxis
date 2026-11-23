@@ -188,11 +188,17 @@ export const assetsOps: OperationRegistry = {
     await validateActiveBranch(db, actor, vars, branchId);
     return listAssets(
       db,
-      `ea.organization_id = $1 AND ea.branch_id = $2
+      `ea.organization_id = $1
        AND m.role = 'employee'
        AND EXISTS (
-         SELECT 1 FROM user_branch_assignment a
-          WHERE a.member_id = ea.employee_member_id AND a.branch_id = ea.branch_id
+         SELECT 1 FROM user_branch_assignment managed_scope
+          WHERE managed_scope.member_id = ea.employee_member_id
+            AND managed_scope.branch_id = $2
+       )
+       AND EXISTS (
+         SELECT 1 FROM user_branch_assignment asset_scope
+          WHERE asset_scope.member_id = ea.employee_member_id
+            AND asset_scope.branch_id = ea.branch_id
        )`,
       [actor.organizationId, branchId],
     );
