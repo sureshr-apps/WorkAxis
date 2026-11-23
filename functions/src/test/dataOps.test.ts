@@ -376,7 +376,7 @@ describe("members ops", () => {
     };
     assert.deepEqual(res.total, [{ _count: 1 }]);
     assert.deepEqual(res.userBranchAssignments[0].member.userBranchAssignments_on_member, [
-      { branch: { id: "b1" } },
+      { branch: { id: "b1", name: "B" } },
     ]);
   });
 
