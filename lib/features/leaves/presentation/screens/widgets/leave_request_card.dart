@@ -116,39 +116,42 @@ class LeaveRequestCard extends StatelessWidget {
           ],
           if (onEdit != null || onReview != null) ...[
             const SizedBox(height: AppSpacing.md),
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                if (onEdit != null)
-                  AppButton.outlined(
-                    text: 'Edit pending request',
-                    iconData: Icons.edit_outlined,
-                    isFullWidth: false,
-                    onPressed: isSaving ? null : onEdit,
-                  ),
-                if (onReview != null)
-                  AppButton.secondary(
-                    text: 'Approve',
-                    iconData: Icons.check_rounded,
-                    isFullWidth: false,
-                    onPressed: isSaving
-                        ? null
-                        : () => onReview!(LeaveStatus.approved),
-                    isLoading: isSaving,
-                  ),
-                if (onReview != null)
-                  AppButton.outlined(
-                    text: 'Reject',
-                    iconData: Icons.close_rounded,
-                    isFullWidth: false,
-                    onPressed: isSaving
-                        ? null
-                        : () => onReview!(LeaveStatus.rejected),
-                    isLoading: isSaving,
-                  ),
-              ],
+            SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  if (onEdit != null)
+                    AppButton.outlined(
+                      text: 'Edit pending request',
+                      iconData: Icons.edit_outlined,
+                      isFullWidth: false,
+                      onPressed: isSaving ? null : onEdit,
+                    ),
+                  if (onReview != null)
+                    AppButton.secondary(
+                      text: 'Approve',
+                      iconData: Icons.check_rounded,
+                      isFullWidth: false,
+                      onPressed: isSaving
+                          ? null
+                          : () => onReview!(LeaveStatus.approved),
+                      isLoading: isSaving,
+                    ),
+                  if (onReview != null)
+                    AppButton.outlined(
+                      text: 'Reject',
+                      iconData: Icons.close_rounded,
+                      isFullWidth: false,
+                      onPressed: isSaving
+                          ? null
+                          : () => onReview!(LeaveStatus.rejected),
+                      isLoading: isSaving,
+                    ),
+                ],
+              ),
             ),
           ],
         ],
