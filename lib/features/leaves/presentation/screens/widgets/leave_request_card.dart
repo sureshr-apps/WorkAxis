@@ -117,9 +117,7 @@ class LeaveRequestCard extends StatelessWidget {
           if (onEdit != null || onReview != null) ...[
             const SizedBox(height: AppSpacing.md),
             Wrap(
-              alignment: onEdit != null
-                  ? WrapAlignment.end
-                  : WrapAlignment.start,
+              alignment: WrapAlignment.end,
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
