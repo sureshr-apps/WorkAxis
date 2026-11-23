@@ -181,7 +181,9 @@ No function can create a `platformOwner`. Once, using the Admin SDK or the
 console with a trusted credential: create the Auth user; insert the SQL
 member (`role: "platformOwner"`, no organization, `authUid` = uid) directly
 in SQL; set claims `{role: "platformOwner", branchIds: [], status:
-"active"}`; write `users/{uid}` and aliases `user_aliases/{username}` =
+"active"}`; write `users/{uid}` = `{role: "platformOwner", status: "active",
+branchIds: [], activeBranchIds: []}` (the rules deny any caller without it)
+and aliases `user_aliases/{username}` =
 `{userId, email}`. Seed members (`functions/db/seed/seed_data.sql`) have
 `auth_uid = NULL` and cannot call any function until linked.
 
@@ -196,7 +198,22 @@ writes (members, assignments, role, status) and branch saves have no `dataOp`
 operation: use the callables. Name filters are case-insensitive (`ILIKE`).
 Platform = platformOwner or platformAdmin; Org Admin = own organization only;
 Branch Manager (BM) = assigned branches only. Paged operations take
-`limit`/`offset` and also return `total`.
+`limit`/`offset` and also return `total`. Returns are ordered by business
+return date (newest first); leave requests pending first, then by start date.
+The app never walks every page of these lists: screens load one page at a time
+("Load more") and take KPI and filter totals from the count operations.
+
+**Retry-safe creates.** `SubmitReturn`, `SubmitReturnBatch`,
+`SubmitLeaveRequest`, and `CreateOffSiteWorkAssignment` accept an optional
+`requestId` (8–100 characters). The server stores
+`sha256(callerUid:organizationId:requestId)` and a hash of the validated
+payload on the created row(s) (`012_idempotent_creates.sql`). A repeat call
+with the same `requestId` and details returns the original result without
+writing; the same `requestId` with different details fails with
+`already-exists`. Concurrent duplicates race on a partial unique index and the
+loser replays the winner. The app (`IdempotentCreates`) keeps one `requestId`
+per distinct create until a call succeeds. Calls without a `requestId` behave
+as before.
 
 ### Organizations (`ops/organizations.ts`)
 
@@ -236,10 +253,13 @@ Branch Manager (BM) = assigned branches only. Paged operations take
 | Operation | Who may call | Key vars | Response keys |
 | --- | --- | --- | --- |
 | `ListReturnsByBranch` | Org Admin of its org; BM assigned (latest 200) | `branchId` | `returnRecords` |
-| `ListReturnsByBranchPaged` | Org Admin; BM assigned | `branchId`, `status` | `returnRecords`, `total` |
-| `ListReturnsByOrgPaged` | Platform; Org Admin | `orgId`, `branchId`, `status` | `returnRecords`, `total` |
-| `ListMyReturns` | Any signed-in member (own submissions) | `status` | `returnRecords`, `total` |
-| `SubmitReturn` | Employee, BM (own active branch) | `branchId`, `productTitle`, `quantity`, `unit`, `invoiceNumber`, `returnReason`, `billImageUrl`, `remarks` | `returnRecord_insert` |
+| `ListReturnsByBranchPaged` | Org Admin; BM assigned | `branchId`, `limit`, `offset`, optional `status`, `query`, `submitter` (`mine` / `others`: the caller's own submissions or everyone else's) | `returnRecords`, `total` |
+| `ListReturnsByOrgPaged` | Platform; Org Admin | `orgId`, `limit`, `offset`, optional `branchId`, `status`, `query` | `returnRecords`, `total` |
+| `ListMyReturns` | Any signed-in member (own submissions) | `limit`, `offset`, optional `status`, `query` | `returnRecords`, `total` |
+| `GetReturnStatusCounts` | Same scopes as the lists | `scope` (`mine`; `branch` + `branchId`, optional `submitter`; `organization` + `orgId`, optional `branchId`) | `counts` = `{pending, approved, rejected}` (ignores status and search) |
+| `GetReturnById` | Its submitter; Org Admin of its org; BM assigned to its branch | `id` | `returnRecord` (with `branch`), or null when out of scope |
+| `SubmitReturn` | Employee, BM (own active branch) | `branchId`, `productTitle`, `quantity`, `unit`, `invoiceNumber`, `returnReason`, optional `billNumber`, `returnDate` (`YYYY-MM-DD` business date, not after today in Asia/Kolkata; defaults to today), `billImageUrl`, `remarks` | `returnRecord_insert` |
+| `SubmitReturnBatch` | Employee, BM (own active branch) | `branchId`, `invoiceNumber`, optional `billNumber`, `returnDate`, `billImageUrl`, and `items` (1–50 of `productTitle`, `quantity`, `unit`, `returnReason`, optional `remarks`). All lines are saved in one transaction, or none. | `returnRecord_inserts` (ids in line order) |
 | `CreateReturnRecord` | Employee, BM (legacy; client-supplied id) | `id`, `orgId`, `branchId`, `employeeId`, `customerName`, `amount`, `invoiceNumber`, `returnReason` | `returnRecord_insert` |
 | `UpdateReturnRecord` | Employee or BM who filed it; pending only | `id`, `productTitle`, `quantity`, `unit`, `invoiceNumber`, `returnReason`, `billImageUrl`, `remarks` | `returnRecord_update` |
 | `UpdateReturnRecordReview` | Org Admin of its org; another BM assigned to the branch (pending only) | `id`, `status` (approved/rejected), `reviewerNotes` | `returnRecord_update` |
@@ -259,8 +279,9 @@ screen and operations. PostgreSQL is authoritative for leave requests.
 | `ListMyLeaveRequests` | Employee or Branch Manager | `limit`, `offset`, optional `status` | `leaveRequests`, `total` |
 | `ListOrganizationLeaveRequestsPaged` | Organization Admin of its organization | `limit`, `offset`, optional `branchId`, `status` | `leaveRequests`, `total` |
 | `ListEmployeeLeaveRequestsByBranchPaged` | Branch Manager assigned to the active branch | `branchId`, `limit`, `offset`, optional `status` | `leaveRequests`, `total` |
-| `SubmitLeaveRequest` | Employee or Branch Manager for an active assigned branch | `branchId`, `leaveType`, `startDate`, `endDate`, `reason`; Branch Manager also sends `activeBranchId` | `leaveRequest` |
-| `UpdateMyPendingLeaveRequest` | Applicant, while request is pending | `id`, `leaveType`, `startDate`, `endDate`, `reason`; Branch Manager also sends `activeBranchId` | `leaveRequest` |
+| `GetLeaveStatusCounts` | Same scopes as the lists | `scope` (`mine`; `branchEmployees` + `branchId`; `organization`, optional `branchId`) | `counts` = `{pending, approved, rejected}` |
+| `SubmitLeaveRequest` | Employee or Branch Manager for an active assigned branch | `branchId`, `leaveTypeId`, `startDate`, `endDate`, `reason`; Branch Manager also sends `activeBranchId` | `leaveRequest` |
+| `UpdateMyPendingLeaveRequest` | Applicant, while request is pending | `id`, `leaveTypeId`, `startDate`, `endDate`, `reason`; Branch Manager also sends `activeBranchId` | `leaveRequest` |
 | `ReviewLeaveRequest` | Organization Admin in its organization; Branch Manager for an employee in the active assigned branch | `id`, `status` (`approved`/`rejected`), optional `reviewerNotes`; Branch Manager also sends `activeBranchId` | `leaveRequest` |
 
 The server derives applicant/reviewer identity and organization. Branch Managers
@@ -353,6 +374,20 @@ Changing, modifying or renewing an organization without a license is
   - "This organization has reached its plan limit of N active stores. Deactivate an existing store before adding or activating another store."
 
 ## 4. Firestore rules summary
+
+**Live access gate.** An ID token keeps its claims for up to an hour, so a
+suspension, role change or branch removal would otherwise reach the rules
+late. Every Firestore and Storage rule helper therefore also reads the caller's
+`users/{uid}` profile: its `status` must be `active`, its `role` and
+`organizationId` must match the token, and branch access needs the branch in
+both the token's `branchIds` and the profile's `activeBranchIds` (falling back
+to `branchIds` on profiles written before that field existed). A caller with no
+profile is denied, so the Platform Owner bootstrap must write `users/{uid}`.
+`refreshProjection` writes the profile before claims and sign-in state, so the
+change applies on the caller's next request. Each authorized request costs one
+extra Firestore document read. Storage reads the profile with cross-service
+rules: the first deploy of `storage.rules` asks to grant the Storage service
+agent read access to Firestore, which must be accepted.
 
 - `user_aliases`: no client access (`get, list, write: false`).
 - `users/{uid}`: read own profile; platform roles read all; Org Admin reads
@@ -525,6 +560,9 @@ unique within an organization.
   Admin's organization.
 - `ListBranchEmployeeAssets` requires a Branch Manager's assigned active branch
   and returns assets for employees currently assigned to that outlet.
+- The three asset lists take `limit`, `offset` and an optional `query` (asset
+  name, category, tag, serial number, holder or branch) and return `total`.
+  Without `limit` they return at most 500 rows (older clients only).
 - `SaveEmployeeAsset` and `DeleteEmployeeAsset` allow Organization Admins in
   their organization and Branch Managers only for employees and assets within
   the selected outlet. Employee accounts are read-only.
@@ -636,12 +674,61 @@ pay and overtime off. Payroll reads effective schedule, compensation,
 attendance, and approved leave for the requested Asia/Kolkata calendar month.
 Hours-based pay caps regular payable hours at the scheduled daily duration;
 workday mode counts at most one full scheduled day for a valid punch. Approved
-leave is unpaid. When overtime is enabled, daily hours above the schedule are
+leave within the leave type's allowance is paid as a full scheduled day; leave
+beyond it is unpaid (see Leave policy below). Days before the joining date or
+after the relieving date (from `users/{uid}`) still count when the monthly
+salary is divided, but earn nothing, so a mid-month joiner or leaver is paid
+only for their employed days. When overtime is enabled, daily hours above the schedule are
 paid separately at 1× the regular hourly rate. The operation returns gross
 pay and the calculation breakdown. Individual PDF payslips and the monthly
 XLSX report are generated in Flutter from this already scoped result; exports
 do not call a separate backend operation.
 
 Local tests cover the calculator, history operations, access checks, and
-attendance session rules with `FakeDb`. Migration 010 was applied to production
+attendance session rules with `FakeDb`.
+
+### Leave policy and paid leave
+
+Leave types are defined per organization (`013_leave_policies.sql`):
+`leave_type` (name, `paid`, archived flag), `leave_type_allowance` (yearly
+days and carry-forward, effective-dated) and `organization_leave_policy`
+(monthly accrual on or off, effective-dated). A database trigger gives every
+new organization only the built-in Unpaid leave type (never paid, cannot be
+removed) and yearly availability; Org Admins add their own paid types.
+Migration 013 replaces the former fixed `leave_request.leave_type` code with
+`leave_type_id` and expects no existing leave requests (pre-production).
+
+| Operation | Who may call | Key vars | Response keys |
+| --- | --- | --- | --- |
+| `ListLeaveTypes` | Any organization member | — | `leaveTypes` = `[{id, name, paid}]` (active) |
+| `GetLeavePolicy` | Org Admin | — | `leavePolicy` = `{monthlyAccrual, leaveTypes: [{id, name, paid, yearlyDays, carryForward}]}` (allowances in force today) |
+| `SaveLeaveType` | Org Admin | optional `id`, `name`, `yearlyDays` (0–366, two decimals), `carryForward` | `leaveType` |
+| `ArchiveLeaveType` | Org Admin | `id` (not the unpaid type) | `leaveType` |
+| `SetLeaveAccrual` | Org Admin | `monthlyAccrual` | `leavePolicy` |
+| `PreviewLeaveRequest` | Applicant (`leaveTypeId`, `startDate`, `endDate`, optional `id` of the request being edited) or reviewer (`id`; Branch Manager also `activeBranchId`) | | `leavePreview` = `{leaveTypeId, availableDays, workdays, paidDays, unpaidDays}` |
+
+Leave requests carry `leaveTypeId` (rows also return `leaveTypeName` and
+`leaveTypePaid`); `SubmitLeaveRequest` and `UpdateMyPendingLeaveRequest`
+require `leaveTypeId`, an active type of the caller's organization.
+
+Whether an approved leave day is paid is decided by the leave ledger
+(`functions/src/payroll/leaveLedger.ts`), walking the member's approved leave
+in date order:
+
+- Only scheduled working days count (not the weekly day off), and only between
+  the joining and relieving dates.
+- A day is paid while at least one whole day of the type's allowance remains;
+  later days are unpaid. Applying beyond the balance is allowed.
+- The yearly allowance is pro-rated from the joining month in the joining year.
+- With monthly accrual, 1/12 of the yearly allowance becomes available each
+  month and unused accrual stays available for the rest of the year; without
+  it the year's allowance is available from January.
+- Unused days lapse on 31 December unless the type's allowance in force that
+  day carries forward; carried days add to the next year.
+- The allowance accrues 1/12 per month, each month at the rate in force when
+  it began, so an allowance change takes effect from the next month; the
+  accrual setting takes effect from the day it is changed (Asia/Kolkata).
+  Earlier days, and payroll for them, do not change.
+- The Unpaid leave type is never paid.
+ Migration 010 was applied to production
 on 22 November 2026. The legacy Firestore backfill callable has been removed.

@@ -37,7 +37,8 @@ This file is the working specification for employee details, schedules, weekly d
 - An organization setting selects the pay calculation basis. Default to hours-based calculation. The alternate workday-based mode pays a full scheduled workday share when an employee has any valid attendance punch that day, even if the employee worked only one hour.
 - Hours-based gross pay is monthly salary multiplied by payable hours divided by scheduled hours in the calendar month. Exclude weekly days off from scheduled hours.
 - Workday-based gross pay is monthly salary multiplied by payable workdays divided by scheduled workdays in the calendar month. Exclude weekly days off from scheduled workdays. Count at most one payable workday per employee per scheduled day, regardless of the number of branch sessions.
-- Approved leave is unpaid and contributes no payable hours or workdays.
+- Approved leave within the leave type's allowance is paid as a full scheduled day; approved leave beyond the allowance is unpaid and contributes no payable hours or workdays. Organization Admins define leave types with a yearly allowance, optional monthly accrual (1/12 a month, unused accrual carrying to later months), and per-type carry-forward of unused days into the next year (otherwise they lapse on 31 December). Allowances are pro-rated from the joining month; an allowance change applies from the next month (months already started keep the old rate) and an accrual change from the day it is made.
+- An employee who joins or leaves mid-month is paid only for the days from the joining date to the relieving date; the monthly salary is still divided over the whole month's scheduled hours or days.
 - Apply each salary rate only over the dates when that salary version is effective within the selected month.
 - Add an organization overtime setting, disabled by default. When enabled, pay actual work hours beyond the scheduled daily hours at the employee’s regular hourly rate. When disabled, hours above the scheduled daily target do not increase pay.
 - Payslips and monthly reports show gross calculated pay. Tax, statutory deductions, benefits, payroll approval, and payment disbursement are outside this scope.
@@ -121,6 +122,8 @@ This file is the working specification for employee details, schedules, weekly d
 - [x] Hours-based pay is the default organization setting; workday-based pay is available as an alternative.
 - [x] Workday-based pay counts one full scheduled day for any valid punch, while hours-based pay uses accumulated session time less breaks.
 - [x] Weekly days off and approved unpaid leave do not create payable time or days.
+- [x] Approved leave within the leave type's allowance is paid; leave beyond it is deducted.
+- [x] Mid-month joiners and leavers are paid only for their employed days.
 - [x] Salary effective-date changes within a month are reflected in the corresponding portions of the calculation.
 - [x] Overtime is disabled by default and adds hours beyond the scheduled daily shift at the regular hourly rate only when enabled.
 - [x] Branch Managers and Organization Admins can view their own payslips and employee payslips within their authorized scope.

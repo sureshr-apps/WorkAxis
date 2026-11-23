@@ -78,6 +78,29 @@ export function assertGroupScope(
     throw denied();
 }
 
+export interface RecordedSession {
+  checkInAt: Date | null;
+  checkOutAt: Date | null;
+}
+
+/**
+ * A group check-in may be back-dated, and finished sessions leave no
+ * session-state document behind. The new session would run from
+ * [checkInAt] until the employee next checks out, so it overlaps any
+ * recorded session that is still open or ended after [checkInAt]. Payroll
+ * sums session hours, so an overlap would be paid twice.
+ */
+export function overlapsRecordedSession(
+  checkInAt: Date,
+  sessions: readonly RecordedSession[],
+): boolean {
+  return sessions.some(
+    (session) =>
+      session.checkInAt !== null &&
+      (session.checkOutAt === null || session.checkOutAt > checkInAt),
+  );
+}
+
 export function assertGroupAttendee(
   member: MemberRecord | null,
   organizationId: string,

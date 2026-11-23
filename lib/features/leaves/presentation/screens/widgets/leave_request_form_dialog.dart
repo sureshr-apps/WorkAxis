@@ -6,6 +6,10 @@ import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/leaves/domain/models/leave_request.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_type_option.dart';
+import 'package:workaxis/features/leaves/presentation/controllers/leave_preview_controller.dart';
+import 'package:workaxis/features/leaves/presentation/screens/widgets/leave_preview_summary.dart';
+import 'package:workaxis/features/leaves/presentation/screens/widgets/leave_type_field.dart';
 
 class LeaveRequestFormResult {
   const LeaveRequestFormResult({required this.branchId, required this.draft});
@@ -19,6 +23,8 @@ Future<bool> showLeaveRequestFormDialog({
   required List<BranchSummary> branches,
   required String? initialBranchId,
   required bool branchLocked,
+  required Future<List<LeaveTypeOption>> Function() loadLeaveTypes,
+  required LeavePreviewController preview,
   required Future<bool> Function(LeaveRequestFormResult result) onSubmit,
   String? Function()? failureMessage,
   LeaveRequest? request,
@@ -30,6 +36,8 @@ Future<bool> showLeaveRequestFormDialog({
         branches: branches,
         initialBranchId: initialBranchId,
         branchLocked: branchLocked,
+        loadLeaveTypes: loadLeaveTypes,
+        preview: preview,
         onSubmit: onSubmit,
         failureMessage: failureMessage,
         request: request,
@@ -43,6 +51,8 @@ class LeaveRequestFormDialog extends StatefulWidget {
     required this.branches,
     required this.initialBranchId,
     required this.branchLocked,
+    required this.loadLeaveTypes,
+    required this.preview,
     required this.onSubmit,
     required this.failureMessage,
     this.request,
@@ -51,6 +61,12 @@ class LeaveRequestFormDialog extends StatefulWidget {
   final List<BranchSummary> branches;
   final String? initialBranchId;
   final bool branchLocked;
+
+  /// The organization's active leave types (cached by the caller).
+  final Future<List<LeaveTypeOption>> Function() loadLeaveTypes;
+
+  /// Paid/unpaid preview of the draft; owned and disposed by the caller.
+  final LeavePreviewController preview;
   final Future<bool> Function(LeaveRequestFormResult result) onSubmit;
   final String? Function()? failureMessage;
   final LeaveRequest? request;
@@ -61,7 +77,10 @@ class LeaveRequestFormDialog extends StatefulWidget {
 
 class _LeaveRequestFormDialogState extends State<LeaveRequestFormDialog> {
   final _reasonController = TextEditingController();
-  LeaveType _leaveType = LeaveType.annual;
+  List<LeaveTypeOption>? _leaveTypes;
+  bool _leaveTypesFailed = false;
+  String? _leaveTypeId;
+  String? _leaveTypeError;
   DateTime? _startDate;
   DateTime? _endDate;
   BranchSummary? _branch;
@@ -73,7 +92,6 @@ class _LeaveRequestFormDialogState extends State<LeaveRequestFormDialog> {
   void initState() {
     super.initState();
     final request = widget.request;
-    _leaveType = request?.leaveType ?? LeaveType.annual;
     _startDate = request?.startDate ?? _calendarDay(DateTime.now());
     _endDate = request?.endDate ?? _startDate;
     _reasonController.text = request?.reason ?? '';
@@ -84,6 +102,53 @@ class _LeaveRequestFormDialogState extends State<LeaveRequestFormDialog> {
         )
         .firstOrNull;
     _reasonController.addListener(_onReasonChanged);
+    _loadLeaveTypes();
+  }
+
+  Future<void> _loadLeaveTypes() async {
+    if (_leaveTypesFailed) setState(() => _leaveTypesFailed = false);
+    List<LeaveTypeOption> types;
+    try {
+      types = await widget.loadLeaveTypes();
+    } catch (_) {
+      // The caller's repository already logged and mapped the failure.
+      if (mounted) setState(() => _leaveTypesFailed = true);
+      return;
+    }
+    if (!mounted) return;
+    final request = widget.request;
+    setState(() {
+      _leaveTypes = types;
+      final current = types.where((t) => t.id == request?.leaveTypeId);
+      if (current.isNotEmpty) {
+        _leaveTypeId = current.first.id;
+      } else if (request == null) {
+        _leaveTypeId = types.firstOrNull?.id;
+      } else {
+        // The request's type was archived: the applicant must pick another.
+        _leaveTypeError =
+            '${request.leaveTypeName} is no longer available. '
+            'Choose another leave type.';
+      }
+    });
+    _requestPreview();
+  }
+
+  LeaveTypeOption? get _selectedType =>
+      _leaveTypes?.where((type) => type.id == _leaveTypeId).firstOrNull;
+
+  void _requestPreview() {
+    final typeId = _leaveTypeId;
+    if (typeId == null) {
+      widget.preview.clear();
+      return;
+    }
+    widget.preview.previewDraft(
+      leaveTypeId: typeId,
+      startDate: _startDate!,
+      endDate: _endDate!,
+      editingRequestId: widget.request?.id,
+    );
   }
 
   @override
@@ -120,10 +185,25 @@ class _LeaveRequestFormDialogState extends State<LeaveRequestFormDialog> {
         _endDate = _calendarDay(picked);
       }
     });
+    _requestPreview();
+  }
+
+  void _chooseLeaveType(String? id) {
+    if (id == null || id == _leaveTypeId) return;
+    setState(() {
+      _leaveTypeId = id;
+      _leaveTypeError = null;
+    });
+    _requestPreview();
   }
 
   Future<void> _save() async {
     if (_isSaving) return;
+    final leaveTypeId = _leaveTypeId;
+    if (leaveTypeId == null) {
+      setState(() => _leaveTypeError ??= 'Choose a leave type.');
+      return;
+    }
     final reason = _reasonController.text.trim();
     if (reason.isEmpty) {
       setState(() => _reasonError = 'Enter a reason for your leave.');
@@ -137,7 +217,7 @@ class _LeaveRequestFormDialogState extends State<LeaveRequestFormDialog> {
     final result = LeaveRequestFormResult(
       branchId: branch.id,
       draft: LeaveRequestDraft(
-        leaveType: _leaveType,
+        leaveTypeId: leaveTypeId,
         startDate: _startDate!,
         endDate: _endDate!,
         reason: reason,
@@ -176,6 +256,7 @@ class _LeaveRequestFormDialogState extends State<LeaveRequestFormDialog> {
     final dateError = _endDate!.isBefore(_startDate!)
         ? 'End date must be on or after the start date.'
         : null;
+    final selectedType = _selectedType;
 
     return PopScope(
       canPop: !_isSaving,
@@ -218,19 +299,13 @@ class _LeaveRequestFormDialogState extends State<LeaveRequestFormDialog> {
                       child: Text(_branch!.name),
                     ),
                   const SizedBox(height: AppSpacing.md),
-                  DropdownButtonFormField<LeaveType>(
-                    initialValue: _leaveType,
-                    decoration: const InputDecoration(
-                      labelText: 'Leave type',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      for (final type in LeaveType.values)
-                        DropdownMenuItem(value: type, child: Text(type.label)),
-                    ],
-                    onChanged: (type) {
-                      if (type != null) setState(() => _leaveType = type);
-                    },
+                  LeaveTypeField(
+                    types: _leaveTypes,
+                    failed: _leaveTypesFailed,
+                    selectedId: _leaveTypeId,
+                    errorText: _leaveTypeError,
+                    onChanged: _chooseLeaveType,
+                    onRetry: _loadLeaveTypes,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   _DatePickerField(
@@ -247,6 +322,14 @@ class _LeaveRequestFormDialogState extends State<LeaveRequestFormDialog> {
                     errorText: dateError,
                     onTap: () => _chooseDate(start: false),
                   ),
+                  if (selectedType != null && dateError == null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    LeavePreviewSummary(
+                      controller: widget.preview,
+                      typeName: selectedType.name,
+                      paid: selectedType.paid,
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.md),
                   AppTextField(
                     controller: _reasonController,

@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:workaxis/core/errors/user_message.dart';
 import 'package:workaxis/core/session/session_scoped.dart';
+import 'package:workaxis/core/state/safe_notifier.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/payroll/domain/models/monthly_payroll.dart';
 import 'package:workaxis/features/payroll/domain/repositories/payroll_repository.dart';
 
-class PayslipsController extends ChangeNotifier implements SessionScoped {
+class PayslipsController extends ChangeNotifier
+    with SafeNotifier
+    implements SessionScoped {
   PayslipsController({required this.repository});
 
   final PayrollRepository repository;
@@ -39,11 +42,11 @@ class PayslipsController extends ChangeNotifier implements SessionScoped {
       );
       if (generation != _generation) return;
       _payroll = result;
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (generation != _generation) return;
       _errorMessage = userMessageFor(
         error,
-        null,
+        stackTrace,
         fallback: 'Monthly pay could not be loaded.',
       );
     } finally {

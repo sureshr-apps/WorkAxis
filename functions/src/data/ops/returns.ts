@@ -1,12 +1,20 @@
 import type { Actor } from "../../auth/roles";
 import type { SqlExecutor } from "../../db/executor";
-import { denied, notFound } from "../../errors";
+import { denied, invalid, notFound } from "../../errors";
+import { workDateString } from "../../time/workDate";
 import { optString, reqEnum, reqNumber, reqString } from "../../util/input";
-import { requireManagedBranch, requireOrgAdminScope, requireRole } from "../authz";
+import {
+  isOrgAdminOf,
+  requireActiveBranch,
+  requireManagedBranch,
+  requireOrgAdminScope,
+  requireRole,
+} from "../authz";
+import { type CreationKey, creationKey, idempotentCreate } from "../idempotency";
 import type { OperationContext, OperationRegistry } from "../operation";
 import { nestBranchRef, RETURN_MANAGER_FIELDS, returnCols } from "../projections";
 import { insertReturningId, paged, Query, raw, select, selectOne } from "../sql";
-import { optText, pageVars, reqId } from "../vars";
+import { optEnum, optText, pageVars, parseDate, reqId } from "../vars";
 
 type Row = Record<string, unknown>;
 
@@ -28,6 +36,8 @@ const MY_RETURN_COLS = returnCols("r", [
   "reviewerName",
   "reviewedAt",
   "createdAt",
+  "billNumber",
+  "returnDate",
 ]);
 
 const SUBMITTER_ROLES = ["employee", "branchManager"] as const;
@@ -63,6 +73,11 @@ interface NewReturn {
   unit?: string;
   billImageUrl?: string;
   remarks?: string;
+  billNumber?: string;
+  /** Business date (`YYYY-MM-DD`, Asia/Kolkata); defaults to today. */
+  returnDate?: string;
+  creation?: CreationKey;
+  creationLine?: number;
 }
 
 async function insertReturn(db: SqlExecutor, actor: Actor, r: NewReturn) {
@@ -83,21 +98,18 @@ async function insertReturn(db: SqlExecutor, actor: Actor, r: NewReturn) {
     ["return_reason", r.returnReason],
     ["bill_image_url", r.billImageUrl],
     ["remarks", r.remarks],
+    ["bill_number", r.billNumber],
+    ["return_date", r.returnDate ?? workDateString(new Date())],
+    ["creation_request_key", r.creation?.key],
+    ["creation_line", r.creation ? r.creationLine : undefined],
+    ["creation_fingerprint", r.creation?.fingerprint],
     ["created_at", raw("now()")],
   ]);
 }
 
 /** Active branch of the actor's organization, else the original check message. */
-async function requireActiveBranchOf(db: SqlExecutor, branchId: string, orgId: string | undefined) {
-  const branch = await selectOne<{ status: string; organizationId: string }>(
-    db,
-    `SELECT status, organization_id AS "organizationId" FROM branch WHERE id = $1`,
-    [branchId],
-  );
-  if (!branch || branch.status !== "active" || branch.organizationId !== orgId) {
-    throw denied("Branch not found or inactive.");
-  }
-}
+const requireActiveBranchOf = (db: SqlExecutor, branchId: string, orgId: string | undefined) =>
+  requireActiveBranch(db, branchId, orgId, () => denied("Branch not found or inactive."));
 
 async function review(
   { db, actor }: OperationContext,
@@ -237,6 +249,188 @@ async function updateReturnRecord(
   });
 }
 
+/** Most lines one bill may carry in a single SubmitReturnBatch call. */
+const MAX_BATCH_LINES = 50;
+
+/** Optional business return date; a return cannot be dated after today. */
+function optReturnDate(vars: Row): string | undefined {
+  const v = vars.returnDate;
+  if (v === undefined || v === null || v === "") return undefined;
+  const date = parseDate(v, "returnDate");
+  if (date > workDateString(new Date())) {
+    throw invalid("returnDate cannot be in the future.");
+  }
+  return date;
+}
+
+/** Bill-level fields shared by every line of one submission. */
+function billHeader(vars: Row) {
+  return {
+    invoiceNumber: reqString(vars, "invoiceNumber", 1, 100),
+    billNumber: optText(vars, "billNumber", 100),
+    returnDate: optReturnDate(vars),
+    billImageUrl: optText(vars, "billImageUrl", 2048),
+  };
+}
+
+/** One returned product: title, quantity, unit, reason and remarks. */
+function returnLine(vars: Row) {
+  return {
+    productTitle: reqString(vars, "productTitle", 1, 200),
+    quantity: reqNumber(vars, "quantity", Number.MIN_VALUE, 1e9),
+    unit: reqString(vars, "unit", 1, 32),
+    returnReason: reqString(vars, "returnReason", 1, 1000),
+    remarks: optText(vars, "remarks", 2000),
+  };
+}
+
+function batchLines(vars: Row): Row[] {
+  const items = vars.items;
+  if (!Array.isArray(items) || items.length === 0 || items.length > MAX_BATCH_LINES) {
+    throw invalid(`items must list between 1 and ${MAX_BATCH_LINES} returned products.`);
+  }
+  return items.map((item) => {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      throw invalid("Each item must be an object.");
+    }
+    return item as Row;
+  });
+}
+
+/** The lines a previous attempt of this request created, in line order. */
+async function priorLines(db: SqlExecutor, key: string) {
+  const rows = await select<{ id: string; fingerprint: string | null }>(
+    db,
+    `SELECT id, creation_fingerprint AS fingerprint
+       FROM return_record WHERE creation_request_key = $1
+      ORDER BY creation_line`,
+    [key],
+  );
+  if (rows.length === 0) return null;
+  return { fingerprint: rows[0].fingerprint, result: rows.map(({ id }) => ({ id })) };
+}
+
+/**
+ * Inserts every line of one bill for the caller in a single transaction, so a
+ * failure part-way leaves no partial bill behind. With a `requestId`, a retry
+ * returns the lines the first attempt saved instead of saving them again.
+ */
+async function submitLines(
+  { db, actor }: OperationContext,
+  vars: Row,
+  branchId: string,
+  header: ReturnType<typeof billHeader>,
+  lines: ReturnType<typeof returnLine>[],
+): Promise<{ id: string }[]> {
+  if (!actor.branchIds.includes(branchId)) throw denied();
+  const orgId = actor.organizationId;
+  if (!orgId) throw denied();
+  const creation = creationKey(actor, vars, { branchId, header, lines });
+  return idempotentCreate(db, creation, priorLines, () => db.transaction(async (tx) => {
+    const me = await findMe(tx, actor.uid);
+    if (!me) throw notFound("Member not found.");
+    await requireActiveBranchOf(tx, branchId, orgId);
+    const inserted: { id: string }[] = [];
+    for (const [index, line] of lines.entries()) {
+      inserted.push(
+        await insertReturn(tx, actor, {
+          ...header,
+          ...line,
+          organizationId: orgId,
+          branchId,
+          employeeId: me.id,
+          employeeName: me.fullName,
+          customerName: line.productTitle,
+          amount: line.quantity,
+          creation,
+          creationLine: index,
+        }),
+      );
+    }
+    return inserted;
+  }));
+}
+
+/** The list scopes shared by the paged list and count operations. */
+const RETURN_SCOPES = ["mine", "branch", "organization"] as const;
+type ReturnScopeName = (typeof RETURN_SCOPES)[number];
+
+/** Rows submitted by the caller, including legacy rows without a uid. */
+function submittedBy(q: Query, uid: string): string {
+  const u = q.bind(uid);
+  return `(r.employee_uid = ${u} OR (r.employee_uid IS NULL AND r.employee_id = ${u}))`;
+}
+
+/**
+ * FROM clause, authorization and base filters for one returns scope:
+ * `mine` (the caller's submissions), `branch` (a branch the caller manages;
+ * optional `submitter` = mine | others), or `organization` (Org Admin, with
+ * an optional `branchId`).
+ */
+async function returnScope(
+  db: SqlExecutor,
+  actor: Actor,
+  vars: Row,
+  scope: ReturnScopeName,
+): Promise<{ from: string; q: Query; columns: string }> {
+  const from = "return_record r JOIN branch b ON b.id = r.branch_id";
+  const q = new Query();
+  if (scope === "mine") {
+    q.and(submittedBy(q, actor.uid));
+    return { from, q, columns: `${MY_RETURN_COLS}, ${BRANCH_REF}` };
+  }
+  if (scope === "branch") {
+    const branchId = reqId(vars, "branchId");
+    await requireManagedBranch(db, actor, branchId);
+    q.eq("r.branch_id", branchId);
+    const submitter = optEnum(vars, "submitter", ["mine", "others"] as const);
+    if (submitter === "mine") q.and(submittedBy(q, actor.uid));
+    if (submitter === "others") q.and(`NOT ${submittedBy(q, actor.uid)}`);
+    return { from, q, columns: `${MANAGER_COLS}, ${BRANCH_REF}` };
+  }
+  const orgId = reqId(vars, "orgId");
+  requireOrgAdminScope(actor, orgId);
+  q.eq("r.organization_id", orgId).eq("r.branch_id", optString(vars, "branchId", 1, 128));
+  return { from, q, columns: `${MANAGER_COLS}, ${BRANCH_REF}` };
+}
+
+/** Newest business return date first (legacy rows use their creation day). */
+const RETURN_ORDER =
+  "COALESCE(r.return_date, (r.created_at AT TIME ZONE 'Asia/Kolkata')::date) DESC, " +
+  "r.created_at DESC, r.id DESC";
+
+/** One page of a scope, optionally narrowed by status and search text. */
+async function listReturns(
+  { db, actor }: OperationContext,
+  vars: Row,
+  scopeName: ReturnScopeName,
+): Promise<unknown> {
+  const { limit, offset } = pageVars(vars);
+  const scope = await returnScope(db, actor, vars, scopeName);
+  scope.q
+    .eq("r.status", optString(vars, "status", 1, 50))
+    .containsAny(
+      [
+        "r.product_title",
+        "r.customer_name",
+        "r.invoice_number",
+        "r.bill_number",
+        "r.employee_name",
+        "b.name",
+      ],
+      optText(vars, "query", 100),
+    );
+  const { rows, total } = await paged<Row>(db, {
+    columns: scope.columns,
+    from: scope.from,
+    q: scope.q,
+    orderBy: RETURN_ORDER,
+    limit,
+    offset,
+  });
+  return { returnRecords: rows.map(nestBranchRef), total };
+}
+
 export const returnsOps: OperationRegistry = {
   // Org Admin: branches of own org. Branch Manager: only assigned branches.
   ListReturnsByBranch: async ({ db, actor }, vars) => {
@@ -251,58 +445,51 @@ export const returnsOps: OperationRegistry = {
     return { returnRecords };
   },
 
-  ListReturnsByBranchPaged: async ({ db, actor }, vars) => {
-    const branchId = reqId(vars, "branchId");
-    const { limit, offset } = pageVars(vars);
-    await requireManagedBranch(db, actor, branchId);
-    const q = new Query()
-      .eq("r.branch_id", branchId)
-      .eq("r.status", optString(vars, "status", 1, 50));
-    const { rows, total } = await paged(db, {
-      columns: MANAGER_COLS,
-      from: "return_record r",
-      q,
-      orderBy: "r.created_at DESC, r.id DESC",
-      limit,
-      offset,
-    });
-    return { returnRecords: rows, total };
-  },
-
-  ListReturnsByOrgPaged: async ({ db, actor }, vars) => {
-    const orgId = reqId(vars, "orgId");
-    requireOrgAdminScope(actor, orgId);
-    const { limit, offset } = pageVars(vars);
-    const q = new Query()
-      .eq("r.organization_id", orgId)
-      .eq("r.branch_id", optString(vars, "branchId", 1, 128))
-      .eq("r.status", optString(vars, "status", 1, 50));
-    const { rows, total } = await paged<Row>(db, {
-      columns: `${MANAGER_COLS}, ${BRANCH_REF}`,
-      from: "return_record r JOIN branch b ON b.id = r.branch_id",
-      q,
-      orderBy: "r.created_at DESC, r.id DESC",
-      limit,
-      offset,
-    });
-    return { returnRecords: rows.map(nestBranchRef), total };
-  },
-
+  ListReturnsByBranchPaged: (ctx, vars) => listReturns(ctx, vars, "branch"),
+  ListReturnsByOrgPaged: (ctx, vars) => listReturns(ctx, vars, "organization"),
   // The caller's own returns (Employee, or a Branch Manager's own submissions).
-  ListMyReturns: async ({ db, actor }, vars) => {
-    const { limit, offset } = pageVars(vars);
-    const q = new Query()
-      .eq("r.employee_uid", actor.uid)
-      .eq("r.status", optString(vars, "status", 1, 50));
-    const { rows, total } = await paged<Row>(db, {
-      columns: `${MY_RETURN_COLS}, ${BRANCH_REF}`,
-      from: "return_record r JOIN branch b ON b.id = r.branch_id",
-      q,
-      orderBy: "r.created_at DESC, r.id DESC",
-      limit,
-      offset,
-    });
-    return { returnRecords: rows.map(nestBranchRef), total };
+  ListMyReturns: (ctx, vars) => listReturns(ctx, vars, "mine"),
+
+  // Status counts for the same scopes as the list operations, ignoring the
+  // status and text filters (they drive KPI tiles and filter chips).
+  GetReturnStatusCounts: async ({ db, actor }, vars) => {
+    const scope = await returnScope(db, actor, vars, reqEnum(vars, "scope", RETURN_SCOPES));
+    const rows = await select<{ status: string; count: number }>(
+      db,
+      `SELECT r.status, count(*)::int AS count FROM ${scope.from} ${scope.q.where} GROUP BY r.status`,
+      scope.q.params,
+    );
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    for (const row of rows) {
+      const status = String(row.status).toLowerCase();
+      if (status in counts) counts[status as keyof typeof counts] += Number(row.count);
+    }
+    return { counts };
+  },
+
+  // One return the caller may see: their own, any in their Org Admin
+  // organization, or any in a branch they manage. Null when out of scope.
+  GetReturnById: async ({ db, actor }, vars) => {
+    const id = reqId(vars, "id");
+    const row = await selectOne<Row & { organizationId: string; branchRefId: string }>(
+      db,
+      `SELECT ${MANAGER_COLS}, r.organization_id AS "organizationId", ${BRANCH_REF}
+         FROM return_record r JOIN branch b ON b.id = r.branch_id
+        WHERE r.id = $1`,
+      [id],
+    );
+    if (!row) return { returnRecord: null };
+    const own =
+      row.employeeUid === actor.uid || (row.employeeUid == null && row.employeeId === actor.uid);
+    const manages =
+      isOrgAdminOf(actor, row.organizationId) ||
+      (actor.role === "branchManager" &&
+        actor.organizationId === row.organizationId &&
+        actor.branchIds.includes(row.branchRefId));
+    if (!own && !manages) return { returnRecord: null };
+    const { organizationId: _org, ...rest } = row;
+    void _org;
+    return { returnRecord: nestBranchRef(rest) };
   },
 
   // Legacy signature (client-supplied id). The submitter must be an Employee
@@ -346,38 +533,23 @@ export const returnsOps: OperationRegistry = {
   },
 
   // Server-generated id; org, submitter id/name and uid are derived server-side.
-  SubmitReturn: async ({ db, actor }, vars) => {
-    requireRole(actor, SUBMITTER_ROLES);
+  SubmitReturn: async (ctx, vars) => {
+    requireRole(ctx.actor, SUBMITTER_ROLES);
     const branchId = reqId(vars, "branchId");
-    const quantity = reqNumber(vars, "quantity", Number.MIN_VALUE, 1e9);
-    const productTitle = reqString(vars, "productTitle", 1, 200);
-    const input = {
-      returnReason: reqString(vars, "returnReason", 1, 1000),
-      unit: reqString(vars, "unit", 1, 32),
-      invoiceNumber: reqString(vars, "invoiceNumber", 1, 100),
-      billImageUrl: optText(vars, "billImageUrl", 2048),
-      remarks: optText(vars, "remarks", 2000),
-    };
-    if (!actor.branchIds.includes(branchId)) throw denied();
-    const orgId = actor.organizationId;
-    if (!orgId) throw denied();
-    return db.transaction(async (tx) => {
-      const me = await findMe(tx, actor.uid);
-      if (!me) throw notFound("Member not found.");
-      await requireActiveBranchOf(tx, branchId, orgId);
-      const returnRecord_insert = await insertReturn(tx, actor, {
-        ...input,
-        organizationId: orgId,
-        branchId,
-        employeeId: me.id,
-        employeeName: me.fullName,
-        customerName: productTitle,
-        amount: quantity,
-        productTitle,
-        quantity,
-      });
-      return { returnRecord_insert };
-    });
+    const line = returnLine(vars);
+    const header = billHeader(vars);
+    const [returnRecord_insert] = await submitLines(ctx, vars, branchId, header, [line]);
+    return { returnRecord_insert };
+  },
+
+  // Every line of one bill in one transaction (all saved, or none).
+  SubmitReturnBatch: async (ctx, vars) => {
+    requireRole(ctx.actor, SUBMITTER_ROLES);
+    const branchId = reqId(vars, "branchId");
+    const header = billHeader(vars);
+    const lines = batchLines(vars).map(returnLine);
+    const returnRecord_inserts = await submitLines(ctx, vars, branchId, header, lines);
+    return { returnRecord_inserts };
   },
 
   // The submitter may edit the row only while it remains pending.

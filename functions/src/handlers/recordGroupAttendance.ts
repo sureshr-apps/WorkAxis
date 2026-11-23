@@ -1,11 +1,19 @@
 import { createHash } from "node:crypto";
-import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
+import {
+  type CollectionReference,
+  FieldValue,
+  Timestamp,
+  type Transaction,
+  getFirestore,
+} from "firebase-admin/firestore";
 import { onCall } from "firebase-functions/v2/https";
 import { resolveActor } from "../auth/actor";
 import {
   assertGroupAttendee,
   assertGroupScope,
+  overlapsRecordedSession,
   parseGroupAttendance,
+  type RecordedSession,
 } from "../attendance/groupRules";
 import { assertScheduledWorkday } from "../attendance/punchRules";
 import { callableOptions } from "../config";
@@ -85,6 +93,19 @@ export const recordGroupAttendance = onCall(callableOptions, (request) =>
         throw conflict(
           "Some selected employees already have an open attendance session.",
         );
+      const recorded = await recordedSessionsByEmployee(
+        tx,
+        entries,
+        branch.organizationId,
+        input.workDate,
+        attendees.map((member) => member.authUid),
+      );
+      if (attendees.some((member) =>
+        overlapsRecordedSession(input.checkInAt, recorded.get(member.authUid) ?? []))) {
+        throw conflict(
+          "Some selected employees already have attendance after this check-in time.",
+        );
+      }
       attendees.forEach((member, index) =>
         tx.create(refs[index], {
           id: refs[index].id,
@@ -129,3 +150,39 @@ export const recordGroupAttendance = onCall(callableOptions, (request) =>
     return { entryIds: refs.map((ref) => ref.id) };
   }),
 );
+
+/** `in` filters accept at most 30 values. */
+const IN_QUERY_LIMIT = 30;
+
+/** Sessions already recorded on [workDate] for each attendee, read inside [tx]. */
+async function recordedSessionsByEmployee(
+  tx: Transaction,
+  entries: CollectionReference,
+  organizationId: string,
+  workDate: string,
+  employeeUids: readonly string[],
+): Promise<Map<string, RecordedSession[]>> {
+  const byEmployee = new Map<string, RecordedSession[]>();
+  for (let i = 0; i < employeeUids.length; i += IN_QUERY_LIMIT) {
+    const snapshot = await tx.get(
+      entries
+        .where("organizationId", "==", organizationId)
+        .where("workDateString", "==", workDate)
+        .where("employeeId", "in", employeeUids.slice(i, i + IN_QUERY_LIMIT)),
+    );
+    for (const doc of snapshot.docs) {
+      const uid = doc.get("employeeId") as string;
+      const sessions = byEmployee.get(uid) ?? [];
+      sessions.push({
+        checkInAt: timestampToDate(doc.get("checkInAt")),
+        checkOutAt: timestampToDate(doc.get("checkOutAt")),
+      });
+      byEmployee.set(uid, sessions);
+    }
+  }
+  return byEmployee;
+}
+
+function timestampToDate(value: unknown): Date | null {
+  return value instanceof Timestamp ? value.toDate() : null;
+}

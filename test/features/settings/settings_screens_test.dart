@@ -7,6 +7,8 @@ import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/authentication/domain/models/app_user.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/leave_policy/data/mock_leave_policy_repository.dart';
+import 'package:workaxis/features/leave_policy/presentation/controllers/leave_policy_controller.dart';
 import 'package:workaxis/features/settings/data/mock_settings_repository.dart';
 import 'package:workaxis/features/settings/domain/models/organization_settings.dart';
 import 'package:workaxis/features/settings/presentation/controllers/settings_controller.dart';
@@ -18,10 +20,14 @@ void main() {
   late MockAccessRepository accessRepository;
   late AccessController accessController;
   late SettingsController settingsController;
+  late LeavePolicyController leavePolicyController;
 
   setUp(() {
     settingsController = SettingsController(
       repository: MockSettingsRepository(delay: Duration.zero),
+    );
+    leavePolicyController = LeavePolicyController(
+      repository: MockLeavePolicyRepository(delay: Duration.zero),
     );
     accessDataSource = MockAccessDataSource();
     accessRepository = MockAccessRepository(
@@ -34,6 +40,7 @@ void main() {
   tearDown(() {
     accessController.dispose();
     settingsController.dispose();
+    leavePolicyController.dispose();
   });
 
   Future<void> pumpPlatformSettingsScreen(
@@ -108,6 +115,9 @@ void main() {
           ChangeNotifierProvider<SettingsController>.value(
             value: settingsController,
           ),
+          ChangeNotifierProvider<LeavePolicyController>.value(
+            value: leavePolicyController,
+          ),
         ],
         child: MaterialApp(
           theme: AppTheme.light,
@@ -174,6 +184,7 @@ void main() {
 
       expect(find.text('Organization Settings'), findsOneWidget);
       expect(find.text('Organization Information'), findsOneWidget);
+      expect(find.text('Leave Policy'), findsOneWidget);
       expect(find.text('Asset Management'), findsOneWidget);
       expect(find.text('Require employee acknowledgment'), findsOneWidget);
       expect(find.text('Attendance & Geofencing Policies'), findsOneWidget);
@@ -229,10 +240,14 @@ void main() {
       );
       expect(toggle, findsOneWidget);
       expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
       await tester.tap(toggle);
       await tester.pumpAndSettle();
       expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
 
+      await tester.ensureVisible(find.text('Save Changes'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Save Changes'));
       await tester.pumpAndSettle();
 

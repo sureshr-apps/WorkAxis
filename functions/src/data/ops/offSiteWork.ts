@@ -3,7 +3,13 @@ import { denied, invalid, precondition } from "../../errors";
 import type { Actor } from "../../auth/roles";
 import type { SqlExecutor } from "../../db/executor";
 import { attachmentsBucketName } from "../../config";
-import { requireManagedBranch, requireRole } from "../authz";
+import {
+  requireActiveBranch,
+  requireBranchManagerContext,
+  requireManagedBranch,
+  requireRole,
+} from "../authz";
+import { creationKey, idempotentCreate } from "../idempotency";
 import type { OperationRegistry } from "../operation";
 import { insertReturningId, paged, Query, raw, select, selectOne } from "../sql";
 import { optStringArray, reqNumber, reqString } from "../../util/input";
@@ -44,19 +50,13 @@ async function requireBranchScope(
   if (!actor.organizationId) throw denied("Organization context is required.");
   const branch = await requireManagedBranch(db, actor, branchId);
   if (branch.organizationId !== actor.organizationId) throw denied();
-  if (actor.role === "branchManager") {
-    const activeBranchId = reqId(vars, "activeBranchId");
-    if (activeBranchId !== branchId || !actor.branchIds.includes(branchId)) {
-      throw denied("Use an active branch you manage.");
-    }
-  }
-  const row = await selectOne<{ name: string; status: string }>(
+  requireBranchManagerContext(actor, vars, branchId, "Use an active branch you manage.");
+  const row = await requireActiveBranch(
     db,
-    `SELECT name, status FROM branch
-      WHERE id = $1 AND organization_id = $2 LIMIT 1`,
-    [branchId, actor.organizationId],
+    branchId,
+    actor.organizationId,
+    () => denied("Branch is not active."),
   );
-  if (!row || row.status !== "active") throw denied("Branch is not active.");
   return { organizationId: actor.organizationId, branchName: row.name };
 }
 
@@ -73,6 +73,20 @@ async function findActor(
   );
   if (!member) throw denied("Your organization profile could not be found.");
   return member;
+}
+
+/** The assignment a previous attempt of this request created. */
+async function priorAssignment(db: SqlExecutor, key: string) {
+  const prior = await selectOne<{ id: string; fingerprint: string | null }>(
+    db,
+    `SELECT id, creation_fingerprint AS fingerprint
+       FROM off_site_work_assignment WHERE creation_request_key = $1`,
+    [key],
+  );
+  if (!prior) return null;
+  const offSiteWorkAssignment = await loadAssignment(db, prior.id, true);
+  if (!offSiteWorkAssignment) return null;
+  return { fingerprint: prior.fingerprint, result: { offSiteWorkAssignment } };
 }
 
 async function loadAssignment(
@@ -229,7 +243,19 @@ export const offSiteWorkOps: OperationRegistry = {
     const reference = optText(vars, "reference", 200);
     const evidenceDescription = optText(vars, "requiredEvidenceDescription", 500);
     const employeeMemberId = reqId(vars, "employeeMemberId");
-    return db.transaction(async (tx) => {
+    const creation = creationKey(actor, vars, {
+      branchId,
+      employeeMemberId,
+      title,
+      instructions,
+      destination,
+      destinationLatitude,
+      destinationLongitude,
+      dueAt,
+      reference,
+      evidenceDescription,
+    });
+    return idempotentCreate(db, creation, priorAssignment, () => db.transaction(async (tx) => {
       const branch = await requireBranchScope(tx, actor, vars, branchId);
       const assigneeRoleCondition = actor.role === "orgAdmin"
         ? "m.role IN ('employee', 'branchManager')"
@@ -264,6 +290,8 @@ export const offSiteWorkOps: OperationRegistry = {
         ["reference", reference],
         ["required_evidence_description", evidenceDescription],
         ["status", "assigned"],
+        ["creation_request_key", creation?.key],
+        ["creation_fingerprint", creation?.fingerprint],
         ["created_at", raw("now()")],
         ["updated_at", raw("now()")],
       ]);
@@ -276,7 +304,7 @@ export const offSiteWorkOps: OperationRegistry = {
       const offSiteWorkAssignment = await loadAssignment(tx, id, true);
       if (!offSiteWorkAssignment) throw denied("Assignment could not be loaded.");
       return { offSiteWorkAssignment };
-    });
+    }));
   },
 
   DeleteOffSiteWorkAssignment: async ({ db, actor }, vars) => {

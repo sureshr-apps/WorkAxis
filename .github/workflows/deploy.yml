@@ -2,7 +2,7 @@
 #   changes -> verify (always)
 #   verify + changes -> database migrations (functions/db changed)
 #   verify + changes + database -> backend deploy (functions or rules changed)
-#   verify + changes -> web build and deploy (app code or hosting config changed)
+#   verify + changes + backend -> web build and deploy (app code or hosting config changed)
 #   changes -> signed Android APK (app code changed)
 #   changes -> signed App Bundle (manual run only)
 # A manual run (workflow_dispatch) deploys everything.
@@ -144,8 +144,10 @@ jobs:
 
   web:
     name: Build and deploy web
-    needs: [verify, changes]
-    if: ${{ always() && needs.verify.result == 'success' && needs.changes.outputs.app == 'true' }}
+    # Waits for the backend so the new web app never calls operations that
+    # are not deployed yet; a skipped backend (no backend change) is fine.
+    needs: [verify, changes, backend]
+    if: ${{ always() && needs.verify.result == 'success' && needs.changes.outputs.app == 'true' && (needs.backend.result == 'success' || needs.backend.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:workaxis/core/backend/idempotent_creates.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/returns/data/data_connect_returns_remote.dart';
@@ -44,7 +45,11 @@ void main() {
 
   setUp(() {
     gateway = FakeDataGateway();
-    remote = DataConnectReturnsRemote(gateway: gateway);
+    var nextRequest = 0;
+    remote = DataConnectReturnsRemote(
+      gateway: gateway,
+      creates: IdempotentCreates(newRequestId: () => 'req-${++nextRequest}'),
+    );
   });
 
   test('listMine omits status when unset and maps rows', () async {
@@ -81,7 +86,7 @@ void main() {
     );
 
     expect(gateway.singleVarsOf('ListMyReturns'), {'limit': 100, 'offset': 0});
-    final r = items.single;
+    final r = items.items.single;
     expect(r.employeeId, 'u1');
     expect(r.productTitle, 'Return INV-7');
     expect(r.reason, ReturnReason.expired);
@@ -124,7 +129,7 @@ void main() {
       'limit': 100,
       'offset': 0,
     });
-    final r = items.single;
+    final r = items.items.single;
     expect(r.productTitle, 'Legacy product');
     expect(r.quantity, 3.0);
     expect(r.employeeId, 'm1');
@@ -146,7 +151,7 @@ void main() {
       'limit': 50,
       'offset': 0,
     });
-    expect(items.single.branchName, 'North');
+    expect(items.items.single.branchName, 'North');
 
     await remote.listByOrganization(
       organizationId: 'org1',
@@ -175,53 +180,146 @@ void main() {
     );
   });
 
-  test('submit omits blank optionals and returns the new id', () async {
-    gateway.respond('SubmitReturn', {
-      'returnRecord_insert': {'id': 'new-return'},
+  test('submitBatch omits blank optionals and returns ids in order', () async {
+    gateway.respond('SubmitReturnBatch', {
+      'returnRecord_inserts': [
+        {'id': 'r-a'},
+        {'id': 'r-b'},
+      ],
     });
 
-    final id = await remote.submit(
+    final ids = await remote.submitBatch(
       branchId: 'b1',
-      input: const CreateReturnInput(
+      input: const CreateReturnBatchInput(
         invoiceNumber: 'INV-9',
-        productTitle: 'Milk',
-        quantity: 4,
-        unit: 'ltr',
-        reason: ReturnReason.damaged,
+        billNumber: '  ',
         billImageUrl: '',
-        remarks: '  ',
+        items: [
+          ReturnLineItemInput(
+            productTitle: 'Milk',
+            quantity: 4,
+            unit: 'ltr',
+            reason: ReturnReason.damaged,
+            remarks: '  ',
+          ),
+          ReturnLineItemInput(
+            productTitle: 'Eggs',
+            quantity: 12,
+            reason: ReturnReason.expired,
+          ),
+        ],
       ),
     );
 
-    expect(id, 'new-return');
-    expect(gateway.singleVarsOf('SubmitReturn'), {
+    expect(ids, ['r-a', 'r-b']);
+    expect(gateway.singleVarsOf('SubmitReturnBatch'), {
       'branchId': 'b1',
-      'productTitle': 'Milk',
-      'returnReason': 'damaged',
-      'quantity': 4.0,
-      'unit': 'ltr',
       'invoiceNumber': 'INV-9',
+      'requestId': 'req-1',
+      'items': [
+        {
+          'productTitle': 'Milk',
+          'returnReason': 'damaged',
+          'quantity': 4.0,
+          'unit': 'ltr',
+        },
+        {
+          'productTitle': 'Eggs',
+          'returnReason': 'expired',
+          'quantity': 12.0,
+          'unit': 'units',
+        },
+      ],
     });
   });
 
-  test('submit sends bill image and trimmed remarks when present', () async {
-    gateway.respond('SubmitReturn', {
-      'returnRecord_insert': {'id': 'x'},
-    });
-    await remote.submit(
-      branchId: 'b1',
-      input: const CreateReturnInput(
-        invoiceNumber: 'INV-9',
-        productTitle: 'Milk',
-        quantity: 1,
-        reason: ReturnReason.other,
-        billImageUrl: 'https://x/bill.jpg',
-        remarks: ' torn ',
-      ),
+  test(
+    'submitBatch sends bill number, business date, photo and remarks',
+    () async {
+      gateway.respond('SubmitReturnBatch', {
+        'returnRecord_inserts': [
+          {'id': 'x'},
+        ],
+      });
+      await remote.submitBatch(
+        branchId: 'b1',
+        input: CreateReturnBatchInput(
+          invoiceNumber: 'INV-9',
+          billNumber: ' BILL-7 ',
+          returnDate: DateTime(2026, 3, 5),
+          billImageUrl: 'https://x/bill.jpg',
+          remarks: ' counter ',
+          items: const [
+            ReturnLineItemInput(
+              productTitle: 'Milk',
+              quantity: 1,
+              reason: ReturnReason.other,
+              remarks: ' torn ',
+            ),
+          ],
+        ),
+      );
+      final vars = gateway.singleVarsOf('SubmitReturnBatch');
+      expect(vars['billNumber'], 'BILL-7');
+      expect(vars['returnDate'], '2026-03-05');
+      expect(vars['billImageUrl'], 'https://x/bill.jpg');
+      expect((vars['items'] as List).single['remarks'], 'counter - torn');
+    },
+  );
+
+  test('a retried bill reuses its request id until it succeeds', () async {
+    var attempts = 0;
+    gateway.handlers['SubmitReturnBatch'] = (_) {
+      if (++attempts == 1) throw const NetworkException();
+      return {
+        'returnRecord_inserts': [
+          {'id': 'r-$attempts'},
+        ],
+      };
+    };
+    const input = CreateReturnBatchInput(
+      invoiceNumber: 'INV-9',
+      items: [
+        ReturnLineItemInput(
+          productTitle: 'Milk',
+          quantity: 1,
+          reason: ReturnReason.other,
+        ),
+      ],
     );
-    final vars = gateway.singleVarsOf('SubmitReturn');
-    expect(vars['billImageUrl'], 'https://x/bill.jpg');
-    expect(vars['remarks'], 'torn');
+
+    await expectLater(
+      remote.submitBatch(branchId: 'b1', input: input),
+      throwsA(isA<NetworkException>()),
+    );
+    await remote.submitBatch(branchId: 'b1', input: input);
+    await remote.submitBatch(branchId: 'b1', input: input);
+
+    expect(gateway.varsOf('SubmitReturnBatch').map((v) => v['requestId']), [
+      'req-1',
+      'req-1',
+      'req-2',
+    ]);
+  });
+
+  test('rows map the stored bill number and return date', () {
+    final item = DataConnectReturnsRemote.mapBranchReturn(
+      {..._managedRow(), 'billNumber': 'BILL-7', 'returnDate': '2026-03-05'},
+      organizationId: 'org1',
+      branch: _branch,
+    );
+    expect(item.billNumber, 'BILL-7');
+    expect(item.returnDate, DateTime(2026, 3, 5));
+  });
+
+  test('rows saved before the return date existed fall back to createdAt', () {
+    final item = DataConnectReturnsRemote.mapBranchReturn(
+      _managedRow(),
+      organizationId: 'org1',
+      branch: _branch,
+    );
+    expect(item.billNumber, isNull);
+    expect(item.returnDate, DateTime.parse('2026-11-07T09:00:00.000Z'));
   });
 
   test('review sends notes only when given', () async {

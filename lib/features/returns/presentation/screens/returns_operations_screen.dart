@@ -13,6 +13,7 @@ import 'package:workaxis/features/access/presentation/controllers/access_control
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
+import 'package:workaxis/features/returns/domain/models/return_status_counts.dart';
 import 'package:workaxis/features/returns/presentation/controllers/returns_controller.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_filter_bar.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_sliver_body.dart';
@@ -27,11 +28,8 @@ class ReturnsOperationsScreen extends StatefulWidget {
       _ReturnsOperationsScreenState();
 }
 
-enum _ReturnQueue { mine, others }
-
 class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
   late final TextEditingController _searchController;
-  _ReturnQueue _queue = _ReturnQueue.mine;
 
   @override
   void initState() {
@@ -91,17 +89,7 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
     final canReview =
         role == UserRole.orgAdmin || role == UserRole.branchManager;
     final hasPending = controller.pendingCount > 0;
-    bool isInSelectedQueue(ReturnItem item) => _queue == _ReturnQueue.mine
-        ? item.wasSubmittedBy(access!.user.id)
-        : !item.wasSubmittedBy(access!.user.id);
-    final countItems = isManager
-        ? controller.items.where(isInSelectedQueue).toList(growable: false)
-        : controller.items;
-    final visibleItems = isManager
-        ? controller.filteredItems
-              .where(isInSelectedQueue)
-              .toList(growable: false)
-        : controller.filteredItems;
+    final showsOwnQueue = isManager && controller.queue == ReturnQueue.mine;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -172,22 +160,22 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
             if (isManager)
               SliverToBoxAdapter(
-                child: SegmentedButton<_ReturnQueue>(
+                child: SegmentedButton<ReturnQueue>(
                   segments: const [
                     ButtonSegment(
-                      value: _ReturnQueue.mine,
+                      value: ReturnQueue.mine,
                       label: Text('My returns'),
                       icon: Icon(Icons.person_outline),
                     ),
                     ButtonSegment(
-                      value: _ReturnQueue.others,
+                      value: ReturnQueue.others,
                       label: Text('Returns filed by others'),
                       icon: Icon(Icons.groups_outlined),
                     ),
                   ],
-                  selected: {_queue},
+                  selected: {controller.queue},
                   onSelectionChanged: (selection) =>
-                      setState(() => _queue = selection.first),
+                      controller.setQueue(selection.first),
                 ),
               ),
             if (isManager)
@@ -197,21 +185,19 @@ class _ReturnsOperationsScreenState extends State<ReturnsOperationsScreen> {
                 controller: controller,
                 searchController: _searchController,
                 searchHint: 'Search product, invoice, or employee...',
-                countItems: countItems,
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
             SliverReturnsBody(
               controller: controller,
-              visibleItems: visibleItems,
               showReviewAction: canReview,
               reviewerUid: isManager ? access?.user.id : null,
               onOpen: _openDetails,
               onRetry: _loadData,
-              emptyTitle: isManager && _queue == _ReturnQueue.mine
+              emptyTitle: showsOwnQueue
                   ? 'No returns filed by you'
                   : 'No return requests found',
-              emptyMessage: isManager && _queue == _ReturnQueue.mine
+              emptyMessage: showsOwnQueue
                   ? 'Returns you submit will appear here.'
                   : 'There are no returned products matching your filter criteria.',
               columns: [

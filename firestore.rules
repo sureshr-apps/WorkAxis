@@ -12,6 +12,12 @@ rules_version = '2';
 //   branchIds      list of branch ids (Branch Manager / Employee scope)
 //   status         'active' | 'suspended'   (every helper requires 'active')
 //
+// Claims live in the ID token, which stays valid for up to an hour after a
+// suspension or branch removal. Every helper therefore also checks the live
+// users/{uid} projection (written by the same functions, first): its status,
+// role and organization must agree with the token, and branch access needs
+// the branch in both the token and the profile's activeBranchIds.
+//
 // Collections (all written by trusted functions unless stated):
 //   user_aliases/{normalizedIdentifier} = { userId, email }   no client access
 //   users/{uid}      read-only profile projection              clients read only
@@ -37,8 +43,17 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // The caller's live profile; a missing profile makes the caller inactive.
+    function liveProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function isActive() {
-      return signedIn() && request.auth.token.get('status', '') == 'active';
+      return signedIn() && request.auth.token.get('status', '') == 'active' &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        liveProfile().get('status', '') == 'active' &&
+        liveProfile().get('role', '') == role() &&
+        liveProfile().get('organizationId', '') == claimOrg();
     }
 
     function role() {
@@ -53,6 +68,24 @@ service cloud.firestore {
       return request.auth.token.get('branchIds', []);
     }
 
+    // Branch access from the live profile. Profiles written before
+    // activeBranchIds existed fall back to branchIds until re-projected.
+    function liveBranches() {
+      return liveProfile().get('activeBranchIds', liveProfile().get('branchIds', []));
+    }
+
+    // In scope only while both the token and the live profile grant it.
+    function managesBranch(branchId) {
+      return branchId in claimBranches() && branchId in liveBranches();
+    }
+
+    function sharesManagedBranch(branchIds) {
+      return branchIds.toSet()
+        .intersection(claimBranches().toSet())
+        .intersection(liveBranches().toSet())
+        .size() > 0;
+    }
+
     function isPlatform() {
       return isActive() && role() in ['platformOwner', 'platformAdmin'];
     }
@@ -64,7 +97,7 @@ service cloud.firestore {
     function isBranchManagerOf(orgId, branchId) {
       return isActive() && role() == 'branchManager' &&
         claimOrg() != '' && claimOrg() == orgId &&
-        branchId in claimBranches();
+        managesBranch(branchId);
     }
 
     function isBranchManagerOfEmployee(orgId, userId) {
@@ -75,7 +108,7 @@ service cloud.firestore {
         claimOrg() != '' && claimOrg() == orgId &&
         employeeProfile.get('organizationId', '') == orgId &&
         employeeProfile.get('role', '') == 'employee' &&
-        employeeProfile.get('branchIds', []).hasAny(claimBranches());
+        sharesManagedBranch(employeeProfile.get('branchIds', []));
     }
 
     // Org Admin of the org, or Branch Manager of the branch.
@@ -140,7 +173,7 @@ service cloud.firestore {
           role() == 'branchManager' &&
           resource.data.get('organizationId', '') == claimOrg() &&
           resource.data.get('role', '') == 'employee' &&
-          resource.data.get('branchIds', []).hasAny(claimBranches())
+          sharesManagedBranch(resource.data.get('branchIds', []))
         )
       );
 
@@ -153,7 +186,7 @@ service cloud.firestore {
           role() == 'branchManager' &&
           resource.data.get('organizationId', '') == claimOrg() &&
           resource.data.get('role', '') == 'employee' &&
-          resource.data.get('branchIds', []).hasAny(claimBranches())
+          sharesManagedBranch(resource.data.get('branchIds', []))
         )
       );
 
@@ -193,7 +226,10 @@ service cloud.firestore {
       // Group membership and effective time require authoritative SQL checks.
       allow create: if false; // Trusted recordGroupAttendance callable only.
 
+      // Nobody reviews their own attendance (Branch Managers can have
+      // entries when Branch Manager attendance is enabled).
       allow update: if canManageBranchData(resource.data.organizationId, resource.data.branchId) &&
+        resource.data.employeeId != request.auth.uid &&
         isValidAttendanceReviewUpdate();
 
       allow delete: if false;

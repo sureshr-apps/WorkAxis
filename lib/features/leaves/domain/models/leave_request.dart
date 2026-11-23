@@ -20,37 +20,16 @@ enum LeaveStatus {
   };
 }
 
-enum LeaveType {
-  annual,
-  sick,
-  personal,
-  unpaid;
-
-  static LeaveType? tryParse(String? raw) {
-    final value = raw?.trim().toLowerCase();
-    for (final type in values) {
-      if (type.name == value) return type;
-    }
-    return null;
-  }
-
-  String get label => switch (this) {
-    LeaveType.annual => 'Annual',
-    LeaveType.sick => 'Sick',
-    LeaveType.personal => 'Personal',
-    LeaveType.unpaid => 'Unpaid',
-  };
-}
-
 class LeaveRequestDraft {
   const LeaveRequestDraft({
-    required this.leaveType,
+    required this.leaveTypeId,
     required this.startDate,
     required this.endDate,
     required this.reason,
   });
 
-  final LeaveType leaveType;
+  /// Id of one of the organization's active leave types.
+  final String leaveTypeId;
   final DateTime startDate;
   final DateTime endDate;
   final String reason;
@@ -66,7 +45,9 @@ class LeaveRequest {
     required this.applicantUid,
     required this.applicantName,
     required this.applicantRole,
-    required this.leaveType,
+    required this.leaveTypeId,
+    required this.leaveTypeName,
+    required this.leaveTypePaid,
     required this.startDate,
     required this.endDate,
     required this.reason,
@@ -86,7 +67,11 @@ class LeaveRequest {
   final String applicantUid;
   final String applicantName;
   final UserRole applicantRole;
-  final LeaveType leaveType;
+  final String leaveTypeId;
+  final String leaveTypeName;
+
+  /// False for a type that is never paid (e.g. the built-in "Unpaid leave").
+  final bool leaveTypePaid;
   final DateTime startDate;
   final DateTime endDate;
   final String reason;
@@ -103,7 +88,9 @@ class LeaveRequest {
       applicantRole == UserRole.branchManager;
 
   LeaveRequest copyWith({
-    LeaveType? leaveType,
+    String? leaveTypeId,
+    String? leaveTypeName,
+    bool? leaveTypePaid,
     DateTime? startDate,
     DateTime? endDate,
     String? reason,
@@ -121,7 +108,9 @@ class LeaveRequest {
     applicantUid: applicantUid,
     applicantName: applicantName,
     applicantRole: applicantRole,
-    leaveType: leaveType ?? this.leaveType,
+    leaveTypeId: leaveTypeId ?? this.leaveTypeId,
+    leaveTypeName: leaveTypeName ?? this.leaveTypeName,
+    leaveTypePaid: leaveTypePaid ?? this.leaveTypePaid,
     startDate: startDate ?? this.startDate,
     endDate: endDate ?? this.endDate,
     reason: reason ?? this.reason,

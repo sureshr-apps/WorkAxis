@@ -2,26 +2,16 @@ import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_queue.dart';
 import 'package:workaxis/features/leaves/domain/models/leave_request.dart';
 
+/// An authorized read of one [LeaveQueue]. [branch] is the active branch for
+/// [LeaveQueue.branchEmployees] and null otherwise.
 class LeaveReadScope {
-  const LeaveReadScope.own()
-    : ownOnly = true,
-      organizationWide = false,
-      activeBranch = null;
+  const LeaveReadScope(this.queue, {this.branch});
 
-  const LeaveReadScope.organization()
-    : ownOnly = false,
-      organizationWide = true,
-      activeBranch = null;
-
-  const LeaveReadScope.branch(this.activeBranch)
-    : ownOnly = false,
-      organizationWide = false;
-
-  final bool ownOnly;
-  final bool organizationWide;
-  final BranchSummary? activeBranch;
+  final LeaveQueue queue;
+  final BranchSummary? branch;
 }
 
 /// Shared client-side scope checks for the mock and SQL repositories.
@@ -29,27 +19,53 @@ class LeaveReadScope {
 class LeaveScope {
   const LeaveScope();
 
-  LeaveReadScope forRead(UserAccessContext access, String? activeBranchId) {
+  LeaveReadScope forRead(
+    UserAccessContext access,
+    String? activeBranchId,
+    LeaveQueue queue,
+  ) {
     _requireOrganization(access);
-    switch (access.user.role) {
-      case UserRole.employee:
-        return const LeaveReadScope.own();
-      case UserRole.branchManager:
-        final id = activeBranchId ?? access.activeBranch?.branchId;
-        if (id == null) {
-          throw const BranchAuthorizationException(
-            'Branch Manager has no active branch.',
-            userMessage: 'Select a branch to review leave requests.',
-          );
-        }
-        return LeaveReadScope.branch(_assigned(access, id));
-      case UserRole.orgAdmin:
-        return const LeaveReadScope.organization();
-      case UserRole.platformOwner:
-      case UserRole.platformAdmin:
-        throw const AccessDeniedException(
-          'Platform users do not have customer leave scope.',
-        );
+    final role = access.user.role;
+    if (role == UserRole.platformOwner || role == UserRole.platformAdmin) {
+      throw const AccessDeniedException(
+        'Platform users do not have customer leave scope.',
+      );
+    }
+    if (!queue.isAvailableTo(role)) {
+      throw AccessDeniedException(
+        'Role ${role.name} cannot read the ${queue.name} leave queue.',
+      );
+    }
+    if (queue != LeaveQueue.branchEmployees) return LeaveReadScope(queue);
+    final id = activeBranchId ?? access.activeBranch?.branchId;
+    if (id == null) {
+      throw const BranchAuthorizationException(
+        'Branch Manager has no active branch.',
+        userMessage: 'Select a branch to review leave requests.',
+      );
+    }
+    return LeaveReadScope(queue, branch: _assigned(access, id));
+  }
+
+  /// Any customer member of the organization (leave types are shared).
+  void assertMember(UserAccessContext access) {
+    _requireOrganization(access);
+    if (access.user.role.isPlatformLevel) {
+      throw const AccessDeniedException(
+        'Platform users do not have customer leave scope.',
+      );
+    }
+  }
+
+  /// An Employee or Branch Manager acting on their own leave (e.g. a draft
+  /// preview, which needs no branch).
+  void assertApplicant(UserAccessContext access) {
+    _requireOrganization(access);
+    final role = access.user.role;
+    if (role != UserRole.employee && role != UserRole.branchManager) {
+      throw const AccessDeniedException(
+        'Only employees and Branch Managers may apply for leave.',
+      );
     }
   }
 
@@ -58,13 +74,8 @@ class LeaveScope {
     String? branchId,
     String? activeBranchId,
   }) {
-    _requireOrganization(access);
+    assertApplicant(access);
     final role = access.user.role;
-    if (role != UserRole.employee && role != UserRole.branchManager) {
-      throw const AccessDeniedException(
-        'Only employees and Branch Managers may apply for leave.',
-      );
-    }
     final contextBranch = activeBranchId ?? access.activeBranch?.branchId;
     final id = role == UserRole.branchManager
         ? contextBranch

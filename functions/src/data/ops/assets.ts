@@ -1,10 +1,13 @@
 import type { Actor } from "../../auth/roles";
-import { denied, invalid } from "../../errors";
+import { DomainError, denied, invalid, precondition } from "../../errors";
 import type { SqlExecutor } from "../../db/executor";
-import { requireManagedBranch } from "../authz";
+import { requireActiveBranch, requireBranchManagerContext, requireManagedBranch } from "../authz";
 import type { OperationRegistry } from "../operation";
-import { optId, optText, reqId } from "../vars";
+import { mapDbError, paged, Query } from "../sql";
+import { optId, optText, pageVars, reqId } from "../vars";
 import { reqEnum, reqString } from "../../util/input";
+
+const ASSET_TAG_IN_USE = "That asset tag is already in use.";
 
 type RequestVars = Record<string, unknown>;
 
@@ -86,34 +89,36 @@ async function validateActiveBranch(
   branchId: string,
 ): Promise<void> {
   if (actor.role !== "branchManager") return;
-  const activeBranchId = reqId(vars, "activeBranchId");
-  if (activeBranchId !== branchId || !actor.branchIds.includes(activeBranchId)) {
-    throw denied("Branch not found or access denied.");
-  }
-  const active = await db.query<{ id: string }>(
-    `SELECT id FROM branch
-      WHERE id = $1 AND organization_id = $2 AND status = 'active'
-      LIMIT 1`,
-    [branchId, actor.organizationId],
-  );
-  if (!active[0]) throw denied("Branch not found or access denied.");
+  requireBranchManagerContext(actor, vars, branchId);
+  await requireActiveBranch(db, branchId, actor.organizationId);
 }
 
-async function listAssets(
-  db: SqlExecutor,
-  where: string,
-  params: readonly unknown[],
-) {
-  const employeeAssets = await db.query<Record<string, unknown>>(
-    `SELECT ${ASSET_COLUMNS}
-       FROM employee_asset ea
-       JOIN branch b ON b.id = ea.branch_id
-       JOIN organization_member m ON m.id = ea.employee_member_id
-      WHERE ${where}
-      ORDER BY m.full_name, ea.name, ea.id`,
-    params,
+/** Rows returned when an older client sends no `limit`. */
+const DEFAULT_ASSET_PAGE = 500;
+
+/**
+ * One page of the assets matching [scope], optionally narrowed by `query`
+ * (asset name, category, tag, serial, holder or branch). Returns `total` too.
+ */
+async function listAssets(db: SqlExecutor, vars: RequestVars, scope: Query) {
+  const { limit, offset } = vars.limit === undefined || vars.limit === null
+    ? { limit: DEFAULT_ASSET_PAGE, offset: 0 }
+    : pageVars(vars);
+  scope.containsAny(
+    ["ea.name", "ea.category", "ea.asset_tag", "ea.serial_number", "m.full_name", "b.name"],
+    optText(vars, "query", 100),
   );
-  return { employeeAssets };
+  const { rows, total } = await paged(db, {
+    columns: ASSET_COLUMNS,
+    from: `employee_asset ea
+       JOIN branch b ON b.id = ea.branch_id
+       JOIN organization_member m ON m.id = ea.employee_member_id`,
+    q: scope,
+    orderBy: "m.full_name, ea.name, ea.id",
+    limit,
+    offset,
+  });
+  return { employeeAssets: rows, total };
 }
 
 async function requireAssigneeAtBranch(
@@ -122,9 +127,9 @@ async function requireAssigneeAtBranch(
   branchId: string,
   memberId: string,
   roles: readonly string[],
-): Promise<string> {
-  const rows = await db.query<{ id: string; role: string }>(
-    `SELECT m.id, m.role
+): Promise<{ role: string; status: string }> {
+  const rows = await db.query<{ id: string; role: string; status: string }>(
+    `SELECT m.id, m.role, m.status
        FROM organization_member m
        JOIN user_branch_assignment a ON a.member_id = m.id
       WHERE m.id = $1
@@ -137,7 +142,17 @@ async function requireAssigneeAtBranch(
   if (!rows[0]) {
     throw denied("Assignee is not authorized for this branch.");
   }
-  return rows[0].role;
+  return rows[0];
+}
+
+/**
+ * A suspended (or otherwise inactive) member keeps the assets they already
+ * hold, so managers can still edit or return them, but cannot be handed one.
+ */
+function requireActiveForNewAssignment(assigneeStatus: string, assetStatus: string): void {
+  if (assetStatus !== "returned" && assigneeStatus !== "active") {
+    throw precondition("Assets can only be assigned to active members.");
+  }
 }
 
 async function ensureAssetScope(
@@ -163,19 +178,19 @@ export const assetsOps: OperationRegistry = {
     ) throw denied();
     const branchId = actor.role === "branchManager" ? reqId(vars, "branchId") : null;
     if (branchId) await validateActiveBranch(db, actor, vars, branchId);
-    return listAssets(
-      db,
-      `ea.employee_member_id IN (
-         SELECT m.id FROM organization_member m
-          WHERE m.auth_uid = $1 AND m.organization_id = $2 AND m.role = $3
-       ) AND ($4::text IS NULL OR ea.branch_id = $4)`,
-      [actor.uid, actor.organizationId, actor.role, branchId],
-    );
+    const q = new Query();
+    q.and(`ea.employee_member_id IN (
+         SELECT own.id FROM organization_member own
+          WHERE own.auth_uid = ${q.bind(actor.uid)}
+            AND own.organization_id = ${q.bind(actor.organizationId)}
+            AND own.role = ${q.bind(actor.role)}
+       )`).eq("ea.branch_id", branchId);
+    return listAssets(db, vars, q);
   },
 
-  ListOrganizationEmployeeAssets: async ({ db, actor }) => {
+  ListOrganizationEmployeeAssets: async ({ db, actor }, vars) => {
     if (actor.role !== "orgAdmin" || !actor.organizationId) throw denied();
-    return listAssets(db, "ea.organization_id = $1", [actor.organizationId]);
+    return listAssets(db, vars, new Query().eq("ea.organization_id", actor.organizationId));
   },
 
   ListBranchEmployeeAssets: async ({ db, actor }, vars) => {
@@ -186,22 +201,17 @@ export const assetsOps: OperationRegistry = {
       throw denied();
     }
     await validateActiveBranch(db, actor, vars, branchId);
-    return listAssets(
-      db,
-      `ea.organization_id = $1
-       AND m.role = 'employee'
-       AND EXISTS (
+    const q = new Query().eq("ea.organization_id", actor.organizationId).and("m.role = 'employee'");
+    q.and(`EXISTS (
          SELECT 1 FROM user_branch_assignment managed_scope
           WHERE managed_scope.member_id = ea.employee_member_id
-            AND managed_scope.branch_id = $2
-       )
-       AND EXISTS (
+            AND managed_scope.branch_id = ${q.bind(branchId)}
+       )`).and(`EXISTS (
          SELECT 1 FROM user_branch_assignment asset_scope
           WHERE asset_scope.member_id = ea.employee_member_id
             AND asset_scope.branch_id = ea.branch_id
-       )`,
-      [actor.organizationId, branchId],
-    );
+       )`);
+    return listAssets(db, vars, q);
   },
 
   SaveEmployeeAsset: async (
@@ -229,7 +239,7 @@ export const assetsOps: OperationRegistry = {
       const branch = await requireManagedBranch(tx, actor, branchId);
       if (branch.organizationId !== organizationId) throw denied();
       await validateActiveBranch(tx, actor, vars, branchId);
-      const assigneeRole = await requireAssigneeAtBranch(
+      const assignee = await requireAssigneeAtBranch(
         tx,
         organizationId,
         branchId,
@@ -240,7 +250,7 @@ export const assetsOps: OperationRegistry = {
       // receive assets, but should not be left with an acknowledgement they
       // cannot complete in the current workflow.
       const assignmentAcknowledgementEnabled =
-        requireAcknowledgement && assigneeRole === "employee";
+        requireAcknowledgement && assignee.role === "employee";
 
       const duplicate = await tx.query<{ id: string }>(
         `SELECT id FROM employee_asset
@@ -250,7 +260,7 @@ export const assetsOps: OperationRegistry = {
           LIMIT 1`,
         [organizationId, assetTag, id ?? null],
       );
-      if (duplicate[0]) throw invalid("That asset tag is already in use.");
+      if (duplicate[0]) throw invalid(ASSET_TAG_IN_USE);
 
       if (id) {
         const existing = await tx.query<
@@ -288,6 +298,7 @@ export const assetsOps: OperationRegistry = {
           existing[0].employeeId !== employeeId ||
           existing[0].branchId !== branchId ||
           (existing[0].status === "returned" && status === "assigned");
+        if (assignmentChanged) requireActiveForNewAssignment(assignee.status, status);
         const clearPendingAcknowledgement =
           status === "returned" &&
           existing[0].acknowledgementStatus === "pending";
@@ -352,6 +363,7 @@ export const assetsOps: OperationRegistry = {
         return { employeeAsset };
       }
 
+      requireActiveForNewAssignment(assignee.status, status);
       const assignedByName = await assignmentActorName(tx, actor, organizationId);
       const created = await tx.query<{ id: string }>(
         `INSERT INTO employee_asset (
@@ -383,6 +395,11 @@ export const assetsOps: OperationRegistry = {
         : null;
       if (!employeeAsset) throw denied("Asset could not be saved.");
       return { employeeAsset };
+    }).catch((e: unknown) => {
+      if (e instanceof DomainError) throw e;
+      // Two concurrent saves can both pass the duplicate check above; the
+      // unique index then rejects one, which must read as the same message.
+      throw mapDbError(e, { unique: ASSET_TAG_IN_USE });
     });
   },
 

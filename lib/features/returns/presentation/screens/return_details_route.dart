@@ -57,26 +57,22 @@ class _ReturnDetailsRouteState extends State<ReturnDetailsRoute> {
     if (!mounted) return;
     final access = accessController.accessContext;
     final controller = context.read<ReturnsController>()..clearActionError();
-    var item = _findItem(controller);
-    if (access != null && item == null) {
-      // Not in the loaded list (a deep link or a fresh session): load it and
-      // look again.
-      await controller.loadReturns(
-        access: access,
-        activeBranchId: _branchScope(access),
-      );
-      if (!mounted) return;
-      item = _findItem(controller);
-    }
+    // From the loaded pages, else read from the server (a deep link, a fresh
+    // session, or a return beyond the loaded pages).
+    final item = access == null
+        ? null
+        : await controller.findReturn(
+            access: access,
+            activeBranchId: _branchScope(access),
+            returnId: widget.returnId,
+          );
+    if (!mounted) return;
     setState(() {
       _access = access;
       _item = item;
       _loading = false;
     });
   }
-
-  ReturnItem? _findItem(ReturnsController controller) =>
-      controller.items.where((i) => i.id == widget.returnId).firstOrNull;
 
   String? get _activeBranchId =>
       context.read<BranchContextController>().activeBranch?.branchId;

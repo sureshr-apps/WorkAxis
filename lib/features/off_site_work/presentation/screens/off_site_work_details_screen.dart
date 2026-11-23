@@ -54,7 +54,9 @@ class _OffSiteWorkDetailsScreenState extends State<OffSiteWorkDetailsScreen> {
     _branchController = context.read<BranchContextController>();
     _observedBranchId = _activeBranchId;
     _branchController.addListener(_onBranchChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   @override

@@ -1,4 +1,5 @@
 import { AuthTypes, Connector, IpAddressTypes } from "@google-cloud/cloud-sql-connector";
+import { logger } from "firebase-functions/v2";
 import { Pool, types, type PoolConfig } from "pg";
 
 /**
@@ -11,6 +12,12 @@ import { Pool, types, type PoolConfig } from "pg";
  *                   project that owns the instance.
  * DB_MODE=tcp       Any Postgres reachable over TCP (a VM, RDS, a laptop).
  *                   Uses DB_HOST, DB_PORT, DB_USER and DB_PASSWORD.
+ *                   TLS (DB_SSL, default "true") verifies the server
+ *                   certificate and host name against the public CAs, or
+ *                   against DB_SSL_CA (PEM text) for a private CA.
+ *                   "no-verify" encrypts without checking the certificate
+ *                   (anyone on the network path can impersonate the
+ *                   server); "false" disables TLS (private network only).
  *
  * Everything else (DB_NAME, pool size) is shared by both modes.
  */
@@ -24,8 +31,10 @@ export interface DbSettings {
   host?: string;
   port?: number;
   password?: string;
-  /** tcp only: require TLS (set false only for a private network). */
-  ssl: boolean;
+  /** tcp only: TLS mode (see the file header). */
+  ssl: TcpTlsMode;
+  /** tcp only: PEM certificate(s) of a private CA that signed the server. */
+  sslCa?: string;
   poolMax: number;
 }
 
@@ -48,10 +57,43 @@ export function readDbSettings(env: NodeJS.ProcessEnv = process.env): DbSettings
     host: mode === "tcp" ? need("DB_HOST") : undefined,
     port: env.DB_PORT ? Number(env.DB_PORT) : 5432,
     password: mode === "tcp" ? need("DB_PASSWORD") : undefined,
-    ssl: env.DB_SSL !== "false",
+    ssl: readTlsMode(env.DB_SSL),
+    sslCa: env.DB_SSL_CA || undefined,
     // Small on purpose: the instance is shared and tiny.
     poolMax: env.DB_POOL_MAX ? Number(env.DB_POOL_MAX) : 3,
   };
+}
+
+export type TcpTlsMode = "verify" | "no-verify" | "off";
+
+function readTlsMode(raw: string | undefined): TcpTlsMode {
+  switch (raw ?? "true") {
+    case "true":
+      return "verify";
+    case "no-verify":
+      return "no-verify";
+    case "false":
+      return "off";
+    default:
+      throw new Error(`DB_SSL must be "true", "no-verify" or "false", got "${raw}".`);
+  }
+}
+
+/**
+ * pg `ssl` options for a TCP connection. Verification is the default; only an
+ * explicit DB_SSL=no-verify accepts an unverified certificate.
+ */
+export function tcpSslOptions(settings: Pick<DbSettings, "ssl" | "sslCa">): PoolConfig["ssl"] {
+  switch (settings.ssl) {
+    case "off":
+      return false;
+    case "no-verify":
+      return { rejectUnauthorized: false };
+    case "verify":
+      return settings.sslCa
+        ? { rejectUnauthorized: true, ca: settings.sslCa }
+        : { rejectUnauthorized: true };
+  }
 }
 
 let typeParsersInstalled = false;
@@ -105,7 +147,10 @@ export async function createPool(settings: DbSettings): Promise<PoolHandle> {
     host: settings.host,
     port: settings.port,
     password: settings.password,
-    ssl: settings.ssl ? { rejectUnauthorized: false } : false,
+    ssl: tcpSslOptions(settings),
   });
+  if (settings.ssl === "no-verify") {
+    logger.warn("DB_SSL=no-verify: the database server certificate is not verified.");
+  }
   return { pool, close: () => pool.end() };
 }

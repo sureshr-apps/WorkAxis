@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:workaxis/core/errors/user_message.dart';
@@ -373,9 +374,15 @@ class PlatformUsersController extends ChangeNotifier
       _activeCount = results.$2;
       _suspendedCount = results.$3;
       notifyListeners();
-    } catch (_) {
+    } catch (error, stackTrace) {
       // Summary counts are decorative; keep the previous values and let the
       // list surface its own errors.
+      developer.log(
+        'Unable to load platform administrator counts.',
+        name: 'workaxis.platform_users',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 

@@ -4,10 +4,34 @@ rules_version = '2';
 // immutable: every object gets a fresh UUID name, so only `create` is allowed.
 // Claims (role, organizationId, branchIds, status) are written by trusted
 // account functions. Attendance selfie reads are limited to assigned branches.
+// Because an ID token outlives a suspension or branch removal by up to an
+// hour, every check also reads the live Firestore users/{uid} profile (see
+// firestore.rules): status, role and organization must match the token, and
+// branch access needs the branch in both.
+// Reads are `get` only: the app always opens an object by the reference saved
+// on its record, so nobody may `list` a folder and enumerate other people's
+// files (for example every Aadhaar scan in an organization).
 service firebase.storage {
   match /b/{bucket}/o {
+    function profilePath() {
+      return /databases/(default)/documents/users/$(request.auth.uid);
+    }
+    function liveProfile() {
+      return firestore.get(profilePath()).data;
+    }
     function active() {
-      return request.auth != null && request.auth.token.status == 'active';
+      return request.auth != null && request.auth.token.status == 'active' &&
+        firestore.exists(profilePath()) &&
+        liveProfile().get('status', '') == 'active' &&
+        liveProfile().get('role', '') == request.auth.token.role &&
+        liveProfile().get('organizationId', '') ==
+          request.auth.token.get('organizationId', '');
+    }
+    // The branch is granted by both the token and the live profile.
+    function hasBranch(branchId) {
+      return request.auth.token.get('branchIds', []).hasAny([branchId]) &&
+        liveProfile().get('activeBranchIds', liveProfile().get('branchIds', []))
+          .hasAny([branchId]);
     }
     function inOrg(orgId) {
       return active() && request.auth.token.organizationId == orgId;
@@ -22,7 +46,7 @@ service firebase.storage {
     function isBranchManagerOf(orgId, branchId) {
       return inOrg(orgId) &&
         request.auth.token.role == 'branchManager' &&
-        request.auth.token.get('branchIds', []).hasAny([branchId]);
+        hasBranch(branchId);
     }
     function validImage() {
       return request.resource.size < 5 * 1024 * 1024 &&
@@ -33,21 +57,21 @@ service firebase.storage {
     }
 
     match /organizations/{orgId}/profile-photos/{file} {
-      allow read: if inOrg(orgId);
+      allow get: if inOrg(orgId);
       allow create: if isOrgManager(orgId) && validImage();
     }
 
     // Organization logos: uploaded by platform staff, read by the platform and
     // members of that organization. Uploads are immutable (fresh UUID names).
     match /organizations/{orgId}/logo/{file} {
-      allow read: if platformStaff() || inOrg(orgId);
+      allow get: if platformStaff() || inOrg(orgId);
       allow create: if platformStaff() && request.resource.size < 2 * 1024 * 1024 &&
         request.resource.contentType.matches('image/(jpeg|png)');
     }
 
     // Identity documents: organization managers only.
     match /organizations/{orgId}/aadhaar-documents/{file} {
-      allow read: if isOrgManager(orgId);
+      allow get: if isOrgManager(orgId);
       allow create: if isOrgManager(orgId) && validImage();
     }
 
@@ -56,14 +80,14 @@ service firebase.storage {
     // a punch; branch managers assigned to the path's branch and Org Admins
     // can review the images.
     match /organizations/{orgId}/attendance-selfies/{branchId}/{employeeUid}/{file} {
-      allow read: if isOrgAdmin(orgId) ||
+      allow get: if isOrgAdmin(orgId) ||
         isBranchManagerOf(orgId, branchId) ||
         (inOrg(orgId) && request.auth.token.role == 'employee' &&
           request.auth.uid == employeeUid);
       allow create: if inOrg(orgId) &&
         request.auth.token.role in ['employee', 'branchManager'] &&
         request.auth.uid == employeeUid &&
-        request.auth.token.get('branchIds', []).hasAny([branchId]) &&
+        hasBranch(branchId) &&
         validImage();
     }
 
@@ -71,19 +95,19 @@ service firebase.storage {
     // work operation verifies that the caller is the assigned person before
     // saving a reference. Managers can read evidence in their scope.
     match /organizations/{orgId}/off-site-work-evidence/{branchId}/{employeeUid}/{assignmentId}/{file} {
-      allow read: if isOrgAdmin(orgId) ||
+      allow get: if isOrgAdmin(orgId) ||
         isBranchManagerOf(orgId, branchId) ||
         (inOrg(orgId) && request.auth.token.role == 'employee' &&
           request.auth.uid == employeeUid);
       allow create: if inOrg(orgId) &&
         request.auth.token.role in ['employee', 'branchManager'] &&
         request.auth.uid == employeeUid &&
-        request.auth.token.get('branchIds', []).hasAny([branchId]) &&
+        hasBranch(branchId) &&
         validImage();
     }
 
     match /organizations/{orgId}/return-bills/{file} {
-      allow read: if inOrg(orgId);
+      allow get: if inOrg(orgId);
       allow create: if inOrg(orgId) && validImage();
     }
 

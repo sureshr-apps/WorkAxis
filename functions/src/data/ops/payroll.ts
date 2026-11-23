@@ -2,8 +2,10 @@ import { getFirestore, type DocumentData, type Query } from "firebase-admin/fire
 import { denied, invalid, notFound } from "../../errors";
 import type { Actor } from "../../auth/roles";
 import type { SqlExecutor } from "../../db/executor";
-import { calculatePayroll, type ApprovedLeaveRange, type CompensationVersion, type PayrollAttendanceSession, type PayrollCalculation, type ScheduleVersion } from "../../payroll/calculatePayroll";
-import { requireRole } from "../authz";
+import { loadEmploymentDates, loadLeaveHistory, loadLeavePolicy, ledgerInput } from "../../leave/leavePolicyStore";
+import { leaveLedger } from "../../payroll/leaveLedger";
+import { calculatePayroll, type PayrollLeaveDay, type CompensationVersion, type PayrollAttendanceSession, type PayrollCalculation, type ScheduleVersion } from "../../payroll/calculatePayroll";
+import { findActiveBranch, requireActiveBranch, requireRole } from "../authz";
 import type { OperationRegistry } from "../operation";
 import { reqId } from "../vars";
 import { reqString } from "../../util/input";
@@ -24,6 +26,7 @@ interface PayrollSummaryRow {
   actualHours: number;
   scheduledWorkdays: number;
   payableWorkdays: number;
+  paidLeaveDays: number;
   unpaidLeaveDays: number;
   unpaidLeaveImpact: number;
   overtimeHours: number;
@@ -44,12 +47,6 @@ interface CompensationRow extends Row {
   effectiveTo: string | Date | null;
   monthlySalary: number | string;
 }
-interface LeaveRow extends Row {
-  applicantMemberId: string;
-  startDate: string | Date;
-  endDate: string | Date;
-}
-
 export const payrollOps: OperationRegistry = {
   GetMonthlyPayroll: async ({ db, actor }, vars) => {
     const month = reqString(vars, "month", 7, 7);
@@ -85,14 +82,12 @@ export const payrollOps: OperationRegistry = {
       const basis = settings.get("payCalculationBasis");
       let branchSummaries: (PayrollSummaryRow & { branchId: string; branchName: string })[] = [];
       if (view === "branchSummary") {
-        const branchId = reqId(vars, "activeBranchId");
-        const branches = await db.query<{ id: string; name: string }>(
-          `SELECT id, name FROM branch
-            WHERE id = $1 AND organization_id = $2 AND status = 'active'
-            LIMIT 1`,
-          [branchId, actor.organizationId],
+        const branch = await findActiveBranch(
+          db,
+          reqId(vars, "activeBranchId"),
+          actor.organizationId,
         );
-        branchSummaries = branches.map((branch) => ({
+        branchSummaries = (branch ? [branch] : []).map((branch) => ({
           branchId: branch.id,
           branchName: branch.name,
           ...emptySummary(),
@@ -121,7 +116,7 @@ export const payrollOps: OperationRegistry = {
     }
 
     const memberIds = members.map((member) => member.id);
-    const [schedules, compensations, leaves] = await Promise.all([
+    const [schedules, compensations] = await Promise.all([
       db.query<ScheduleRow>(
         `SELECT member_id AS "memberId", to_char(effective_from, 'YYYY-MM-DD') AS "effectiveFrom",
                 CASE WHEN effective_to IS NULL THEN NULL ELSE to_char(effective_to, 'YYYY-MM-DD') END AS "effectiveTo",
@@ -142,16 +137,15 @@ export const payrollOps: OperationRegistry = {
           ORDER BY member_id, effective_from`,
         [memberIds, monthStart, nextMonth],
       ),
-      db.query<LeaveRow>(
-        `SELECT applicant_member_id AS "applicantMemberId",
-                to_char(start_date, 'YYYY-MM-DD') AS "startDate",
-                to_char(end_date, 'YYYY-MM-DD') AS "endDate"
-           FROM leave_request
-          WHERE organization_id = $1 AND status = 'approved'
-            AND applicant_member_id = ANY($2::text[])
-            AND end_date >= $3::date AND start_date < $4::date`,
-        [actor.organizationId, memberIds, monthStart, nextMonth],
-      ),
+    ]);
+    // Whether each approved leave day is paid depends on the whole leave
+    // history (allowance used earlier in the year, carry-forward), so the
+    // ledger reads it up to the end of this month.
+    const monthEnd = lastDayOf(month);
+    const [policy, leaveHistory, employment] = await Promise.all([
+      loadLeavePolicy(db, actor.organizationId!),
+      loadLeaveHistory(db, actor.organizationId!, memberIds, monthEnd),
+      loadEmploymentDates(members.map((member) => member.authUid)),
     ]);
     const attendance = await attendanceForScope(actor, members, monthStart, nextMonth);
     const settings = await getFirestore().collection("organization_settings")
@@ -161,6 +155,10 @@ export const payrollOps: OperationRegistry = {
 
     const paySlips = members.map((member) => {
       const memberAttendance = attendance.get(member.authUid) ?? [];
+      const dates = employment.get(member.authUid);
+      const leaveDays = leaveLedger(ledgerInput(policy, leaveHistory.get(member.id), dates))
+        .filter((day) => day.date >= monthStart && day.date <= monthEnd)
+        .map((day): PayrollLeaveDay => ({ date: day.date, paid: day.paid }));
       const calculation = calculatePayroll({
         month,
         basis,
@@ -168,9 +166,9 @@ export const payrollOps: OperationRegistry = {
         schedules: schedules.filter((row) => row.memberId === member.id).map(scheduleVersion),
         compensations: compensations.filter((row) => row.memberId === member.id).map(compensationVersion),
         attendance: memberAttendance,
-        approvedLeaves: leaves
-          .filter((row) => row.applicantMemberId === member.id)
-          .map((row): ApprovedLeaveRange => ({ startDate: dateOnly(row.startDate), endDate: dateOnly(row.endDate) })),
+        leaveDays,
+        employmentStart: dates?.joiningDate,
+        employmentEnd: dates?.relievingDate,
       });
       return {
         memberId: member.id,
@@ -183,10 +181,7 @@ export const payrollOps: OperationRegistry = {
     });
     if (view === "branchSummary") {
       const branchId = reqId(vars, "activeBranchId");
-      const branch = await db.query<{ name: string }>(
-        `SELECT name FROM branch WHERE id = $1 AND organization_id = $2 AND status = 'active' LIMIT 1`,
-        [branchId, actor.organizationId],
-      );
+      const branch = await findActiveBranch(db, branchId, actor.organizationId);
       const assignments = await db.query<{ memberId: string; branchCount: number }>(
         `SELECT a.member_id AS "memberId", count(*)::int AS "branchCount"
            FROM user_branch_assignment a
@@ -213,7 +208,7 @@ export const payrollOps: OperationRegistry = {
         overtimeEnabled,
         paySlips: [],
         summary,
-        branchSummaries: branch[0] ? [{ branchId, branchName: branch[0].name, ...summary }] : [],
+        branchSummaries: branch ? [{ branchId, branchName: branch.name, ...summary }] : [],
       };
     }
     if (view === "organizationSummary") {
@@ -275,7 +270,7 @@ export const payrollOps: OperationRegistry = {
 function emptySummary(): PayrollSummaryRow {
   return {
     employeeCount: 0, availableCount: 0, scheduledHours: 0, payableHours: 0,
-    actualHours: 0, scheduledWorkdays: 0, payableWorkdays: 0, unpaidLeaveDays: 0,
+    actualHours: 0, scheduledWorkdays: 0, payableWorkdays: 0, paidLeaveDays: 0, unpaidLeaveDays: 0,
     unpaidLeaveImpact: 0, overtimeHours: 0, overtimePay: 0, basePay: 0, grossPay: 0,
   };
 }
@@ -285,7 +280,7 @@ function sumCalculations(rows: readonly { calculation: PayrollCalculation }[]): 
   summary.employeeCount = rows.length;
   for (const { calculation } of rows) {
     if (calculation.available === true) summary.availableCount++;
-    for (const key of ["scheduledHours", "payableHours", "actualHours", "scheduledWorkdays", "payableWorkdays", "unpaidLeaveDays", "unpaidLeaveImpact", "overtimeHours", "overtimePay", "basePay", "grossPay"] as const) {
+    for (const key of ["scheduledHours", "payableHours", "actualHours", "scheduledWorkdays", "payableWorkdays", "paidLeaveDays", "unpaidLeaveDays", "unpaidLeaveImpact", "overtimeHours", "overtimePay", "basePay", "grossPay"] as const) {
       summary[key] += calculation[key];
     }
   }
@@ -301,6 +296,7 @@ function scaleCalculation(calculation: PayrollCalculation, share: number): Payro
     actualHours: scale(calculation.actualHours),
     scheduledWorkdays: scale(calculation.scheduledWorkdays),
     payableWorkdays: scale(calculation.payableWorkdays),
+    paidLeaveDays: scale(calculation.paidLeaveDays),
     unpaidLeaveDays: scale(calculation.unpaidLeaveDays),
     unpaidLeaveImpact: scale(calculation.unpaidLeaveImpact),
     overtimeHours: scale(calculation.overtimeHours),
@@ -332,13 +328,7 @@ async function payrollMembers(db: SqlExecutor, actor: Actor, vars: Row): Promise
   requireRole(actor, ["branchManager"]);
   const branchId = reqId(vars, "activeBranchId");
   if (!actor.branchIds.includes(branchId)) throw denied("Use an assigned active branch.");
-  const branches = await db.query<{ status: string; organizationId: string }>(
-    `SELECT status, organization_id AS "organizationId" FROM branch WHERE id = $1`,
-    [branchId],
-  );
-  if (!branches[0] || branches[0].status !== "active" || branches[0].organizationId !== orgId) {
-    throw notFound("Branch not found.");
-  }
+  await requireActiveBranch(db, branchId, orgId, () => notFound("Branch not found."));
   return db.query<MemberRow>(
     `SELECT id, auth_uid AS "authUid", full_name AS "fullName", role, employee_code AS "employeeCode"
        FROM organization_member
@@ -436,6 +426,13 @@ function compensationVersion(row: CompensationRow): CompensationVersion {
 
 function dateOnly(value: string | Date): string {
   return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
+}
+
+/** Last calendar day of a `YYYY-MM` month. */
+function lastDayOf(month: string): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(year, monthNumber, 0));
+  return last.toISOString().slice(0, 10);
 }
 
 function monthBounds(month: string): { monthStart: string; nextMonth: string } {

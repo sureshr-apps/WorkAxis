@@ -76,6 +76,9 @@ import 'package:workaxis/features/leaves/data/mock_leaves_data_source.dart';
 import 'package:workaxis/features/leaves/data/mock_leaves_repository.dart';
 import 'package:workaxis/features/leaves/data/sql_connect_leaves_repository.dart';
 import 'package:workaxis/features/leaves/domain/repositories/leaves_repository.dart';
+import 'package:workaxis/features/leave_policy/data/mock_leave_policy_repository.dart';
+import 'package:workaxis/features/leave_policy/data/sql_connect_leave_policy_repository.dart';
+import 'package:workaxis/features/leave_policy/domain/repositories/leave_policy_repository.dart';
 import 'package:workaxis/features/off_site_work/data/mock_off_site_work_repository.dart';
 import 'package:workaxis/features/off_site_work/data/off_site_work_remote_data_source.dart';
 import 'package:workaxis/features/off_site_work/data/sql_connect_off_site_work_repository.dart';
@@ -102,6 +105,7 @@ class BackendRepositories {
     required this.attendanceRepository,
     required this.returnsRepository,
     required this.leavesRepository,
+    required this.leavePolicyRepository,
     required this.offSiteWorkRepository,
     required this.reportsRepository,
     required this.payrollRepository,
@@ -125,6 +129,7 @@ class BackendRepositories {
   final AttendanceRepository attendanceRepository;
   final ReturnsRepository returnsRepository;
   final LeavesRepository leavesRepository;
+  final LeavePolicyRepository leavePolicyRepository;
   final OffSiteWorkRepository offSiteWorkRepository;
   final ReportsRepository reportsRepository;
   final PayrollRepository payrollRepository;
@@ -243,6 +248,7 @@ class BackendFactory {
         ),
         returnsRepository: returnsRepository,
         leavesRepository: SqlConnectLeavesRepository(gateway: data),
+        leavePolicyRepository: SqlConnectLeavePolicyRepository(gateway: data),
         offSiteWorkRepository: SqlConnectOffSiteWorkRepository(
           remote: OffSiteWorkRemoteDataSource(gateway: data),
           attachments: attachmentStorage,
@@ -334,6 +340,9 @@ class BackendFactory {
         leavesDataSource,
         now: now,
         delay: delay ?? const Duration(milliseconds: 140),
+      ),
+      leavePolicyRepository: MockLeavePolicyRepository(
+        delay: delay ?? const Duration(milliseconds: 150),
       ),
       offSiteWorkRepository: MockOffSiteWorkRepository(
         members: organizationMembersRepository,

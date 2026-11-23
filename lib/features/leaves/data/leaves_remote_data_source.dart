@@ -1,47 +1,73 @@
 import 'package:workaxis/core/backend/data_gateway.dart';
+import 'package:workaxis/core/backend/idempotent_creates.dart';
 import 'package:workaxis/core/backend/json_reader.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_preview.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_queue.dart';
 import 'package:workaxis/features/leaves/domain/models/leave_request.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_status_counts.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_type_option.dart';
 
 class LeavesRemoteDataSource {
-  const LeavesRemoteDataSource(this._gateway);
+  LeavesRemoteDataSource(this._gateway, {IdempotentCreates? creates})
+    : _creates = creates ?? IdempotentCreates();
 
   final DataGateway _gateway;
+  final IdempotentCreates _creates;
 
-  Future<List<LeaveRequest>> listMine({
+  /// One page of [queue]. [branchId] is required for
+  /// [LeaveQueue.branchEmployees] and ignored otherwise.
+  Future<PageResult<LeaveRequest>> listPage({
+    required LeaveQueue queue,
+    String? branchId,
+    LeaveStatus? status,
     required int limit,
     required int offset,
   }) async {
-    final data = await _gateway.call('ListMyLeaveRequests', {
+    final data = await _gateway.call(_listOperation(queue), {
+      if (queue == LeaveQueue.branchEmployees) 'branchId': _branch(branchId),
       'limit': limit,
       'offset': offset,
+      // Unset optional variables are omitted, never sent as null.
+      'status': ?status?.name,
     });
-    return _list(data);
+    return PageResult(
+      items: [for (final row in data.objects('leaveRequests')) _map(row)],
+      total: data.countOf('total'),
+      offset: offset,
+    );
   }
 
-  Future<List<LeaveRequest>> listByOrganization({
-    required int limit,
-    required int offset,
+  /// Per-status totals for the whole of [queue].
+  Future<LeaveStatusCounts> statusCounts({
+    required LeaveQueue queue,
+    String? branchId,
   }) async {
-    final data = await _gateway.call('ListOrganizationLeaveRequestsPaged', {
-      'limit': limit,
-      'offset': offset,
+    final data = await _gateway.call('GetLeaveStatusCounts', {
+      'scope': queue.scopeName,
+      if (queue == LeaveQueue.branchEmployees) 'branchId': _branch(branchId),
     });
-    return _list(data);
+    final counts = data.object('counts');
+    return LeaveStatusCounts(
+      pending: counts.integer('pending'),
+      approved: counts.integer('approved'),
+      rejected: counts.integer('rejected'),
+    );
   }
 
-  Future<List<LeaveRequest>> listEmployeeRequestsByBranch({
-    required String branchId,
-    required int limit,
-    required int offset,
-  }) async {
-    final data = await _gateway.call('ListEmployeeLeaveRequestsByBranchPaged', {
-      'branchId': branchId,
-      'limit': limit,
-      'offset': offset,
-    });
-    return _list(data);
+  static String _listOperation(LeaveQueue queue) => switch (queue) {
+    LeaveQueue.mine => 'ListMyLeaveRequests',
+    LeaveQueue.branchEmployees => 'ListEmployeeLeaveRequestsByBranchPaged',
+    LeaveQueue.organization => 'ListOrganizationLeaveRequestsPaged',
+  };
+
+  static String _branch(String? branchId) {
+    if (branchId == null || branchId.isEmpty) {
+      throw ArgumentError('branchId is required for branch employee leave.');
+    }
+    return branchId;
   }
 
   Future<LeaveRequest> submit({
@@ -49,14 +75,15 @@ class LeavesRemoteDataSource {
     String? activeBranchId,
     required LeaveRequestDraft draft,
   }) async {
-    final data = await _gateway.call('SubmitLeaveRequest', {
+    // A retried request reuses its requestId, so it is never saved twice.
+    final data = await _creates.run('SubmitLeaveRequest', {
       'branchId': branchId,
       'activeBranchId': ?activeBranchId,
-      'leaveType': draft.leaveType.name,
+      'leaveTypeId': draft.leaveTypeId,
       'startDate': _dateOnly(draft.startDate),
       'endDate': _dateOnly(draft.endDate),
       'reason': draft.reason.trim(),
-    });
+    }, (vars) => _gateway.call('SubmitLeaveRequest', vars));
     return _map(data.object('leaveRequest'));
   }
 
@@ -68,13 +95,64 @@ class LeavesRemoteDataSource {
     final data = await _gateway.call('UpdateMyPendingLeaveRequest', {
       'id': requestId,
       'activeBranchId': ?activeBranchId,
-      'leaveType': draft.leaveType.name,
+      'leaveTypeId': draft.leaveTypeId,
       'startDate': _dateOnly(draft.startDate),
       'endDate': _dateOnly(draft.endDate),
       'reason': draft.reason.trim(),
     });
     return _map(data.object('leaveRequest'));
   }
+
+  /// The organization's active leave types, in display order.
+  Future<List<LeaveTypeOption>> listLeaveTypes() async {
+    final data = await _gateway.call('ListLeaveTypes', const {});
+    return [
+      for (final row in data.objects('leaveTypes'))
+        LeaveTypeOption(
+          id: row.string('id'),
+          name: row.string('name'),
+          paid: row.boolean('paid'),
+        ),
+    ];
+  }
+
+  /// Applicant preview of an unsaved draft. [requestId] is the pending
+  /// request being edited, if any.
+  Future<LeavePreview> previewDraft({
+    required String leaveTypeId,
+    required DateTime startDate,
+    required DateTime endDate,
+    String? requestId,
+  }) async {
+    final data = await _gateway.call('PreviewLeaveRequest', {
+      'leaveTypeId': leaveTypeId,
+      'startDate': _dateOnly(startDate),
+      'endDate': _dateOnly(endDate),
+      'id': ?requestId,
+    });
+    return _mapPreview(data.object('leavePreview'));
+  }
+
+  /// Reviewer preview of a saved request. [activeBranchId] is required by the
+  /// server for Branch Managers and omitted for Organization Admins.
+  Future<LeavePreview> previewReview({
+    required String requestId,
+    String? activeBranchId,
+  }) async {
+    final data = await _gateway.call('PreviewLeaveRequest', {
+      'id': requestId,
+      'activeBranchId': ?activeBranchId,
+    });
+    return _mapPreview(data.object('leavePreview'));
+  }
+
+  LeavePreview _mapPreview(Map<String, dynamic> row) => LeavePreview(
+    leaveTypeId: row.string('leaveTypeId'),
+    availableDays: row.integer('availableDays'),
+    workdays: row.integer('workdays'),
+    paidDays: row.integer('paidDays'),
+    unpaidDays: row.integer('unpaidDays'),
+  );
 
   Future<LeaveRequest> review({
     required String requestId,
@@ -91,15 +169,10 @@ class LeavesRemoteDataSource {
     return _map(data.object('leaveRequest'));
   }
 
-  List<LeaveRequest> _list(Map<String, dynamic> data) => [
-    for (final row in data.objects('leaveRequests')) _map(row),
-  ];
-
   LeaveRequest _map(Map<String, dynamic> row) {
     final role = UserRoleValue.parse(_string(row, 'applicantRole'));
-    final type = LeaveType.tryParse(_string(row, 'leaveType'));
     final status = LeaveStatus.tryParse(_string(row, 'status'));
-    if (type == null || status == null) {
+    if (status == null) {
       throw const DatabaseException(
         'Invalid leave request enum returned by the server.',
       );
@@ -113,7 +186,11 @@ class LeavesRemoteDataSource {
       applicantUid: _string(row, 'applicantUid'),
       applicantName: _string(row, 'applicantName'),
       applicantRole: role,
-      leaveType: type,
+      // `leaveType` is only the legacy code of a former fixed type; the
+      // organization-defined type is identified by id.
+      leaveTypeId: _string(row, 'leaveTypeId'),
+      leaveTypeName: _string(row, 'leaveTypeName'),
+      leaveTypePaid: row.boolean('leaveTypePaid'),
       startDate: _calendarDate(row, 'startDate'),
       endDate: _calendarDate(row, 'endDate'),
       reason: _string(row, 'reason'),

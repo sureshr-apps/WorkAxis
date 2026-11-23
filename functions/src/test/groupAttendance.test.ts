@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   assertGroupAttendee,
   assertGroupScope,
+  overlapsRecordedSession,
   parseGroupAttendance,
 } from "../attendance/groupRules";
 import type { Actor } from "../auth/roles";
@@ -109,5 +110,30 @@ describe("trusted group attendance", () => {
     ]) {
       assert.throws(() => assertGroupAttendee(candidate, "o1", "b1"));
     }
+  });
+  it("rejects a back-dated group check-in that overlaps recorded sessions", () => {
+    const at = (time: string) => new Date(`2026-11-07T${time}:00+05:30`);
+    const checkInAt = at("09:00");
+    // A completed self-service session that ended after the group time.
+    assert.equal(
+      overlapsRecordedSession(checkInAt, [{ checkInAt: at("08:00"), checkOutAt: at("12:00") }]),
+      true,
+    );
+    // A session that started later the same day.
+    assert.equal(
+      overlapsRecordedSession(checkInAt, [{ checkInAt: at("13:00"), checkOutAt: at("14:00") }]),
+      true,
+    );
+    // An open session.
+    assert.equal(
+      overlapsRecordedSession(checkInAt, [{ checkInAt: at("08:00"), checkOutAt: null }]),
+      true,
+    );
+    // Sessions that finished before the group time do not overlap.
+    assert.equal(
+      overlapsRecordedSession(checkInAt, [{ checkInAt: at("06:00"), checkOutAt: at("09:00") }]),
+      false,
+    );
+    assert.equal(overlapsRecordedSession(checkInAt, []), false);
   });
 });

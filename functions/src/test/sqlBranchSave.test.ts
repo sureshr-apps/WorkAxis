@@ -61,11 +61,14 @@ async function failureOf(p: Promise<unknown>): Promise<[string, string]> {
   assert.fail("expected a DomainError");
 }
 
-it("update runs every statement in one transaction and replaces manager assignments", async () => {
+it("update runs every statement in one transaction and writes only changed manager assignments", async () => {
   db.when('AS "authUid" FROM organization_member', [
     { id: "m1", authUid: "u1" },
-  ]);
-  await commitBranchSave(updatePlan(["m1"]), []);
+    { id: "m2", authUid: "u2" },
+  ])
+    .when('SELECT a.member_id AS "memberId"', [{ memberId: "m1" }, { memberId: "m3" }])
+    .when('AS "otherBranches"', [{ id: "m3", otherBranches: 1 }]);
+  await commitBranchSave(updatePlan(["m1", "m2"]), ["m1", "m3"]);
   assert.equal(db.transactions, 1);
   const sql = sqlOf();
   assert.ok(sql.some((s) => s.startsWith("UPDATE branch SET")));
@@ -77,7 +80,16 @@ it("update runs every statement in one transaction and replaces manager assignme
     s.startsWith("INSERT INTO user_branch_assignment"),
   );
   assert.ok(del > 0 && ins > del);
-  assert.deepEqual(db.calls[ins].params, [["m1"], "b1"]);
+  // m1 is unchanged, so its assignment (and assigned_at) is left alone.
+  assert.deepEqual(db.calls[del].params, ["b1", ["m3"]]);
+  assert.deepEqual(db.calls[ins].params, [["m2"], "b1"]);
+});
+
+it("saving a branch with unchanged managers rewrites no assignments", async () => {
+  db.when('AS "authUid" FROM organization_member', [{ id: "m1", authUid: "u1" }])
+    .when('SELECT a.member_id AS "memberId"', [{ memberId: "m1" }]);
+  await commitBranchSave(updatePlan(["m1"]), ["m1"]);
+  assert.ok(!sqlOf().some((s) => /^(DELETE FROM|INSERT INTO) user_branch_assignment/.test(s)));
 });
 
 it("create inserts the branch with idempotency columns instead of upserting", async () => {

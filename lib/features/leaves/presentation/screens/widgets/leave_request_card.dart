@@ -57,7 +57,7 @@ class LeaveRequestCard extends StatelessWidget {
                     Text(
                       showApplicant
                           ? request.applicantName
-                          : request.leaveType.label,
+                          : request.leaveTypeName,
                       style: AppTypography.titleMedium.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppColors.onSurface,
@@ -65,7 +65,7 @@ class LeaveRequestCard extends StatelessWidget {
                     ),
                     if (showApplicant)
                       Text(
-                        '${request.applicantRole.displayName} · ${request.leaveType.label}',
+                        '${request.applicantRole.displayName} · ${request.leaveTypeName}',
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.onSurfaceVariant,
                         ),

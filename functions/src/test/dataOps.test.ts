@@ -63,9 +63,12 @@ describe("dispatch", () => {
       "GetPlatformStats", "ListBranchesByOrg", "GetBranchById", "ListMyBranchAssignments",
       "GetMyMember", "ListMembersByOrg", "ListMembersByOrgPaged", "ListMembersByBranchPaged",
       "GetMemberById", "ListReturnsByBranch", "ListReturnsByBranchPaged", "ListReturnsByOrgPaged",
-      "ListMyReturns", "GetOrganizationDashboardCounts", "GetReturnCountsByBranch", "GetBranchStats",
+      "ListMyReturns", "GetReturnStatusCounts", "GetReturnById", "GetLeaveStatusCounts",
+      "ListLeaveTypes", "GetLeavePolicy", "SaveLeaveType", "ArchiveLeaveType", "SetLeaveAccrual",
+      "PreviewLeaveRequest",
+      "GetOrganizationDashboardCounts", "GetReturnCountsByBranch", "GetBranchStats",
       "ListPlatformMembersPaged", "CreateOrganization", "UpdateOrganization",
-      "CreateReturnRecord", "SubmitReturn", "ListLicensePlans", "CreateLicensePlan",
+      "CreateReturnRecord", "SubmitReturn", "SubmitReturnBatch", "ListLicensePlans", "CreateLicensePlan",
       "UpdateLicensePlan", "ChangeLicensePlanStatus", "DeleteLicensePlan", "GetOrganizationLicense",
       "GetOrganizationLicenseHistory", "AssignOrganizationLicense", "ChangeOrganizationLicensePlan",
       "ModifyOrganizationCommercialTerms", "RenewOrganizationLicense",
@@ -101,9 +104,20 @@ describe("employee asset acknowledgments", () => {
     acknowledgedAt: acknowledgementStatus === "acknowledged" ? "2026-11-02T09:00:00.000Z" : null,
   });
 
-  function saveDb(initialStatus = "assigned") {
+  function saveDb(
+    initialStatus = "assigned",
+    insertError?: Error,
+    { memberStatus = "active", existing }: {
+      memberStatus?: string;
+      existing?: { employeeId: string; status: string };
+    } = {},
+  ) {
     return new FakeDb().whenCall(({ sql }) => {
       const query = sql.toLowerCase();
+      if (insertError && query.includes("insert into employee_asset")) throw insertError;
+      if (existing && query.includes("from employee_asset") && query.includes("for update")) {
+        return [{ id: "asset-1", organizationId: "o1", branchId: "b1", ...existing }];
+      }
       if (query.includes("from branch where id = $1")) {
         return [{ id: "b1", organizationId: "o1" }];
       }
@@ -111,7 +125,7 @@ describe("employee asset acknowledgments", () => {
         return [{ fullName: "Organization Owner" }];
       }
       if (query.includes("from organization_member m") && query.includes("user_branch_assignment")) {
-        return [{ id: "member-e1", role: "employee" }];
+        return [{ id: "member-e1", role: "employee", status: memberStatus }];
       }
       if (query.includes("lower(asset_tag)")) return [];
       if (query.includes("insert into employee_asset")) return [{ id: "asset-1" }];
@@ -139,6 +153,26 @@ describe("employee asset acknowledgments", () => {
     assert.equal(insert.params[11], orgAdmin.uid);
     assert.equal(insert.params[12], "Organization Owner");
     assert.match(insert.sql, /assigned_at\s*\)\s*VALUES[\s\S]*now\(\)/i);
+  });
+
+  it("reports a concurrent duplicate asset tag as a conflict, not an internal error", async () => {
+    // Both saves passed the duplicate check; the unique index rejects this one.
+    const uniqueViolation = Object.assign(
+      new Error("duplicate key value violates unique constraint"),
+      { code: "23505" },
+    );
+    await assert.rejects(
+      run(saveDb("assigned", uniqueViolation), orgAdmin, "SaveEmployeeAsset", {
+        branchId: "b1",
+        employeeId: "member-e1",
+        name: "Work phone",
+        category: "Device",
+        assetTag: "WA-001",
+        status: "assigned",
+      }),
+      (e: { code?: string; message?: string }) =>
+        e.code === "already-exists" && e.message === "That asset tag is already in use.",
+    );
   });
 
   it("ignores client-supplied acknowledgment fields", async () => {
@@ -191,6 +225,55 @@ describe("employee asset acknowledgments", () => {
     assert.equal(insert.params[10], "not_required");
   });
 
+  const assetVars = {
+    branchId: "b1",
+    employeeId: "member-e1",
+    name: "Work phone",
+    category: "Device",
+    assetTag: "WA-001",
+    status: "assigned",
+  };
+  const rejectsInactive = (e: { code?: string }) => e.code === "failed-precondition";
+
+  it("does not hand a new asset to a suspended member", async () => {
+    const db = saveDb("assigned", undefined, { memberStatus: "suspended" });
+    await assert.rejects(run(db, orgAdmin, "SaveEmployeeAsset", assetVars), rejectsInactive);
+    assert.ok(!db.calls.some((call) => /insert into employee_asset/i.test(call.sql)));
+  });
+
+  it("does not reassign or re-issue an asset to a suspended member", async () => {
+    const transfer = saveDb("assigned", undefined, {
+      memberStatus: "suspended",
+      existing: { employeeId: "member-e9", status: "assigned" },
+    });
+    await assert.rejects(
+      run(transfer, orgAdmin, "SaveEmployeeAsset", { ...assetVars, id: "asset-1" }),
+      rejectsInactive,
+    );
+    const reissue = saveDb("assigned", undefined, {
+      memberStatus: "suspended",
+      existing: { employeeId: "member-e1", status: "returned" },
+    });
+    await assert.rejects(
+      run(reissue, orgAdmin, "SaveEmployeeAsset", { ...assetVars, id: "asset-1" }),
+      rejectsInactive,
+    );
+    for (const db of [transfer, reissue]) {
+      assert.ok(!db.calls.some((call) => /update employee_asset/i.test(call.sql)));
+    }
+  });
+
+  it("still lets managers edit or take back an asset a suspended member holds", async () => {
+    for (const status of ["maintenance", "returned"]) {
+      const db = saveDb("assigned", undefined, {
+        memberStatus: "suspended",
+        existing: { employeeId: "member-e1", status: "assigned" },
+      });
+      await run(db, orgAdmin, "SaveEmployeeAsset", { ...assetVars, id: "asset-1", status });
+      assert.ok(db.calls.some((call) => /update employee_asset/i.test(call.sql)), status);
+    }
+  });
+
   it("starts a new acknowledgment when an asset is transferred", async () => {
     const db = new FakeDb().whenCall(({ sql }) => {
       const query = sql.toLowerCase();
@@ -198,7 +281,7 @@ describe("employee asset acknowledgments", () => {
         return [{ id: "b1", organizationId: "o1" }];
       }
       if (query.includes("from organization_member m") && query.includes("user_branch_assignment")) {
-        return [{ id: "member-e2", role: "employee" }];
+        return [{ id: "member-e2", role: "employee", status: "active" }];
       }
       if (query.includes("lower(asset_tag)")) return [];
       if (query.includes("from employee_asset") && query.includes("for update")) {
@@ -363,6 +446,17 @@ describe("members ops", () => {
     await denies(run(db, employee, "GetMemberById", { id: "m9" }));
   });
 
+  it("lets a Branch Manager read employees, not peer managers, in their branches", async () => {
+    const db = (role: string) =>
+      new FakeDb()
+        .when("from organization_member m where", [
+          { id: "m9", authUid: "other", organizationId: "o1", role },
+        ])
+        .when("a.member_id in", [{ memberId: "m9", branchId: "b1", branchName: "B" }]);
+    await denies(run(db("branchManager"), manager, "GetMemberById", { id: "m9" }));
+    await denies(run(db("orgAdmin"), manager, "GetMemberById", { id: "m9" }));
+  });
+
   it("limits branch member lists to managed branches and nests members", async () => {
     await denies(run(new FakeDb(), manager, "ListMembersByBranchPaged", { branchId: "b2", limit: 1, offset: 0 }));
     const db = new FakeDb()
@@ -419,6 +513,96 @@ describe("returns ops", () => {
     for (const v of ["o1", "b1", "mem1", "e1", "Eve", "Shoe", 2, "pc", "INV1", "pending"]) {
       assert.ok(insert.params.includes(v), String(v));
     }
+  });
+
+  it("stores the bill number and business return date", async () => {
+    const db = new FakeDb()
+      .when("from organization_member where auth_uid", [{ id: "mem1", authUid: "e1", fullName: "Eve" }])
+      .when("from branch where id", [{ status: "active", organizationId: "o1" }])
+      .when("insert into return_record", [{ id: "r1" }]);
+    await run(db, employee, "SubmitReturn", {
+      branchId: "b1", productTitle: "Shoe", returnReason: "Torn", quantity: 2, unit: "pc",
+      invoiceNumber: "INV1", billNumber: "BILL-7", returnDate: "2024-03-05",
+    });
+    const insert = db.calls.find((c) => /insert into return_record/i.test(c.sql))!;
+    assert.match(insert.sql, /bill_number/);
+    assert.match(insert.sql, /return_date/);
+    assert.ok(insert.params.includes("BILL-7"));
+    assert.ok(insert.params.includes("2024-03-05"));
+  });
+
+  it("rejects a return dated after the business day", async () => {
+    await assert.rejects(
+      run(new FakeDb(), employee, "SubmitReturn", {
+        branchId: "b1", productTitle: "Shoe", returnReason: "Torn", quantity: 2, unit: "pc",
+        invoiceNumber: "INV1", returnDate: "2999-01-01",
+      }),
+      (e: { code?: string }) => e.code === "invalid-argument",
+    );
+  });
+
+  it("submits every line of a bill in one transaction", async () => {
+    let next = 0;
+    const db = new FakeDb()
+      .when("from organization_member where auth_uid", [{ id: "mem1", authUid: "e1", fullName: "Eve" }])
+      .when("from branch where id", [{ status: "active", organizationId: "o1" }])
+      .whenCall((c) => (/insert into return_record/i.test(c.sql) ? [{ id: `r${++next}` }] : undefined));
+    const res = await run(db, employee, "SubmitReturnBatch", {
+      branchId: "b1", invoiceNumber: "INV1", billNumber: "BILL-7",
+      items: [
+        { productTitle: "Shoe", quantity: 2, unit: "pc", returnReason: "damaged" },
+        { productTitle: "Sock", quantity: 1, unit: "pc", returnReason: "expired", remarks: "Torn" },
+      ],
+    });
+    assert.deepEqual(res, { returnRecord_inserts: [{ id: "r1" }, { id: "r2" }] });
+    assert.equal(db.transactions, 1);
+    const inserts = db.calls.filter((c) => /insert into return_record/i.test(c.sql));
+    assert.equal(inserts.length, 2);
+    for (const insert of inserts) assert.ok(insert.params.includes("BILL-7"));
+  });
+
+  it("fails the whole batch when one line cannot be saved", async () => {
+    let inserts = 0;
+    const db = new FakeDb()
+      .when("from organization_member where auth_uid", [{ id: "mem1", authUid: "e1", fullName: "Eve" }])
+      .when("from branch where id", [{ status: "active", organizationId: "o1" }])
+      .whenCall((c) => {
+        if (!/insert into return_record/i.test(c.sql)) return undefined;
+        inserts += 1;
+        if (inserts === 2) throw new Error("connection reset");
+        return [{ id: "r1" }];
+      });
+    await assert.rejects(
+      run(db, employee, "SubmitReturnBatch", {
+        branchId: "b1", invoiceNumber: "INV1",
+        items: [
+          { productTitle: "Shoe", quantity: 2, unit: "pc", returnReason: "damaged" },
+          { productTitle: "Sock", quantity: 1, unit: "pc", returnReason: "expired" },
+        ],
+      }),
+    );
+    assert.equal(db.transactions, 1);
+  });
+
+  it("validates every batch line before writing", async () => {
+    const vars = { branchId: "b1", invoiceNumber: "INV1" };
+    const isInvalid = (e: { code?: string }) => e.code === "invalid-argument";
+    await assert.rejects(run(new FakeDb(), employee, "SubmitReturnBatch", { ...vars, items: [] }), isInvalid);
+    const db = new FakeDb();
+    await assert.rejects(
+      run(db, employee, "SubmitReturnBatch", {
+        ...vars,
+        items: [
+          { productTitle: "Shoe", quantity: 2, unit: "pc", returnReason: "damaged" },
+          { productTitle: "Sock", quantity: 0, unit: "pc", returnReason: "expired" },
+        ],
+      }),
+      isInvalid,
+    );
+    assert.equal(db.calls.length, 0);
+    await denies(run(new FakeDb(), employee, "SubmitReturnBatch", {
+      ...vars, branchId: "b2", items: [{ productTitle: "Shoe", quantity: 2, unit: "pc", returnReason: "damaged" }],
+    }));
   });
 
   it("rejects a review of an already-reviewed or out-of-scope return", async () => {

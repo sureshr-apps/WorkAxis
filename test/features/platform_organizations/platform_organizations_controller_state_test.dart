@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/features/platform_organizations/data/mock_platform_organizations_repository.dart';
 import 'package:workaxis/features/platform_organizations/domain/models/customer_organization.dart';
+import 'package:workaxis/features/platform_organizations/domain/models/organization_status.dart';
 import 'package:workaxis/features/platform_organizations/presentation/controllers/platform_organizations_controller.dart';
 
 class _ControllableDetailRepository
@@ -18,7 +20,49 @@ class _ControllableDetailRepository
   }
 }
 
+/// Records the filters of every page request.
+class _RecordingPagesRepository extends MockPlatformOrganizationsRepository {
+  final requests = <({OrganizationStatus? status, int offset})>[];
+
+  @override
+  Future<PageResult<CustomerOrganization>> getOrganizationsPage({
+    String? query,
+    OrganizationStatus? statusFilter,
+    int offset = 0,
+    int limit = defaultPageSize,
+  }) {
+    requests.add((status: statusFilter, offset: offset));
+    return super.getOrganizationsPage(
+      query: query,
+      statusFilter: statusFilter,
+      offset: offset,
+      limit: limit,
+    );
+  }
+}
+
 void main() {
+  test(
+    'loadMore continues the loaded filter while a new one is pending',
+    () async {
+      final recording = _RecordingPagesRepository();
+      final paging = PlatformOrganizationsController(
+        repository: recording,
+        pageSize: 1,
+        searchDebounce: const Duration(hours: 1),
+      );
+      addTearDown(paging.dispose);
+      await paging.loadOrganizations();
+      expect(paging.hasMore, isTrue);
+
+      // Changed in the UI; the debounced server refresh has not run yet.
+      paging.setStatusFilter(OrganizationStatus.suspended);
+      await paging.loadMore();
+
+      expect(recording.requests.last, (status: null, offset: 1));
+    },
+  );
+
   late _ControllableDetailRepository repository;
   late PlatformOrganizationsController controller;
 

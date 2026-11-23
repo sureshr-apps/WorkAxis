@@ -163,17 +163,22 @@ export async function commitBranchSave(plan: Plan, currentIds: string[]) {
       );
     }
 
-    await tx.query(
-      `DELETE FROM user_branch_assignment a
-        USING organization_member m
-        WHERE a.member_id = m.id AND a.branch_id = $1 AND m.role = 'branchManager'`,
-      [branchId],
-    );
-    if (wanted.length > 0) {
+    // Only the difference is written. Unchanged managers keep their original
+    // assigned_at, which orders a multi-branch manager's branches (and so
+    // their default branch); re-stamping it would reorder them.
+    if (removed.length > 0) {
+      await tx.query(
+        `DELETE FROM user_branch_assignment
+          WHERE branch_id = $1 AND member_id = ANY($2::text[])`,
+        [branchId, removed],
+      );
+    }
+    const added = wanted.filter((id) => !currentIds.includes(id));
+    if (added.length > 0) {
       await tx.query(
         `INSERT INTO user_branch_assignment (member_id, branch_id, assigned_at)
          SELECT unnest($1::text[]), $2, now()`,
-        [wanted, branchId],
+        [added, branchId],
       );
     }
   });

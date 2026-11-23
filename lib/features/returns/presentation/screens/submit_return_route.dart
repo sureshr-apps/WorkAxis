@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/core/widgets/record_not_found_page.dart';
+import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
@@ -55,13 +56,14 @@ class _SubmitReturnRouteState extends State<SubmitReturnRoute> {
     final controller = context.read<ReturnsController>()..clearActionError();
     final access = accessController.accessContext;
     ReturnItem? item;
-    if (widget.returnId != null && access != null) {
-      await controller.loadReturns(
+    final returnId = widget.returnId;
+    if (returnId != null && access != null) {
+      item = await controller.findReturn(
         access: access,
         activeBranchId: _branchScope(access),
+        returnId: returnId,
       );
       if (!mounted) return;
-      item = controller.items.where((r) => r.id == widget.returnId).firstOrNull;
     }
     setState(() {
       _access = access;
@@ -84,6 +86,19 @@ class _SubmitReturnRouteState extends State<SubmitReturnRoute> {
       return access.activeAssignedBranches.firstOrNull?.id;
     }
     return _activeBranchId;
+  }
+
+  /// Branch Managers file returns only for their active branch (branch-scoped
+  /// work follows the active branch context); a different branch would also
+  /// vanish from the list they return to. Others choose among their branches.
+  List<BranchSummary> _availableBranches(UserAccessContext access) {
+    if (access.user.role != UserRole.branchManager) {
+      return access.activeAssignedBranches;
+    }
+    final activeBranchId = _activeBranchId;
+    return access.activeAssignedBranches
+        .where((branch) => branch.id == activeBranchId)
+        .toList(growable: false);
   }
 
   Future<String?> _submit(
@@ -191,7 +206,7 @@ class _SubmitReturnRouteState extends State<SubmitReturnRoute> {
     return SubmitReturnScreen(
       eyebrow: returnsEyebrow(access.user.role),
       backLabel: widget.listLabel,
-      availableBranches: access.activeAssignedBranches,
+      availableBranches: _availableBranches(access),
       initialBranchId: _initialBranchId(access),
       initialReturn: item,
       onSubmitBatch: (batch) => _submit(access, batch),

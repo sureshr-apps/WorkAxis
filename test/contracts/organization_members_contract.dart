@@ -333,5 +333,28 @@ void runOrganizationMembersContract(
         isNull,
       );
     });
+
+    test('branch manager cannot open a peer manager by id', () async {
+      expect(
+        await repo.getMember(
+          // Another manager who shares br-01 with Marcus Chen.
+          access: branchManagerAccess(
+            userId: 'user-bm-single-01',
+            branchIds: const ['br-01', 'br-04'],
+          ),
+          memberId: 'user-bm-multi-01',
+          activeBranchId: 'br-01',
+        ),
+        isNull,
+      );
+      expect(
+        await repo.getMember(
+          access: branchManagerAccess(),
+          memberId: 'user-emp-01',
+          activeBranchId: 'br-01',
+        ),
+        isNotNull,
+      );
+    });
   });
 }

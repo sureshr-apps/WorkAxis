@@ -80,6 +80,7 @@ class PayrollExportService {
       'Payable hours',
       'Scheduled days',
       'Payable days',
+      'Paid leave days',
       'Unpaid leave days',
       'Unpaid leave impact (INR)',
       'Overtime hours',
@@ -98,6 +99,7 @@ class PayrollExportService {
         DoubleCellValue(record.payableHours),
         IntCellValue(record.scheduledWorkdays),
         IntCellValue(record.payableWorkdays),
+        IntCellValue(record.paidLeaveDays),
         IntCellValue(record.unpaidLeaveDays),
         DoubleCellValue(record.unpaidLeaveImpact),
         DoubleCellValue(record.overtimeHours),
@@ -156,6 +158,12 @@ class PayrollExportService {
             _pdfRow('Actual hours', _hours(record.actualHours)),
             _pdfRow('Scheduled workdays', '${record.scheduledWorkdays}'),
             _pdfRow('Payable workdays', '${record.payableWorkdays}'),
+            if (record.outsideEmploymentDays > 0)
+              _pdfRow(
+                'Days before joining / after relieving',
+                '${record.outsideEmploymentDays}',
+              ),
+            _pdfRow('Paid leave days', '${record.paidLeaveDays}'),
             _pdfRow('Approved unpaid leave days', '${record.unpaidLeaveDays}'),
             _pdfRow('Unpaid leave impact', _money(record.unpaidLeaveImpact)),
             _pdfRow('Overtime hours', _hours(record.overtimeHours)),

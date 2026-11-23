@@ -134,6 +134,9 @@ export async function writeProfile(
     username: member.username,
     email: member.email,
     branchIds: [...member.branchIds].sort(),
+    // Live branch scope checked by the security rules (suspended branches
+    // excluded), so a branch change takes effect before the token refreshes.
+    activeBranchIds: [...member.activeBranchIds].sort(),
     updatedAt: FieldValue.serverTimestamp(),
   };
   if (member.phone) doc.phone = member.phone;

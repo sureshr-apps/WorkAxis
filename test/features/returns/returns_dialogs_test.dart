@@ -127,6 +127,7 @@ void main() {
     WidgetTester tester, {
     required UserRole role,
     required GoRouter router,
+    String? userId,
     double width = 1200,
     double height = 900,
   }) async {
@@ -139,7 +140,9 @@ void main() {
     addTearDown(router.dispose);
     await accessController.resolveAccess(
       AppUser(
-        id: role == UserRole.employee ? 'user-emp-01' : 'user-oa-01',
+        id:
+            userId ??
+            (role == UserRole.employee ? 'user-emp-01' : 'user-oa-01'),
         name: 'Test User',
         username: 'test.user',
         role: role,
@@ -225,6 +228,38 @@ void main() {
 
       expect(find.byType(SubmitReturnScreen), findsNothing);
       expect(find.byType(EmployeeReturnsScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a multi-branch manager files returns only for the active branch',
+    (tester) async {
+      final router = _returnsRouter(
+        listRoute: AppRoutes.branchManagerReturns,
+        listLabel: 'Branch Returns',
+        list: const SizedBox.shrink(),
+      );
+      await pump(
+        tester,
+        role: UserRole.branchManager,
+        userId: 'user-bm-multi-01',
+        router: router,
+      );
+      final access = accessController.accessContext!;
+      expect(access.hasMultipleAssignedBranches, isTrue);
+      // The manager picks their second branch on the branch selection screen.
+      final active = access.activeAssignedBranches.last.id;
+      expect(
+        branchController.selectBranch(access.activeAssignedBranches.last),
+        isTrue,
+      );
+      router.go('${AppRoutes.branchManagerReturns}/add');
+      await tester.pumpAndSettle();
+
+      final screen = tester.widget<SubmitReturnScreen>(
+        find.byType(SubmitReturnScreen),
+      );
+      expect(screen.availableBranches.map((b) => b.id), [active]);
     },
   );
 

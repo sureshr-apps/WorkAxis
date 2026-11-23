@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/routing/app_routes.dart';
-import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
@@ -18,6 +17,9 @@ import 'package:workaxis/features/payroll/data/payroll_export_service.dart';
 import 'package:workaxis/features/payroll/domain/models/monthly_payroll.dart';
 import 'package:workaxis/features/payroll/presentation/controllers/payslips_controller.dart';
 import 'package:workaxis/features/payroll/domain/repositories/payroll_repository.dart';
+import 'package:workaxis/features/payroll/presentation/widgets/branch_payroll_summary_card.dart';
+import 'package:workaxis/features/payroll/presentation/widgets/payroll_overview_card.dart';
+import 'package:workaxis/features/payroll/presentation/widgets/payroll_record_card.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 
@@ -159,6 +161,9 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     final hasEmployeeViews =
         role == UserRole.branchManager || role == UserRole.orgAdmin;
     final isSummaryView = _tab == _PayslipTab.summary;
+    final availableRecords =
+        payroll?.records.where((record) => record.available).toList() ??
+        const <PayrollRecord>[];
     final total =
         payroll?.summary?.grossPay ??
         payroll?.records
@@ -166,9 +171,33 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
             .fold<double>(0, (sum, record) => sum + record.grossPay) ??
         0;
     final payslipCount =
-        payroll?.summary?.employeeCount ??
+        payroll?.summary?.availableCount ??
         payroll?.records.where((record) => record.available).length ??
         0;
+    final payableHours =
+        payroll?.summary?.payableHours ??
+        availableRecords.fold<double>(
+          0,
+          (sum, record) => sum + record.payableHours,
+        );
+    final payableWorkdays =
+        payroll?.summary?.payableWorkdays ??
+        availableRecords.fold<double>(
+          0,
+          (sum, record) => sum + record.payableWorkdays,
+        );
+    final overtimeHours =
+        payroll?.summary?.overtimeHours ??
+        availableRecords.fold<double>(
+          0,
+          (sum, record) => sum + record.overtimeHours,
+        );
+    final overtimePay =
+        payroll?.summary?.overtimePay ??
+        availableRecords.fold<double>(
+          0,
+          (sum, record) => sum + record.overtimePay,
+        );
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -187,70 +216,113 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                 const AppPageHeader(
                   eyebrow: 'Payroll',
                   title: 'Payslips',
-                  subtitle: 'Review gross monthly pay, attendance hours, unpaid leave, and overtime.',
+                  subtitle: 'Review monthly pay and download payslips.',
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                _monthControls(controller, payroll),
+                _monthControls(controller),
                 if (hasEmployeeViews) ...[
                   const SizedBox(height: AppSpacing.md),
-                  SegmentedButton<_PayslipTab>(
-                    segments: [
-                      const ButtonSegment(
-                        value: _PayslipTab.mine,
-                        label: Text('My payslips'),
-                        icon: Icon(Icons.person_outline),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.xs),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerLow,
+                      borderRadius: AppSpacing.roundedMd,
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SegmentedButton<_PayslipTab>(
+                        showSelectedIcon: false,
+                        segments: [
+                          const ButtonSegment(
+                            value: _PayslipTab.mine,
+                            label: Text('My payslips'),
+                            icon: Icon(Icons.person_outline),
+                          ),
+                          const ButtonSegment(
+                            value: _PayslipTab.employee,
+                            label: Text('Employee payslip'),
+                            icon: Icon(Icons.groups_outlined),
+                          ),
+                          ButtonSegment(
+                            value: _PayslipTab.summary,
+                            label: Text(
+                              role == UserRole.orgAdmin
+                                  ? 'All branches'
+                                  : 'Branch summary',
+                            ),
+                            icon: Icon(Icons.summarize_outlined),
+                          ),
+                        ],
+                        selected: {_tab},
+                        onSelectionChanged: (selection) =>
+                            _selectTab(selection.first),
                       ),
-                      const ButtonSegment(
-                        value: _PayslipTab.employee,
-                        label: Text('Employee payslip'),
-                        icon: Icon(Icons.groups_outlined),
-                      ),
-                      ButtonSegment(
-                        value: _PayslipTab.summary,
-                        label: Text(
-                          role == UserRole.orgAdmin
-                              ? 'All branches'
-                              : 'Branch summary',
-                        ),
-                        icon: Icon(Icons.summarize_outlined),
-                      ),
-                    ],
-                    selected: {_tab},
-                    onSelectionChanged: (selection) =>
-                        _selectTab(selection.first),
+                    ),
                   ),
                 ],
                 if (_tab == _PayslipTab.employee) ...[
                   const SizedBox(height: AppSpacing.md),
-                  if (_loadingMembers)
-                    const LinearProgressIndicator()
-                  else if (_membersError != null)
-                    _MessagePanel(
-                      message: _membersError!,
-                      icon: Icons.error_outline,
-                      color: AppColors.statusUrgent,
-                      onRetry: _loadMembers,
-                    )
-                  else
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedEmployeeId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Select employee',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (final employee in _employees)
-                          DropdownMenuItem(
-                            value: employee.id,
-                            child: Text(employee.fullName),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerLowest,
+                      border: Border.all(color: AppColors.outlineSubtle),
+                      borderRadius: AppSpacing.roundedMd,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.person_search_outlined,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Text(
+                              'Choose an employee',
+                              style: AppTypography.titleMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        if (_loadingMembers)
+                          const LinearProgressIndicator()
+                        else if (_membersError != null)
+                          _MessagePanel(
+                            message: _membersError!,
+                            icon: Icons.error_outline,
+                            color: AppColors.statusUrgent,
+                            onRetry: _loadMembers,
+                          )
+                        else
+                          DropdownButtonFormField<String>(
+                            initialValue: _selectedEmployeeId,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              hintText: 'Select employee',
+                              prefixIcon: Icon(Icons.badge_outlined),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: AppColors.surface,
+                            ),
+                            items: [
+                              for (final employee in _employees)
+                                DropdownMenuItem(
+                                  value: employee.id,
+                                  child: Text(employee.fullName),
+                                ),
+                            ],
+                            onChanged: (memberId) {
+                              setState(() => _selectedEmployeeId = memberId);
+                              _load();
+                            },
                           ),
                       ],
-                      onChanged: (memberId) {
-                        setState(() => _selectedEmployeeId = memberId);
-                        _load();
-                      },
                     ),
+                  ),
                 ],
                 if (controller.errorMessage != null) ...[
                   const SizedBox(height: AppSpacing.md),
@@ -274,26 +346,45 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                   ),
                 ] else if (payroll != null) ...[
                   const SizedBox(height: AppSpacing.md),
-                  _PayrollSummary(
+                  PayrollOverviewCard(
                     totalGross: total,
-                    count: payslipCount,
+                    employeeCount: payslipCount,
                     basis: payroll.basis,
                     overtimeEnabled: payroll.overtimeEnabled,
+                    monthLabel: DateFormat('MMMM yyyy').format(_month),
+                    payableHours: payableHours,
+                    payableWorkdays: payableWorkdays,
+                    overtimeHours: overtimeHours,
+                    overtimePay: overtimePay,
                   ),
                   if (isSummaryView) ...[
                     const SizedBox(height: AppSpacing.lg),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
-                          child: Text(
-                            role == UserRole.orgAdmin
-                                ? 'Organization payroll summary'
-                                : 'Current branch payroll summary',
-                            style: AppTypography.titleLarge,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Branch breakdown',
+                                style: AppTypography.titleLarge.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                role == UserRole.orgAdmin
+                                    ? '${payroll.branchSummaries.length} branches in this organization'
+                                    : 'For your active branch',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         AppButton.outlined(
-                          text: 'Export summary',
+                          text: 'Export XLSX',
                           iconData: Icons.download_outlined,
                           isFullWidth: false,
                           onPressed: () => _exportSummaryXlsx(payroll),
@@ -301,20 +392,46 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                       ],
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    Text(
-                      'Employees assigned to multiple branches are allocated evenly across those branches.',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
                     if (payroll.branchSummaries.isEmpty)
                       const _EmptyPayroll()
                     else
                       for (final branch in payroll.branchSummaries) ...[
-                        _BranchPayrollSummaryCard(branch: branch),
+                        BranchPayrollSummaryCard(
+                          branch: branch,
+                          basis: payroll.basis,
+                          overtimeEnabled: payroll.overtimeEnabled,
+                        ),
                         const SizedBox(height: AppSpacing.sm),
                       ],
+                    if (payroll.branchSummaries.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainerLow,
+                          borderRadius: AppSpacing.roundedMd,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.info_outline,
+                              size: 18,
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                'Employees assigned to multiple branches are allocated evenly across branch summaries.',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ] else ...[
                     const SizedBox(height: AppSpacing.lg),
                     Row(
@@ -341,24 +458,16 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                     if (payroll.records.isEmpty)
                       const _EmptyPayroll()
                     else
-                      LayoutBuilder(
-                        builder: (context, constraints) =>
-                            constraints.maxWidth >= AppBreakpoints.wideContent
-                            ? _PayrollTable(
-                                records: payroll.records,
-                                month: payroll.month,
-                                basis: payroll.basis,
-                                overtimeEnabled: payroll.overtimeEnabled,
-                                onExportPdf: _exportPdf,
-                              )
-                            : _PayrollCards(
-                                records: payroll.records,
-                                month: payroll.month,
-                                basis: payroll.basis,
-                                overtimeEnabled: payroll.overtimeEnabled,
-                                onExportPdf: _exportPdf,
-                              ),
-                      ),
+                      for (final record in payroll.records) ...[
+                        PayrollRecordCard(
+                          record: record,
+                          month: payroll.month,
+                          basis: payroll.basis,
+                          overtimeEnabled: payroll.overtimeEnabled,
+                          onExportPdf: _exportPdf,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
                   ],
                 ],
                 const SizedBox(height: AppSpacing.xxl),
@@ -370,10 +479,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     );
   }
 
-  Widget _monthControls(
-    PayslipsController controller,
-    MonthlyPayroll? payroll,
-  ) {
+  Widget _monthControls(PayslipsController controller) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -458,368 +564,6 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   };
 }
 
-class _PayrollSummary extends StatelessWidget {
-  const _PayrollSummary({
-    required this.totalGross,
-    required this.count,
-    required this.basis,
-    required this.overtimeEnabled,
-  });
-
-  final double totalGross;
-  final int count;
-  final String basis;
-  final bool overtimeEnabled;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.lg),
-    decoration: BoxDecoration(
-      color: AppColors.surfaceContainerLowest,
-      border: Border.all(color: AppColors.outlineSubtle),
-      borderRadius: AppSpacing.roundedMd,
-    ),
-    child: Wrap(
-      spacing: AppSpacing.xl,
-      runSpacing: AppSpacing.md,
-      alignment: WrapAlignment.spaceBetween,
-      children: [
-        _Metric(label: 'Gross pay', value: _money(totalGross)),
-        _Metric(label: 'Payslips ready', value: '$count'),
-        _Metric(
-          label: 'Pay basis',
-          value: basis == 'workdays' ? 'Workdays' : 'Hours',
-        ),
-        _Metric(label: 'Overtime', value: overtimeEnabled ? 'Enabled' : 'Off'),
-      ],
-    ),
-  );
-}
-
-class _BranchPayrollSummaryCard extends StatelessWidget {
-  const _BranchPayrollSummaryCard({required this.branch});
-
-  final BranchPayrollSummary branch;
-
-  @override
-  Widget build(BuildContext context) {
-    final summary = branch.summary;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        border: Border.all(color: AppColors.outlineSubtle),
-        borderRadius: AppSpacing.roundedMd,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  branch.branchName,
-                  style: AppTypography.titleMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Text(
-                _money(summary.grossPay),
-                style: AppTypography.titleMedium.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.lg,
-            runSpacing: AppSpacing.xs,
-            children: [
-              Text('${summary.employeeCount} employees'),
-              Text('${summary.payableHours.toStringAsFixed(2)} payable hours'),
-              Text(
-                '${summary.unpaidLeaveDays.toStringAsFixed(1)} unpaid leave days',
-              ),
-              Text(
-                '${summary.overtimeHours.toStringAsFixed(2)} overtime hours',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: AppTypography.bodySmall.copyWith(
-          color: AppColors.onSurfaceVariant,
-        ),
-      ),
-      const SizedBox(height: AppSpacing.xxs),
-      Text(
-        value,
-        style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700),
-      ),
-    ],
-  );
-}
-
-class _PayrollTable extends StatelessWidget {
-  const _PayrollTable({
-    required this.records,
-    required this.month,
-    required this.basis,
-    required this.overtimeEnabled,
-    required this.onExportPdf,
-  });
-  final List<PayrollRecord> records;
-  final String month;
-  final String basis;
-  final bool overtimeEnabled;
-  final Future<void> Function(PayrollRecord, String, String, bool) onExportPdf;
-
-  @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: DataTable(
-      columns: const [
-        DataColumn(label: Text('Employee')),
-        DataColumn(label: Text('Payable')),
-        DataColumn(label: Text('Unpaid leave')),
-        DataColumn(label: Text('Overtime')),
-        DataColumn(label: Text('Gross pay'), numeric: true),
-        DataColumn(label: Text('Payslip')),
-      ],
-      rows: records
-          .map(
-            (record) => DataRow(
-              cells: [
-                DataCell(
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        record.fullName,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        record.employeeCode ?? record.role,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                DataCell(
-                  Text(
-                    record.available
-                        ? basis == 'workdays'
-                              ? '${record.payableWorkdays} days'
-                              : '${record.payableHours.toStringAsFixed(2)} h'
-                        : '—',
-                  ),
-                ),
-                DataCell(
-                  Text(
-                    record.available ? '${record.unpaidLeaveDays} days' : '—',
-                  ),
-                ),
-                DataCell(
-                  Text(
-                    record.available
-                        ? '${record.overtimeHours.toStringAsFixed(2)} h · ${_money(record.overtimePay)}'
-                        : '—',
-                  ),
-                ),
-                DataCell(
-                  Text(
-                    record.available ? _money(record.grossPay) : 'Unavailable',
-                  ),
-                ),
-                DataCell(
-                  AppButton.outlined(
-                    text: 'PDF',
-                    iconData: Icons.picture_as_pdf_outlined,
-                    isFullWidth: false,
-                    onPressed: () =>
-                        onExportPdf(record, month, basis, overtimeEnabled),
-                  ),
-                ),
-              ],
-            ),
-          )
-          .toList(growable: false),
-    ),
-  );
-}
-
-class _PayrollCards extends StatelessWidget {
-  const _PayrollCards({
-    required this.records,
-    required this.month,
-    required this.basis,
-    required this.overtimeEnabled,
-    required this.onExportPdf,
-  });
-  final List<PayrollRecord> records;
-  final String month;
-  final String basis;
-  final bool overtimeEnabled;
-  final Future<void> Function(PayrollRecord, String, String, bool) onExportPdf;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      for (final record in records) ...[
-        _PayrollRecordCard(
-          record: record,
-          month: month,
-          basis: basis,
-          overtimeEnabled: overtimeEnabled,
-          onExportPdf: onExportPdf,
-        ),
-        const SizedBox(height: AppSpacing.md),
-      ],
-    ],
-  );
-}
-
-class _PayrollRecordCard extends StatelessWidget {
-  const _PayrollRecordCard({
-    required this.record,
-    required this.month,
-    required this.basis,
-    required this.overtimeEnabled,
-    required this.onExportPdf,
-  });
-  final PayrollRecord record;
-  final String month;
-  final String basis;
-  final bool overtimeEnabled;
-  final Future<void> Function(PayrollRecord, String, String, bool) onExportPdf;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.md),
-    decoration: BoxDecoration(
-      color: AppColors.surfaceContainerLowest,
-      border: Border.all(color: AppColors.outlineSubtle),
-      borderRadius: AppSpacing.roundedMd,
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    record.fullName,
-                    style: AppTypography.titleMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    record.employeeCode ?? record.role,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              record.available ? _money(record.grossPay) : 'Unavailable',
-              style: AppTypography.titleMedium.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        if (!record.available)
-          Text(
-            'Schedule or salary history is missing for this period.',
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
-          )
-        else ...[
-          _DetailLine(
-            label: basis == 'workdays' ? 'Paid workdays' : 'Payable hours',
-            value: basis == 'workdays'
-                ? '${record.payableWorkdays} / ${record.scheduledWorkdays}'
-                : '${record.payableHours.toStringAsFixed(2)} / ${record.scheduledHours.toStringAsFixed(2)} h',
-          ),
-          _DetailLine(
-            label: 'Unpaid leave',
-            value:
-                '${record.unpaidLeaveDays} days · ${_money(record.unpaidLeaveImpact)}',
-          ),
-          _DetailLine(
-            label: 'Overtime',
-            value:
-                '${record.overtimeHours.toStringAsFixed(2)} h · ${_money(record.overtimePay)}',
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        Align(
-          alignment: Alignment.centerRight,
-          child: AppButton.outlined(
-            text: 'Export PDF',
-            iconData: Icons.picture_as_pdf_outlined,
-            isFullWidth: false,
-            onPressed: () => onExportPdf(record, month, basis, overtimeEnabled),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _DetailLine extends StatelessWidget {
-  const _DetailLine({required this.label, required this.value});
-  final String label;
-  final String value;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w600),
-        ),
-      ],
-    ),
-  );
-}
-
 class _EmptyPayroll extends StatelessWidget {
   const _EmptyPayroll();
   @override
@@ -878,9 +622,3 @@ class _MessagePanel extends StatelessWidget {
     ),
   );
 }
-
-String _money(double value) => NumberFormat.currency(
-  locale: 'en_IN',
-  symbol: '₹',
-  decimalDigits: 2,
-).format(value);

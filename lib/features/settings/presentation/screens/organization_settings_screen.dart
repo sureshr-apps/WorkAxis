@@ -4,6 +4,7 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
+import 'package:workaxis/features/leave_policy/presentation/widgets/leave_policy_section.dart';
 import 'package:workaxis/features/settings/domain/models/organization_settings.dart';
 import 'package:workaxis/features/settings/domain/validators/settings_validators.dart';
 import 'package:workaxis/features/settings/presentation/controllers/settings_controller.dart';
@@ -152,7 +153,7 @@ class _OrganizationSettingsScreenState
     return SettingsPage(
       eyebrow: 'Enterprise Administration',
       title: 'Organization Settings',
-      subtitle: 'Manage asset receipt acknowledgment, attendance selfie verification, and organization contacts.',
+      subtitle: 'Manage the leave policy, asset receipt acknowledgment, attendance selfie verification, and organization contacts.',
       notice: 'Attendance selfie verification applies to employee self-service and to Branch Managers when their attendance workflow is enabled. It covers check-in, check-out, break start, and resume actions. Manager-recorded group attendance is unchanged. Asset acknowledgments already pending remain open if that setting is turned off.',
       controller: settings,
       status: settings.organizationStatus,
@@ -194,6 +195,7 @@ class _OrganizationSettingsScreenState
             ],
           ),
         ),
+        const LeavePolicySection(),
         SettingsSectionCard(
           icon: Icons.business_outlined,
           title: 'Organization Information',

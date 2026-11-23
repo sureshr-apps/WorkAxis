@@ -134,8 +134,8 @@ export const membersOps: OperationRegistry = {
     return { userBranchAssignments: members.map((member) => ({ member })), total };
   },
 
-  // Platform: any. Org Admin: own org. Branch Manager: members sharing one of
-  // their branches. Anyone: themselves.
+  // Platform: any. Org Admin: own org. Branch Manager: employees sharing one
+  // of their branches (the same set their member lists show). Anyone: themselves.
   GetMemberById: async ({ db, actor }, vars) => {
     const id = reqId(vars, "id");
     const row = await selectOne<Row>(
@@ -154,7 +154,9 @@ export const membersOps: OperationRegistry = {
       row.authUid === actor.uid ||
       isPlatform(actor) ||
       isOrgAdminOf(actor, row.organizationId as string | null) ||
-      (actor.role === "branchManager" && assigned.some((b) => actor.branchIds.includes(b)));
+      (actor.role === "branchManager" &&
+        row.role === "employee" &&
+        assigned.some((b) => actor.branchIds.includes(b)));
     if (!allowed) throw denied("Member not found or access denied.");
     const { organizationId, ...rest } = member;
     const [signedIn] = await withLastSignIn([rest]);

@@ -13,13 +13,13 @@ import 'package:workaxis/features/access/domain/models/user_access_context.dart'
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_queue.dart';
 import 'package:workaxis/features/leaves/domain/models/leave_request.dart';
 import 'package:workaxis/features/leaves/presentation/controllers/leaves_controller.dart';
 import 'package:workaxis/features/leaves/presentation/screens/widgets/leave_request_card.dart';
 import 'package:workaxis/features/leaves/presentation/screens/widgets/leave_request_form_dialog.dart';
 import 'package:workaxis/features/leaves/presentation/screens/widgets/leave_review_dialog.dart';
-
-enum _LeaveQueue { mine, team }
+import 'package:workaxis/features/leaves/presentation/screens/widgets/leave_status_filters.dart';
 
 class LeavesScreen extends StatefulWidget {
   const LeavesScreen({super.key});
@@ -31,8 +31,6 @@ class LeavesScreen extends StatefulWidget {
 class _LeavesScreenState extends State<LeavesScreen> {
   late final BranchContextController _branchController;
   String? _observedBranchId;
-  LeaveStatus? _statusFilter;
-  _LeaveQueue _queue = _LeaveQueue.mine;
 
   @override
   void initState() {
@@ -66,8 +64,10 @@ class _LeavesScreenState extends State<LeavesScreen> {
     if (!mounted) return;
     final access = accessController.accessContext;
     if (access == null) return;
-    context.read<LeavesController>().clearActionError();
-    await context.read<LeavesController>().loadLeaveRequests(
+    final controller = context.read<LeavesController>()..clearActionError();
+    // A manual refresh also picks up leave types the organization changed.
+    if (force) controller.invalidateLeaveTypes();
+    await controller.loadLeaveRequests(
       access: access,
       activeBranchId: _currentBranchId,
     );
@@ -91,30 +91,38 @@ class _LeavesScreenState extends State<LeavesScreen> {
             : access.activeAssignedBranches.firstOrNull?.id ??
                   access.activeBranch?.branchId);
     final controller = context.read<LeavesController>()..clearActionError();
-    final saved = await showLeaveRequestFormDialog(
-      context: context,
-      branches: branches,
-      initialBranchId: initialBranchId,
-      branchLocked: manager,
-      request: request,
-      onSubmit: (result) async {
-        controller.clearActionError();
-        return request == null
-            ? controller.submitLeaveRequest(
-                access: access,
-                branchId: result.branchId,
-                activeBranchId: manager ? _currentBranchId : null,
-                draft: result.draft,
-              )
-            : controller.updatePendingLeaveRequest(
-                access: access,
-                activeBranchId: manager ? _currentBranchId : null,
-                request: request,
-                draft: result.draft,
-              );
-      },
-      failureMessage: () => controller.actionErrorMessage,
-    );
+    final preview = controller.createPreviewController(access: access);
+    final bool saved;
+    try {
+      saved = await showLeaveRequestFormDialog(
+        context: context,
+        branches: branches,
+        initialBranchId: initialBranchId,
+        branchLocked: manager,
+        request: request,
+        loadLeaveTypes: () => controller.loadLeaveTypes(access),
+        preview: preview,
+        onSubmit: (result) async {
+          controller.clearActionError();
+          return request == null
+              ? controller.submitLeaveRequest(
+                  access: access,
+                  branchId: result.branchId,
+                  activeBranchId: manager ? _currentBranchId : null,
+                  draft: result.draft,
+                )
+              : controller.updatePendingLeaveRequest(
+                  access: access,
+                  activeBranchId: manager ? _currentBranchId : null,
+                  request: request,
+                  draft: result.draft,
+                );
+        },
+        failureMessage: () => controller.actionErrorMessage,
+      );
+    } finally {
+      preview.dispose();
+    }
     if (!mounted || !saved) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -133,24 +141,35 @@ class _LeavesScreenState extends State<LeavesScreen> {
     LeaveStatus decision,
   ) async {
     final controller = context.read<LeavesController>()..clearActionError();
-    final saved = await showLeaveReviewDialog(
-      context: context,
-      request: request,
-      decision: decision,
-      onSubmit: (notes) async {
-        controller.clearActionError();
-        return controller.reviewLeaveRequest(
-          access: access,
-          activeBranchId: access.user.role == UserRole.branchManager
-              ? _currentBranchId
-              : null,
-          request: request,
-          decision: decision,
-          reviewerNotes: notes,
-        );
-      },
-      failureMessage: () => controller.actionErrorMessage,
+    final activeBranchId = access.user.role == UserRole.branchManager
+        ? _currentBranchId
+        : null;
+    final preview = controller.createPreviewController(
+      access: access,
+      activeBranchId: activeBranchId,
     );
+    final bool saved;
+    try {
+      saved = await showLeaveReviewDialog(
+        context: context,
+        request: request,
+        decision: decision,
+        preview: preview,
+        onSubmit: (notes) async {
+          controller.clearActionError();
+          return controller.reviewLeaveRequest(
+            access: access,
+            activeBranchId: activeBranchId,
+            request: request,
+            decision: decision,
+            reviewerNotes: notes,
+          );
+        },
+        failureMessage: () => controller.actionErrorMessage,
+      );
+    } finally {
+      preview.dispose();
+    }
     if (!mounted || !saved) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -163,31 +182,27 @@ class _LeavesScreenState extends State<LeavesScreen> {
     );
   }
 
-  List<LeaveRequest> _queueRequests(
-    LeavesController controller,
-    UserAccessContext access,
-  ) {
-    Iterable<LeaveRequest> requests = controller.items;
-    if (access.user.role == UserRole.employee) {
-      requests = requests.where((item) => item.applicantUid == access.user.id);
-    } else if (access.user.role == UserRole.branchManager) {
-      requests = _queue == _LeaveQueue.mine
-          ? requests.where((item) => item.applicantUid == access.user.id)
-          : requests.where(
-              (item) =>
-                  item.applicantRole == UserRole.employee &&
-                  item.branchId == _currentBranchId,
-            );
-    }
-    return requests.toList(growable: false);
+  void _setQueue(UserAccessContext access, LeaveQueue queue) {
+    context.read<LeavesController>().setQueue(
+      access: access,
+      activeBranchId: _currentBranchId,
+      queue: queue,
+    );
   }
 
-  List<LeaveRequest> _visibleRequests(List<LeaveRequest> queueRequests) {
-    Iterable<LeaveRequest> requests = queueRequests;
-    if (_statusFilter != null) {
-      requests = requests.where((item) => item.status == _statusFilter);
-    }
-    return requests.toList(growable: false);
+  void _setStatusFilter(UserAccessContext access, LeaveStatus? status) {
+    context.read<LeavesController>().setStatusFilter(
+      access: access,
+      activeBranchId: _currentBranchId,
+      status: status,
+    );
+  }
+
+  void _loadMore(UserAccessContext access) {
+    context.read<LeavesController>().loadMore(
+      access: access,
+      activeBranchId: _currentBranchId,
+    );
   }
 
   @override
@@ -201,8 +216,8 @@ class _LeavesScreenState extends State<LeavesScreen> {
     final isEmployee = role == UserRole.employee;
     final isManager = role == UserRole.branchManager;
     final canApply = isEmployee || isManager;
-    final queueRequests = _queueRequests(controller, access);
-    final items = _visibleRequests(queueRequests);
+    final items = controller.items;
+    final ownQueue = controller.queue != LeaveQueue.branchEmployees;
     final activeBranchName = _branchController.activeBranch?.branchName;
 
     return Scaffold(
@@ -241,33 +256,32 @@ class _LeavesScreenState extends State<LeavesScreen> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.md),
-                  child: SegmentedButton<_LeaveQueue>(
+                  child: SegmentedButton<LeaveQueue>(
                     segments: const [
                       ButtonSegment(
-                        value: _LeaveQueue.mine,
+                        value: LeaveQueue.mine,
                         label: Text('My requests'),
                         icon: Icon(Icons.person_outline),
                       ),
                       ButtonSegment(
-                        value: _LeaveQueue.team,
+                        value: LeaveQueue.branchEmployees,
                         label: Text('Employee requests'),
                         icon: Icon(Icons.groups_outlined),
                       ),
                     ],
-                    selected: {_queue},
+                    selected: {controller.queue ?? LeaveQueue.mine},
                     onSelectionChanged: (selection) =>
-                        setState(() => _queue = selection.first),
+                        _setQueue(access, selection.first),
                   ),
                 ),
               ),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.md),
-                child: _StatusFilters(
-                  selected: _statusFilter,
-                  onSelected: (status) =>
-                      setState(() => _statusFilter = status),
-                  requests: queueRequests,
+                child: LeaveStatusFilters(
+                  selected: controller.statusFilter,
+                  onSelected: (status) => _setStatusFilter(access, status),
+                  counts: controller.counts,
                 ),
               ),
             ),
@@ -288,8 +302,8 @@ class _LeavesScreenState extends State<LeavesScreen> {
             else if (items.isEmpty)
               SliverToBoxAdapter(
                 child: _EmptyLeavesState(
-                  title: _emptyTitle(isEmployee, isManager),
-                  subtitle: _emptySubtitle(isEmployee, isManager),
+                  title: _emptyTitle(controller.statusFilter, ownQueue),
+                  subtitle: _emptySubtitle(ownQueue),
                   onApply: canApply
                       ? () {
                           _openForm(access);
@@ -299,9 +313,9 @@ class _LeavesScreenState extends State<LeavesScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.only(
+                padding: EdgeInsets.only(
                   top: AppSpacing.md,
-                  bottom: AppSpacing.xxl,
+                  bottom: controller.hasMore ? AppSpacing.md : AppSpacing.xxl,
                 ),
                 sliver: SliverList.separated(
                   itemCount: items.length,
@@ -341,6 +355,23 @@ class _LeavesScreenState extends State<LeavesScreen> {
                   },
                 ),
               ),
+            if (!controller.isLoading &&
+                controller.errorMessage == null &&
+                items.isNotEmpty &&
+                controller.hasMore)
+              SliverPadding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+                sliver: SliverToBoxAdapter(
+                  child: Center(
+                    child: AppButton.outlined(
+                      text: 'Load more',
+                      isFullWidth: false,
+                      isLoading: controller.isLoadingMore,
+                      onPressed: () => _loadMore(access),
+                    ),
+                  ),
+                ),
+              ),
             if (controller.actionErrorMessage != null)
               SliverToBoxAdapter(
                 child: Padding(
@@ -359,65 +390,16 @@ class _LeavesScreenState extends State<LeavesScreen> {
     );
   }
 
-  String _emptyTitle(bool isEmployee, bool isManager) {
-    if (_statusFilter != null) {
-      return 'No ${_statusFilter!.label.toLowerCase()} requests';
+  String _emptyTitle(LeaveStatus? statusFilter, bool ownQueue) {
+    if (statusFilter != null) {
+      return 'No ${statusFilter.label.toLowerCase()} requests';
     }
-    if (isEmployee || (isManager && _queue == _LeaveQueue.mine)) {
-      return 'No leave requests yet';
-    }
-    return 'No employee requests';
+    return ownQueue ? 'No leave requests yet' : 'No employee requests';
   }
 
-  String _emptySubtitle(bool isEmployee, bool isManager) {
-    if (isEmployee || (isManager && _queue == _LeaveQueue.mine)) {
-      return 'Your leave applications will appear here.';
-    }
-    return 'Employee leave applications for this branch will appear here.';
-  }
-}
-
-class _StatusFilters extends StatelessWidget {
-  const _StatusFilters({
-    required this.selected,
-    required this.onSelected,
-    required this.requests,
-  });
-
-  final LeaveStatus? selected;
-  final ValueChanged<LeaveStatus?> onSelected;
-  final List<LeaveRequest> requests;
-
-  @override
-  Widget build(BuildContext context) {
-    final filters = [
-      FilterChip(
-        label: Text('All (${requests.length})'),
-        selected: selected == null,
-        onSelected: (_) => onSelected(null),
-      ),
-      for (final status in LeaveStatus.values)
-        FilterChip(
-          label: Text(
-            '${status.label} (${requests.where((request) => request.status == status).length})',
-          ),
-          selected: selected == status,
-          onSelected: (_) => onSelected(status),
-        ),
-    ];
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (var index = 0; index < filters.length; index++) ...[
-            if (index > 0) const SizedBox(width: AppSpacing.xs),
-            filters[index],
-          ],
-        ],
-      ),
-    );
-  }
+  String _emptySubtitle(bool ownQueue) => ownQueue
+      ? 'Your leave applications will appear here.'
+      : 'Employee leave applications for this branch will appear here.';
 }
 
 class _EmptyLeavesState extends StatelessWidget {

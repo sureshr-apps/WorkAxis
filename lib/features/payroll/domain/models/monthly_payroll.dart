@@ -15,6 +15,8 @@ class PayrollRecord {
     required this.overtimePay,
     required this.basePay,
     required this.grossPay,
+    this.paidLeaveDays = 0,
+    this.outsideEmploymentDays = 0,
     this.employeeCode,
     this.authUid,
     this.unavailableReason,
@@ -32,8 +34,14 @@ class PayrollRecord {
   final double actualHours;
   final int scheduledWorkdays;
   final int payableWorkdays;
+
+  /// Approved leave days covered by a leave allowance (paid in base pay).
+  final int paidLeaveDays;
   final int unpaidLeaveDays;
   final double unpaidLeaveImpact;
+
+  /// Scheduled days of the month before joining or after relieving (unpaid).
+  final int outsideEmploymentDays;
   final double overtimeHours;
   final double overtimePay;
   final double basePay;
@@ -54,6 +62,8 @@ class PayrollRecord {
       actualHours: _number(calculation['actualHours']),
       scheduledWorkdays: _integer(calculation['scheduledWorkdays']),
       payableWorkdays: _integer(calculation['payableWorkdays']),
+      paidLeaveDays: _integer(calculation['paidLeaveDays']),
+      outsideEmploymentDays: _integer(calculation['outsideEmploymentDays']),
       unpaidLeaveDays: _integer(calculation['unpaidLeaveDays']),
       unpaidLeaveImpact: _number(calculation['unpaidLeaveImpact']),
       overtimeHours: _number(calculation['overtimeHours']),
@@ -112,6 +122,7 @@ class PayrollSummary {
     required this.overtimePay,
     required this.basePay,
     required this.grossPay,
+    this.paidLeaveDays = 0,
   });
 
   final int employeeCount;
@@ -121,6 +132,7 @@ class PayrollSummary {
   final double actualHours;
   final double scheduledWorkdays;
   final double payableWorkdays;
+  final double paidLeaveDays;
   final double unpaidLeaveDays;
   final double unpaidLeaveImpact;
   final double overtimeHours;
@@ -136,6 +148,7 @@ class PayrollSummary {
     actualHours: _number(json['actualHours']),
     scheduledWorkdays: _number(json['scheduledWorkdays']),
     payableWorkdays: _number(json['payableWorkdays']),
+    paidLeaveDays: _number(json['paidLeaveDays']),
     unpaidLeaveDays: _number(json['unpaidLeaveDays']),
     unpaidLeaveImpact: _number(json['unpaidLeaveImpact']),
     overtimeHours: _number(json['overtimeHours']),

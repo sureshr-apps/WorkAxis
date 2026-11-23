@@ -5,6 +5,8 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/constants/app_breakpoints.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
+import 'package:workaxis/core/time/business_time.dart';
+import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/core/widgets/app_date_picker_field.dart';
 import 'package:workaxis/core/widgets/app_page_header.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
@@ -67,7 +69,7 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
   final List<ReturnItemDraft> _items = [];
 
   String? _invoiceError;
-  DateTime _returnDate = DateTime.now();
+  DateTime _returnDate = BusinessTime.today(systemNow);
   String? _selectedBranchId;
   String? _imagePath;
   bool _isSubmitting = false;
@@ -149,12 +151,13 @@ class _SubmitReturnScreenState extends State<SubmitReturnScreen> {
   }
 
   Future<void> _pickReturnDate() async {
-    final now = DateTime.now();
+    // The server rejects return dates after today's business date.
+    final today = BusinessTime.today(systemNow);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _returnDate,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 1),
+      initialDate: _returnDate.isAfter(today) ? today : _returnDate,
+      firstDate: DateTime(today.year - 1),
+      lastDate: today,
       helpText: 'SELECT RETURN DATE',
     );
     if (picked != null && mounted) {

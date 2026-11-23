@@ -25,7 +25,7 @@ import 'package:workaxis/features/employee_home/domain/services/attendance_locat
 import 'package:workaxis/features/employee_home/domain/services/monthly_attendance_summary_calculator.dart';
 import 'package:workaxis/features/employees/domain/models/employee_workforce_history.dart';
 import 'package:workaxis/features/employees/domain/repositories/employee_workforce_repository.dart';
-import 'package:workaxis/features/returns/domain/models/return_item.dart';
+import 'package:workaxis/features/returns/domain/models/return_status_counts.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
 
 /// Production [EmployeeHomeRepository].
@@ -438,8 +438,14 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
           shiftHours = schedule.shiftHours;
         }
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
       // Defaults keep the dashboard usable if history is not yet backfilled.
+      developer.log(
+        'Unable to load workforce history for Employee Home.',
+        name: 'workaxis.employee_home',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
 
     final MonthlyAttendanceMetrics monthlyMetrics =
@@ -528,15 +534,13 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     if (repository == null) return null;
 
     try {
-      final returns = await repository.getReturns(access: access);
-      var pending = 0;
-      var approved = 0;
-      for (final item in returns) {
-        if (!item.wasSubmittedBy(access.user.id)) continue;
-        if (item.status == ReturnStatus.pending) pending++;
-        if (item.status == ReturnStatus.approved) approved++;
-      }
-      return (pending: pending, approved: approved);
+      // Server totals of the caller's own returns (a Branch Manager's own
+      // queue in the active branch), without loading the list.
+      final counts = await repository.getReturnCounts(
+        access: access,
+        queue: ReturnQueue.mine,
+      );
+      return (pending: counts.pending, approved: counts.approved);
     } catch (error, stackTrace) {
       developer.log(
         'Unable to load the signed-in user’s return counts for Employee Home.',

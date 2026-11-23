@@ -53,6 +53,18 @@ beforeEach(async () => {
     await setDoc(doc(d, "users/emp"), { name: "Alex", role: "employee", status: "active", organizationId: "o1", branchIds: ["b1"] });
     await setDoc(doc(d, "users/emp2"), { name: "Bo", role: "employee", status: "active", organizationId: "o1", branchIds: ["b9"] });
     await setDoc(doc(d, "users/other"), { name: "Zed", role: "employee", status: "active", organizationId: "o2", branchIds: ["b5"] });
+    // Every caller has a live profile matching its token (see liveProfile()).
+    for (const [uid, c] of Object.entries(claims)) {
+      if (uid === "emp") continue;
+      await setDoc(doc(d, `users/${uid}`), {
+        name: uid,
+        role: c.role,
+        status: c.status,
+        ...(c.organizationId ? { organizationId: c.organizationId } : {}),
+        branchIds: c.branchIds,
+        activeBranchIds: c.branchIds,
+      });
+    }
     await setDoc(doc(d, "attendance_entries/e1"), entry());
     await setDoc(doc(d, "attendance_entries/e2"), entry({ id: "e2", branchId: "b9", employeeId: "emp2" }));
     await setDoc(doc(d, "attendance_entries/e3"), entry({ id: "e3", organizationId: "o2", branchId: "b5", employeeId: "other" }));
@@ -206,6 +218,13 @@ describe("attendance_entries write", () => {
     await assertSucceeds(
       updateDoc(doc(db("orgAdmin"), "attendance_entries/e1"), review({ reviewedById: "orgAdmin" })),
     );
+  });
+
+  it("rejects a manager verifying their own attendance", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "attendance_entries/own"), entry({ id: "own", employeeId: "bm" }));
+    });
+    await assertFails(updateDoc(doc(db("bm"), "attendance_entries/own"), review()));
   });
 
   it("rejects out-of-scope, platform, suspended, forged-time and extra-field reviews", async () => {
@@ -362,5 +381,49 @@ describe("settings", () => {
     await assertFails(setDoc(ref(), platSettings({ updatedBy: "x" })));
     await assertFails(setDoc(ref(), platSettings({ extra: true })));
     await assertSucceeds(setDoc(ref(), platSettings({ sessionTimeoutMinutes: 5, maxLoginAttempts: 10 })));
+  });
+});
+
+describe("live profile gate (stale ID tokens)", () => {
+  const setProfile = (uid, patch) =>
+    env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), `users/${uid}`), patch));
+
+  it("still grants access while token and profile agree", async () => {
+    await assertSucceeds(getDoc(doc(db("bm"), "attendance_entries/e1")));
+    await assertSucceeds(getDoc(doc(db("orgAdmin"), "users/emp")));
+  });
+
+  it("denies a suspended member whose token still says active", async () => {
+    await setProfile("bm", { status: "suspended" });
+    await setProfile("orgAdmin", { status: "suspended" });
+    await assertFails(getDoc(doc(db("bm"), "attendance_entries/e1")));
+    await assertFails(getDoc(doc(db("orgAdmin"), "users/emp")));
+  });
+
+  it("denies a branch removed from the profile before the token refreshes", async () => {
+    await setProfile("bm", { activeBranchIds: ["b2"] });
+    await assertFails(getDoc(doc(db("bm"), "attendance_entries/e1")));
+    await assertFails(getDoc(doc(db("bm"), "users/emp")));
+  });
+
+  it("denies a token whose role or organization no longer matches", async () => {
+    await setProfile("orgAdmin", { role: "employee" });
+    await setProfile("padmin", { organizationId: "o1" });
+    await assertFails(getDoc(doc(db("orgAdmin"), "users/emp")));
+    await assertFails(getDoc(doc(db("padmin"), "users/emp")));
+  });
+
+  it("denies a caller without a profile", async () => {
+    await env.withSecurityRulesDisabled((ctx) => deleteDoc(doc(ctx.firestore(), "users/orgAdmin")));
+    await assertFails(getDoc(doc(db("orgAdmin"), "users/emp")));
+  });
+
+  it("falls back to branchIds for profiles written before activeBranchIds", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), "users/bm"), {
+        name: "bm", role: "branchManager", status: "active", organizationId: "o1", branchIds: ["b1", "b2"],
+      }),
+    );
+    await assertSucceeds(getDoc(doc(db("bm"), "attendance_entries/e1")));
   });
 });

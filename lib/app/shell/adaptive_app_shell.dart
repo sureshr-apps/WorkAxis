@@ -5,6 +5,29 @@ import 'package:workaxis/app/shell/widgets/compact_shell.dart';
 import 'package:workaxis/app/shell/widgets/expanded_shell.dart';
 import 'package:workaxis/core/responsive/responsive_layout.dart';
 
+/// Index of the destination that owns [route]: an exact match, otherwise the
+/// destination with the longest route prefix. Home routes (`/organization`)
+/// prefix every child path, so the first prefix match would always be Home.
+int selectedDestinationIndex(
+  List<AppNavDestination> destinations,
+  String route,
+) {
+  final exact = destinations.indexWhere((d) => d.route == route);
+  if (exact >= 0) return exact;
+  var best = 0;
+  var bestLength = -1;
+  for (var i = 0; i < destinations.length; i++) {
+    final candidate = destinations[i].route;
+    if (candidate != '/' &&
+        route.startsWith('$candidate/') &&
+        candidate.length > bestLength) {
+      best = i;
+      bestLength = candidate.length;
+    }
+  }
+  return best;
+}
+
 /// Adaptive navigation shell: a drawer-based [CompactShell] below 840dp and a
 /// persistent-sidebar [ExpandedShell] above, across all supported roles.
 class AdaptiveAppShell extends StatelessWidget {
@@ -19,14 +42,8 @@ class AdaptiveAppShell extends StatelessWidget {
     required this.currentRoute,
   });
 
-  int get _selectedIndex {
-    final index = destinations.indexWhere((d) => d.route == currentRoute);
-    if (index >= 0) return index;
-    final prefixIndex = destinations.indexWhere(
-      (d) => d.route != '/' && currentRoute.startsWith('${d.route}/'),
-    );
-    return prefixIndex >= 0 ? prefixIndex : 0;
-  }
+  int get _selectedIndex =>
+      selectedDestinationIndex(destinations, currentRoute);
 
   void _onDestinationSelected(BuildContext context, int index) {
     if (index >= 0 && index < destinations.length) {

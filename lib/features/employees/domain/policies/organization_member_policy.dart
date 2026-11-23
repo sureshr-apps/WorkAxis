@@ -66,6 +66,16 @@ class OrganizationMemberPolicy {
     return requested;
   }
 
+  /// Whether a Branch Manager may open [member] while working in [branchId].
+  ///
+  /// Mirrors their member lists and the backend `GetMemberById` rule: only
+  /// employees assigned to that branch, so peer managers' contact details
+  /// stay hidden even when their id is typed into a URL.
+  static bool isVisibleToBranchManager(
+    OrganizationMember member,
+    String? branchId,
+  ) => member.role == UserRole.employee && member.branchIds.contains(branchId);
+
   /// Whether [existing] is editable by the caller (used to show Edit).
   static bool canManage(
     UserAccessContext access,

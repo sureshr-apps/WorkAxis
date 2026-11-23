@@ -26,9 +26,11 @@ export interface PayrollAttendanceSession {
   status?: string;
 }
 
-export interface ApprovedLeaveRange {
-  startDate: string;
-  endDate: string;
+/** One approved leave day, already decided by the leave ledger. */
+export interface PayrollLeaveDay {
+  date: string;
+  /** Covered by the leave type's allowance (paid like a worked day). */
+  paid: boolean;
 }
 
 export interface PayrollCalculationInput {
@@ -38,7 +40,15 @@ export interface PayrollCalculationInput {
   schedules: readonly ScheduleVersion[];
   compensations: readonly CompensationVersion[];
   attendance: readonly PayrollAttendanceSession[];
-  approvedLeaves: readonly ApprovedLeaveRange[];
+  leaveDays: readonly PayrollLeaveDay[];
+  /**
+   * First and last employed day (joining / relieving date). Days outside are
+   * still part of the month when the monthly salary is divided, but earn
+   * nothing, so a mid-month joiner or leaver is paid only for their days.
+   * Without a joining date the earliest schedule or salary version is used.
+   */
+  employmentStart?: string | null;
+  employmentEnd?: string | null;
   asOf?: Date;
 }
 
@@ -50,8 +60,12 @@ export interface PayrollCalculation {
   actualHours: number;
   scheduledWorkdays: number;
   payableWorkdays: number;
+  /** Approved leave days covered by an allowance (included in base pay). */
+  paidLeaveDays: number;
   unpaidLeaveDays: number;
   unpaidLeaveImpact: number;
+  /** Scheduled days of the month before joining or after relieving. */
+  outsideEmploymentDays: number;
   overtimeHours: number;
   overtimePay: number;
   basePay: number;
@@ -62,6 +76,9 @@ interface DayRecord {
   date: string;
   scheduled: boolean;
   scheduledHours: number;
+  /** False before joining / after relieving: counted, never paid. */
+  employed: boolean;
+  paidLeave: boolean;
   unpaidLeave: boolean;
   hasValidPunch: boolean;
   actualHours: number;
@@ -79,41 +96,38 @@ export function calculatePayroll(input: PayrollCalculationInput): PayrollCalcula
   const [year, month] = input.month.split("-").map(Number);
   const days: DayRecord[] = [];
   const attendanceByDate = groupAttendance(input.attendance, input.asOf ?? new Date());
-  const employmentStart = [
+  const employmentStart = input.employmentStart ?? [
     ...input.schedules.map((version) => version.effectiveFrom),
     ...input.compensations.map((version) => version.effectiveFrom),
   ].sort()[0];
+  const employmentEnd = input.employmentEnd ?? undefined;
+  const leaveByDate = new Map(input.leaveDays.map((day) => [day.date, day.paid]));
   let missingSchedule = false;
   let missingSalary = false;
 
   for (let d = 1; d <= new Date(Date.UTC(year, month, 0)).getUTCDate(); d++) {
     const date = `${input.month}-${String(d).padStart(2, "0")}`;
-    if (employmentStart && date < employmentStart) {
-      days.push({
-        date,
-        scheduled: false,
-        scheduledHours: 0,
-        unpaidLeave: false,
-        hasValidPunch: false,
-        actualHours: 0,
-      });
-      continue;
-    }
-    const schedule = effectiveAt(input.schedules, date);
-    const compensation = effectiveAt(input.compensations, date);
-    if (!schedule) missingSchedule = true;
-    if (!compensation) missingSalary = true;
+    const employed =
+      (!employmentStart || date >= employmentStart) && (!employmentEnd || date <= employmentEnd);
+    // Outside employment the nearest version still shapes the month, so the
+    // salary is divided over the whole month's scheduled days.
+    const schedule = effectiveAt(input.schedules, date) ??
+      (employed ? undefined : nearest(input.schedules, date));
+    const compensation = effectiveAt(input.compensations, date) ??
+      (employed ? undefined : nearest(input.compensations, date));
+    if (!schedule && employed) missingSchedule = true;
+    if (!compensation && employed) missingSalary = true;
     const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
     const scheduled = schedule !== undefined && weekday !== schedule.weeklyDayOff;
-    const unpaidLeave = input.approvedLeaves.some(
-      (leave) => leave.startDate <= date && date <= leave.endDate,
-    );
-    const sessions = attendanceByDate.get(date) ?? [];
+    const leave = employed ? leaveByDate.get(date) : undefined;
+    const sessions = employed ? attendanceByDate.get(date) ?? [] : [];
     days.push({
       date,
       scheduled,
       scheduledHours: scheduled ? schedule!.dailyWorkHours : 0,
-      unpaidLeave,
+      employed,
+      paidLeave: leave === true,
+      unpaidLeave: leave === false,
       hasValidPunch: sessions.some((session) => session.hasValidPunch),
       actualHours: sessions.reduce((sum, session) => sum + session.hours, 0),
       salary: compensation?.monthlySalary,
@@ -129,13 +143,16 @@ export function calculatePayroll(input: PayrollCalculationInput): PayrollCalcula
   if (missingSalary) {
     return emptyCalculation("salaryMissing", scheduledHours, scheduledWorkdays);
   }
-  if (scheduledHours <= 0 || scheduledWorkdays <= 0) {
+  // A month wholly before joining or after relieving has nothing to pay.
+  if (scheduledHours <= 0 || scheduledWorkdays <= 0 || !scheduledDays.some((d) => d.employed)) {
     return emptyCalculation("noScheduledHours", scheduledHours, scheduledWorkdays);
   }
 
   let payableHours = 0;
   let actualHours = 0;
   let payableWorkdays = 0;
+  let paidLeaveDays = 0;
+  let outsideEmploymentDays = 0;
   let unpaidLeaveDays = 0;
   let unpaidLeaveImpact = 0;
   let overtimeHours = 0;
@@ -144,6 +161,22 @@ export function calculatePayroll(input: PayrollCalculationInput): PayrollCalcula
 
   for (const day of scheduledDays) {
     const salary = day.salary ?? 0;
+    if (!day.employed) {
+      outsideEmploymentDays++;
+      continue;
+    }
+    if (day.paidLeave) {
+      // Covered by the allowance: paid as a full scheduled day.
+      paidLeaveDays++;
+      if (input.basis === "hours") {
+        payableHours += day.scheduledHours;
+        basePay += salary * day.scheduledHours / scheduledHours;
+      } else {
+        payableWorkdays++;
+        basePay += salary / scheduledWorkdays;
+      }
+      continue;
+    }
     const attendedHours = day.unpaidLeave ? 0 : day.actualHours;
     const dayBaseHours = Math.min(attendedHours, day.scheduledHours);
     const dayOvertimeHours = Math.max(0, attendedHours - day.scheduledHours);
@@ -181,8 +214,10 @@ export function calculatePayroll(input: PayrollCalculationInput): PayrollCalcula
     actualHours: roundHours(actualHours),
     scheduledWorkdays,
     payableWorkdays,
+    paidLeaveDays,
     unpaidLeaveDays,
     unpaidLeaveImpact: roundCurrency(unpaidLeaveImpact),
+    outsideEmploymentDays,
     overtimeHours: roundHours(overtimeHours),
     overtimePay,
     basePay,
@@ -203,13 +238,24 @@ function emptyCalculation(
     actualHours: 0,
     scheduledWorkdays,
     payableWorkdays: 0,
+    paidLeaveDays: 0,
     unpaidLeaveDays: 0,
     unpaidLeaveImpact: 0,
+    outsideEmploymentDays: 0,
     overtimeHours: 0,
     overtimePay: 0,
     basePay: 0,
     grossPay: 0,
   };
+}
+
+/** The version closest to [date]: the first one after it, else the last one before it. */
+function nearest<T extends { effectiveFrom: string; effectiveTo?: string | null }>(
+  versions: readonly T[],
+  date: string,
+): T | undefined {
+  const sorted = [...versions].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  return sorted.find((v) => v.effectiveFrom > date) ?? sorted.at(-1);
 }
 
 function effectiveAt<T extends { effectiveFrom: string; effectiveTo?: string | null }>(

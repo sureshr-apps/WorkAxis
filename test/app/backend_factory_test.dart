@@ -15,6 +15,8 @@ import 'package:workaxis/features/employee_home/data/firestore_employee_home_rep
 import 'package:workaxis/features/employee_home/data/mock_employee_home_repository.dart';
 import 'package:workaxis/features/employees/data/mock_organization_members_repository.dart';
 import 'package:workaxis/features/employees/data/sql_connect_organization_members_repository.dart';
+import 'package:workaxis/features/leave_policy/data/mock_leave_policy_repository.dart';
+import 'package:workaxis/features/leave_policy/data/sql_connect_leave_policy_repository.dart';
 import 'package:workaxis/features/organization_dashboard/data/mock_organization_dashboard_repository.dart';
 import 'package:workaxis/features/organization_dashboard/data/sql_connect_organization_dashboard_repository.dart';
 import 'package:workaxis/features/platform_dashboard/data/mock_platform_dashboard_repository.dart';
@@ -66,6 +68,7 @@ void main() {
       );
       expect(repos.returnsRepository, isA<MockReturnsRepository>());
       expect(repos.reportsRepository, isA<MockReportsRepository>());
+      expect(repos.leavePolicyRepository, isA<MockLeavePolicyRepository>());
     });
 
     test('BackendFactory switches to Firebase and SQL Connect repositories in firebase mode', () {
@@ -107,6 +110,10 @@ void main() {
       );
       expect(repos.returnsRepository, isA<SqlConnectReturnsRepository>());
       expect(repos.reportsRepository, isA<SqlConnectReportsRepository>());
+      expect(
+        repos.leavePolicyRepository,
+        isA<SqlConnectLeavePolicyRepository>(),
+      );
     });
   });
 }

@@ -1,6 +1,9 @@
 import 'package:workaxis/core/backend/data_gateway.dart';
+import 'package:workaxis/core/backend/json_reader.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
+import 'package:workaxis/features/assets/domain/models/asset_queue.dart';
 import 'package:workaxis/features/assets/domain/models/employee_asset.dart';
 import 'package:workaxis/features/assets/domain/repositories/assets_repository.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
@@ -11,16 +14,22 @@ class SqlConnectAssetsRepository implements AssetsRepository {
   final DataGateway gateway;
 
   @override
-  Future<List<EmployeeAsset>> getAssets({
+  Future<PageResult<EmployeeAsset>> getAssetsPage({
     required UserAccessContext access,
+    required AssetQueue queue,
     String? activeBranchId,
+    String? query,
+    int offset = 0,
+    int limit = defaultPageSize,
   }) async {
     final role = access.user.role;
-    final operation = switch (role) {
-      UserRole.employee => 'ListMyEmployeeAssets',
-      UserRole.orgAdmin => 'ListOrganizationEmployeeAssets',
-      UserRole.branchManager => 'ListBranchEmployeeAssets',
-      _ => throw const AccessDeniedException(),
+    if (!AssetQueue.allowedFor(role).contains(queue)) {
+      throw const AccessDeniedException();
+    }
+    final operation = switch (queue) {
+      AssetQueue.mine => 'ListMyEmployeeAssets',
+      AssetQueue.branchEmployees => 'ListBranchEmployeeAssets',
+      AssetQueue.organization => 'ListOrganizationEmployeeAssets',
     };
     final vars = <String, dynamic>{};
     if (role == UserRole.branchManager) {
@@ -33,24 +42,10 @@ class SqlConnectAssetsRepository implements AssetsRepository {
       vars['branchId'] = branchId;
       vars['activeBranchId'] = branchId;
     }
-    if (role == UserRole.branchManager) {
-      final own = await gateway.call('ListMyEmployeeAssets', vars);
-      final team = await gateway.call(operation, vars);
-      final ownRows = own['employeeAssets'];
-      final teamRows = team['employeeAssets'];
-      if (ownRows is! List || teamRows is! List) {
-        throw const DatabaseException(
-          'Asset listing returned an invalid payload.',
-        );
-      }
-      final unique = <String, EmployeeAsset>{};
-      for (final row in [...ownRows, ...teamRows]) {
-        if (row is! Map) continue;
-        final asset = _fromJson(row);
-        unique[asset.id] = asset;
-      }
-      return List.unmodifiable(unique.values);
-    }
+    vars['limit'] = limit;
+    vars['offset'] = offset;
+    _addOptional(vars, 'query', query);
+
     final data = await gateway.call(operation, vars);
     final rows = data['employeeAssets'];
     if (rows is! List) {
@@ -58,7 +53,11 @@ class SqlConnectAssetsRepository implements AssetsRepository {
         'Asset listing returned an invalid payload.',
       );
     }
-    return List.unmodifiable(rows.map(_fromJson));
+    return PageResult(
+      items: List.unmodifiable(rows.map(_fromJson)),
+      total: data.countOf('total'),
+      offset: offset,
+    );
   }
 
   @override

@@ -1,8 +1,11 @@
 import 'package:workaxis/core/errors/app_exceptions.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
+import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/returns/data/mock_returns_data_source.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
+import 'package:workaxis/features/returns/domain/models/return_status_counts.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
 import 'package:workaxis/features/returns/domain/services/returns_scope.dart';
 
@@ -28,25 +31,100 @@ class MockReturnsRepository implements ReturnsRepository {
   }
 
   @override
-  Future<List<ReturnItem>> getReturns({
+  Future<PageResult<ReturnItem>> getReturnsPage({
     required UserAccessContext access,
     String? activeBranchId,
-    ReturnStatus? statusFilter,
+    ReturnQueue? queue,
+    ReturnStatus? status,
+    String? query,
+    int offset = 0,
+    int limit = defaultPageSize,
   }) async {
-    final scope = _scope.forRead(access, activeBranchId);
+    final scoped = _inScope(access, activeBranchId, queue);
     await _latency();
+    final text = query?.trim().toLowerCase() ?? '';
+    final matches =
+        scoped
+            .where((r) => status == null || r.status == status)
+            .where((r) => text.isEmpty || _searchText(r).contains(text))
+            .toList()
+          // Same order as the server: newest return date first.
+          ..sort((a, b) {
+            final byDate = b.returnDate.compareTo(a.returnDate);
+            return byDate != 0 ? byDate : b.id.compareTo(a.id);
+          });
+    final start = offset.clamp(0, matches.length);
+    final end = (start + limit).clamp(0, matches.length);
+    return PageResult(
+      items: List.unmodifiable(matches.sublist(start, end)),
+      total: matches.length,
+      offset: start,
+    );
+  }
+
+  @override
+  Future<ReturnStatusCounts> getReturnCounts({
+    required UserAccessContext access,
+    String? activeBranchId,
+    ReturnQueue? queue,
+  }) async {
+    final scoped = _inScope(access, activeBranchId, queue);
+    await _latency();
+    int count(ReturnStatus status) =>
+        scoped.where((r) => r.status == status).length;
+    return ReturnStatusCounts(
+      pending: count(ReturnStatus.pending),
+      approved: count(ReturnStatus.approved),
+      rejected: count(ReturnStatus.rejected),
+    );
+  }
+
+  @override
+  Future<ReturnItem?> getReturn({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required String returnId,
+  }) async {
+    final scoped = _inScope(access, activeBranchId, null);
+    await _latency();
+    return scoped.where((r) => r.id == returnId).firstOrNull;
+  }
+
+  /// Returns the caller may read, before status and search filters.
+  List<ReturnItem> _inScope(
+    UserAccessContext access,
+    String? activeBranchId,
+    ReturnQueue? queue,
+  ) {
+    final scope = _scope.forRead(access, activeBranchId);
     final orgId = access.organization!.id;
     final branchIds = scope.branches.map((b) => b.id).toSet();
-
+    final managerQueue = access.user.role == UserRole.branchManager
+        ? queue
+        : null;
     return _dataSource.returns
         .where((r) {
           if (r.organizationId != orgId) return false;
           if (scope.ownOnly) return r.employeeId == access.user.id;
           return branchIds.contains(r.branchId);
         })
-        .where((r) => statusFilter == null || r.status == statusFilter)
+        .where(
+          (r) => switch (managerQueue) {
+            null => true,
+            ReturnQueue.mine => r.wasSubmittedBy(access.user.id),
+            ReturnQueue.others => !r.wasSubmittedBy(access.user.id),
+          },
+        )
         .toList();
   }
+
+  static String _searchText(ReturnItem r) => [
+    r.productTitle,
+    r.invoiceNumber,
+    r.billNumber ?? '',
+    r.employeeName,
+    r.branchName,
+  ].join(' ').toLowerCase();
 
   @override
   Future<ReturnItem> submitReturn({

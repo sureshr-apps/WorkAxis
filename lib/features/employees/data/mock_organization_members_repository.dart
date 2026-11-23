@@ -151,7 +151,12 @@ class MockOrganizationMembersRepository
         access,
         activeBranchId,
       );
-      if (!member.branchIds.contains(branchId)) return null;
+      if (!OrganizationMemberPolicy.isVisibleToBranchManager(
+        member,
+        branchId,
+      )) {
+        return null;
+      }
     }
     return member;
   }

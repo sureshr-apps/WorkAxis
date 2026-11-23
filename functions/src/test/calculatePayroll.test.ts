@@ -6,7 +6,7 @@ const fullMonth: Omit<PayrollCalculationInput, "attendance" | "basis" | "overtim
   month: "2026-11",
   schedules: [{ effectiveFrom: "2026-11-01", dailyWorkHours: 8, weeklyDayOff: 0 }],
   compensations: [{ effectiveFrom: "2026-11-01", monthlySalary: 30_000 }],
-  approvedLeaves: [],
+  leaveDays: [],
   asOf: new Date("2026-11-30T18:30:00.000Z"),
 };
 
@@ -66,7 +66,7 @@ test("weekly off and approved unpaid leave add no payable time", () => {
     ...fullMonth,
     basis: "hours",
     overtimeEnabled: false,
-    approvedLeaves: [{ startDate: "2026-11-03", endDate: "2026-11-03" }],
+    leaveDays: [{ date: "2026-11-03", paid: false }],
     attendance: [
       { workDate: "2026-11-01", checkInAt: new Date("2026-11-01T03:00:00Z"), checkOutAt: new Date("2026-11-01T12:00:00Z"), status: "present" },
       { workDate: "2026-11-03", checkInAt: new Date("2026-11-03T03:00:00Z"), checkOutAt: new Date("2026-11-03T12:00:00Z"), status: "present" },
@@ -107,11 +107,10 @@ test("a month before schedule or salary history is unavailable instead of being 
   assert.equal(result.unavailableReason, "noScheduledHours");
 });
 
-test("a mid-month employment start excludes pre-employment days from the pay period", () => {
-  const schedules = [{ effectiveFrom: "2026-11-15", dailyWorkHours: 8, weeklyDayOff: 0 }];
-  const compensations = [{ effectiveFrom: "2026-11-15", monthlySalary: 30_000 }];
+/** A present 9:00-17:00 IST punch on every scheduled (non-Sunday) day in [from, to]. */
+function workedDays(from: number, to: number): PayrollCalculationInput["attendance"][number][] {
   const attendance: PayrollCalculationInput["attendance"][number][] = [];
-  for (let day = 16; day <= 30; day++) {
+  for (let day = from; day <= to; day++) {
     const date = `2026-11-${String(day).padStart(2, "0")}`;
     if (new Date(`${date}T00:00:00.000Z`).getUTCDay() === 0) continue;
     attendance.push({
@@ -121,17 +120,85 @@ test("a mid-month employment start excludes pre-employment days from the pay per
       status: "present",
     });
   }
+  return attendance;
+}
+
+// November 2026 has 25 scheduled days (Sundays 1, 8, 15, 22 and 29 off).
+const NOVEMBER_WORKDAYS = 25;
+
+test("a mid-month joiner is paid only for the days after joining", () => {
+  const attendance = workedDays(16, 30);
   const result = calculatePayroll({
     month: "2026-11",
     basis: "hours",
     overtimeEnabled: false,
-    schedules,
-    compensations,
+    schedules: [{ effectiveFrom: "2026-11-15", dailyWorkHours: 8, weeklyDayOff: 0 }],
+    compensations: [{ effectiveFrom: "2026-11-15", monthlySalary: 30_000 }],
     attendance,
-    approvedLeaves: [],
+    leaveDays: [],
     asOf: new Date("2026-12-01T00:00:00.000Z"),
   });
   assert.equal(result.available, true);
-  assert.equal(result.scheduledWorkdays, attendance.length);
-  assert.equal(result.grossPay, 30_000);
+  // The salary is divided over the whole month, not just the employed part.
+  assert.equal(result.scheduledWorkdays, NOVEMBER_WORKDAYS);
+  assert.equal(result.outsideEmploymentDays, NOVEMBER_WORKDAYS - attendance.length);
+  assert.equal(result.grossPay, 30_000 * attendance.length / NOVEMBER_WORKDAYS);
+});
+
+test("the joining date wins over earlier schedule history", () => {
+  const attendance = workedDays(1, 30);
+  const result = calculatePayroll({
+    ...fullMonth,
+    basis: "workdays",
+    overtimeEnabled: false,
+    attendance,
+    employmentStart: "2026-11-20",
+  });
+  const employed = workedDays(20, 30).length;
+  assert.equal(result.payableWorkdays, employed);
+  assert.equal(result.grossPay, 30_000 * employed / NOVEMBER_WORKDAYS);
+});
+
+test("a mid-month leaver is paid only up to the relieving date", () => {
+  const result = calculatePayroll({
+    ...fullMonth,
+    basis: "workdays",
+    overtimeEnabled: false,
+    attendance: workedDays(1, 30),
+    employmentEnd: "2026-11-10",
+  });
+  const employed = workedDays(1, 10).length;
+  assert.equal(result.payableWorkdays, employed);
+  assert.equal(result.grossPay, 30_000 * employed / NOVEMBER_WORKDAYS);
+});
+
+test("a month wholly before joining is unavailable, not zero", () => {
+  const result = calculatePayroll({
+    ...fullMonth,
+    basis: "hours",
+    overtimeEnabled: false,
+    attendance: [],
+    employmentStart: "2026-12-01",
+  });
+  assert.equal(result.available, false);
+  assert.equal(result.unavailableReason, "noScheduledHours");
+});
+
+test("a paid leave day is paid as a full scheduled day on either basis", () => {
+  for (const basis of ["hours", "workdays"] as const) {
+    const result = calculatePayroll({
+      ...fullMonth,
+      basis,
+      overtimeEnabled: false,
+      attendance: [],
+      leaveDays: [
+        { date: "2026-11-02", paid: true },
+        { date: "2026-11-03", paid: false },
+      ],
+    });
+    assert.equal(result.paidLeaveDays, 1, basis);
+    assert.equal(result.unpaidLeaveDays, 1, basis);
+    assert.equal(result.grossPay, 30_000 / NOVEMBER_WORKDAYS, basis);
+    assert.equal(result.unpaidLeaveImpact, 30_000 / NOVEMBER_WORKDAYS, basis);
+  }
 });

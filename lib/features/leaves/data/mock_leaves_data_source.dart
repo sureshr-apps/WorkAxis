@@ -1,17 +1,53 @@
 import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/leaves/domain/models/leave_request.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_type_option.dart';
+
+/// A mock organization leave type with its yearly allowance.
+typedef MockLeaveTypeAllowance = ({LeaveTypeOption type, int yearlyDays});
 
 class MockLeavesDataSource {
   MockLeavesDataSource({Now? now}) : _now = now ?? systemNow {
     _seed();
   }
 
+  /// Leave types every mock organization offers, in display order.
+  static const List<MockLeaveTypeAllowance> seededLeaveTypes = [
+    (
+      type: LeaveTypeOption(id: 'lt-annual', name: 'Annual leave', paid: true),
+      yearlyDays: 12,
+    ),
+    (
+      type: LeaveTypeOption(id: 'lt-sick', name: 'Sick leave', paid: true),
+      yearlyDays: 6,
+    ),
+    (
+      type: LeaveTypeOption(
+        id: 'lt-personal',
+        name: 'Personal leave',
+        paid: true,
+      ),
+      yearlyDays: 2,
+    ),
+    (
+      type: LeaveTypeOption(id: 'lt-unpaid', name: 'Unpaid leave', paid: false),
+      yearlyDays: 0,
+    ),
+  ];
+
   final Now _now;
   final List<LeaveRequest> _requests = [];
   int _nextId = 5;
 
   List<LeaveRequest> get requests => List.unmodifiable(_requests);
+
+  List<LeaveTypeOption> get leaveTypes => [
+    for (final entry in seededLeaveTypes) entry.type,
+  ];
+
+  /// The active type [id] with its allowance, or null when unknown.
+  MockLeaveTypeAllowance? leaveType(String id) =>
+      seededLeaveTypes.where((entry) => entry.type.id == id).firstOrNull;
 
   String nextId() => 'LV-${(_nextId++).toString().padLeft(3, '0')}';
 
@@ -26,6 +62,9 @@ class MockLeavesDataSource {
 
   void _seed() {
     final today = _date(_now());
+    final annual = seededLeaveTypes[0].type;
+    final sick = seededLeaveTypes[1].type;
+    final personal = seededLeaveTypes[2].type;
     _requests.addAll([
       LeaveRequest(
         id: 'LV-001',
@@ -36,7 +75,9 @@ class MockLeavesDataSource {
         applicantUid: 'user-emp-01',
         applicantName: 'Sarah Connor',
         applicantRole: UserRole.employee,
-        leaveType: LeaveType.annual,
+        leaveTypeId: annual.id,
+        leaveTypeName: annual.name,
+        leaveTypePaid: annual.paid,
         startDate: today.add(const Duration(days: 7)),
         endDate: today.add(const Duration(days: 8)),
         reason: 'Family commitment.',
@@ -52,7 +93,9 @@ class MockLeavesDataSource {
         applicantUid: 'user-bm-multi-01',
         applicantName: 'Marcus Chen',
         applicantRole: UserRole.branchManager,
-        leaveType: LeaveType.personal,
+        leaveTypeId: personal.id,
+        leaveTypeName: personal.name,
+        leaveTypePaid: personal.paid,
         startDate: today.add(const Duration(days: 14)),
         endDate: today.add(const Duration(days: 14)),
         reason: 'Personal appointment.',
@@ -68,7 +111,9 @@ class MockLeavesDataSource {
         applicantUid: 'user-emp-01',
         applicantName: 'Sarah Connor',
         applicantRole: UserRole.employee,
-        leaveType: LeaveType.sick,
+        leaveTypeId: sick.id,
+        leaveTypeName: sick.name,
+        leaveTypePaid: sick.paid,
         startDate: today.subtract(const Duration(days: 5)),
         endDate: today.subtract(const Duration(days: 4)),
         reason: 'Recovery from illness.',

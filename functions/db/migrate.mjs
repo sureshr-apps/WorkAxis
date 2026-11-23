@@ -2,7 +2,8 @@
 // schema_migrations. Uses the same env vars as src/db/connection.ts:
 //   DB_MODE=cloudsql|tcp, DB_NAME, DB_USER, and
 //   cloudsql: DB_INSTANCE_CONNECTION_NAME (IAM auth, no password)
-//   tcp:      DB_HOST, DB_PORT, DB_PASSWORD, DB_SSL
+//   tcp:      DB_HOST, DB_PORT, DB_PASSWORD, DB_SSL (true | no-verify | false,
+//             default true = verify the certificate), DB_SSL_CA (private CA PEM)
 // Optional DB_MIGRATION_ROLE: run every migration as this role (SET ROLE) so
 // new objects get its owner and default privileges (CI uses the table owner).
 // Run from functions/:  node db/migrate.mjs
@@ -39,9 +40,21 @@ async function connect() {
     host: need("DB_HOST"),
     port: env.DB_PORT ? Number(env.DB_PORT) : 5432,
     password: need("DB_PASSWORD"),
-    ssl: env.DB_SSL === "false" ? false : { rejectUnauthorized: false },
+    ssl: tcpSsl(),
   });
   return { pool, close: () => pool.end() };
+}
+
+// Same rules as tcpSslOptions in src/db/connection.ts.
+function tcpSsl() {
+  const raw = env.DB_SSL ?? "true";
+  if (raw === "false") return false;
+  if (raw === "no-verify") {
+    console.warn("DB_SSL=no-verify: the database server certificate is not verified.");
+    return { rejectUnauthorized: false };
+  }
+  if (raw !== "true") throw new Error(`DB_SSL must be "true", "no-verify" or "false", got "${raw}".`);
+  return env.DB_SSL_CA ? { rejectUnauthorized: true, ca: env.DB_SSL_CA } : { rejectUnauthorized: true };
 }
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "migrations");

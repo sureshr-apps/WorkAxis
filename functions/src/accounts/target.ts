@@ -23,11 +23,16 @@ export async function loadTarget(
 }
 
 /**
- * Re-projects SQL state onto Auth claims, sign-in state and the Firestore
- * profile. `revoke` forces existing sessions to refresh their token.
+ * Re-projects SQL state onto the Firestore profile, Auth claims and sign-in
+ * state. `revoke` forces existing sessions to refresh their token.
+ *
+ * The profile is written first: security rules check it on every request, so
+ * a suspension or branch removal takes effect immediately, while an issued ID
+ * token would keep its old claims for up to an hour.
  */
 export async function refreshProjection(member: MemberRecord, revoke = false): Promise<void> {
   const status = effectiveStatus(member);
+  await writeProfile(member);
   await applyClaims(
     member.authUid,
     buildClaims({
@@ -39,5 +44,4 @@ export async function refreshProjection(member: MemberRecord, revoke = false): P
   );
   await setSignInState(member.authUid, status);
   if (revoke && status === "active") await getAuth().revokeRefreshTokens(member.authUid);
-  await writeProfile(member);
 }

@@ -4,6 +4,7 @@ import 'package:workaxis/core/widgets/empty_state.dart';
 import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
 import 'package:workaxis/features/returns/presentation/controllers/returns_controller.dart';
+import 'package:workaxis/features/returns/presentation/screens/widgets/returns_load_more_footer.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_sliver_list.dart';
 import 'package:workaxis/features/returns/presentation/screens/widgets/returns_table.dart';
 
@@ -19,7 +20,6 @@ class SliverReturnsBody extends StatelessWidget {
     required this.emptyMessage,
     this.showReviewAction = false,
     this.reviewerUid,
-    this.visibleItems,
   });
 
   final ReturnsController controller;
@@ -30,7 +30,6 @@ class SliverReturnsBody extends StatelessWidget {
   final String emptyMessage;
   final bool showReviewAction;
   final String? reviewerUid;
-  final List<ReturnItem>? visibleItems;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +47,7 @@ class SliverReturnsBody extends StatelessWidget {
         child: ErrorState(message: error, onRetry: onRetry),
       );
     }
-    final items = visibleItems ?? controller.filteredItems;
+    final items = controller.items;
     if (items.isEmpty) {
       return SliverToBoxAdapter(
         child: EmptyState(
@@ -58,12 +57,19 @@ class SliverReturnsBody extends StatelessWidget {
         ),
       );
     }
-    return SliverReturnsList(
-      items: items,
-      columns: columns,
-      onOpen: onOpen,
-      showReviewAction: showReviewAction,
-      reviewerUid: reviewerUid,
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverReturnsList(
+          items: items,
+          columns: columns,
+          onOpen: onOpen,
+          showReviewAction: showReviewAction,
+          reviewerUid: reviewerUid,
+        ),
+        SliverToBoxAdapter(
+          child: ReturnsLoadMoreFooter(controller: controller),
+        ),
+      ],
     );
   }
 }

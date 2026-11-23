@@ -1,11 +1,16 @@
 import 'package:workaxis/core/backend/data_gateway.dart';
+import 'package:workaxis/core/backend/idempotent_creates.dart';
 import 'package:workaxis/core/backend/json_reader.dart';
 import 'package:workaxis/features/off_site_work/domain/models/off_site_work_assignment.dart';
 
 class OffSiteWorkRemoteDataSource {
-  const OffSiteWorkRemoteDataSource({required this.gateway});
+  OffSiteWorkRemoteDataSource({
+    required this.gateway,
+    IdempotentCreates? creates,
+  }) : _creates = creates ?? IdempotentCreates();
 
   final DataGateway gateway;
+  final IdempotentCreates _creates;
 
   Future<OffSiteWorkPage> list({
     required int limit,
@@ -41,7 +46,8 @@ class OffSiteWorkRemoteDataSource {
     required OffSiteWorkAssignmentDraft draft,
     String? activeBranchId,
   }) async {
-    final data = await gateway.call('CreateOffSiteWorkAssignment', {
+    // A retried assignment reuses its requestId, so it is never saved twice.
+    final data = await _creates.run('CreateOffSiteWorkAssignment', {
       'branchId': draft.branchId,
       'employeeMemberId': draft.employeeMemberId,
       'title': draft.title,
@@ -57,7 +63,7 @@ class OffSiteWorkRemoteDataSource {
         'requiredEvidenceDescription': draft.requiredEvidenceDescription!
             .trim(),
       'activeBranchId': ?activeBranchId,
-    });
+    }, (vars) => gateway.call('CreateOffSiteWorkAssignment', vars));
     return _assignment(data.object('offSiteWorkAssignment'));
   }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:workaxis/core/pagination/page_result.dart';
@@ -57,6 +58,10 @@ class PlatformOrganizationsController extends ChangeNotifier
   final RequestGeneration _countRequests = RequestGeneration();
   Timer? _debounce;
   String _loadedFilterKey = '|';
+
+  /// Server filters of the loaded rows; [loadMore] continues these.
+  String? _loadedQuery;
+  OrganizationStatus? _loadedStatus;
   int _loadedTotal = 0;
   bool _isLoadingMore = false;
   OrganizationStatusCounts _counts = const OrganizationStatusCounts(
@@ -130,16 +135,20 @@ class PlatformOrganizationsController extends ChangeNotifier
     }
 
     final key = _filterKey;
+    final query = _searchQuery.trim().isEmpty ? null : _searchQuery.trim();
+    final status = _statusFilter;
     try {
       final page = await repository.getOrganizationsPage(
-        query: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
-        statusFilter: _statusFilter,
+        query: query,
+        statusFilter: status,
         limit: pageSize,
       );
       if (!_listRequests.isCurrent(token)) return;
       _allOrganizations = List.unmodifiable(page.items);
       _loadedTotal = page.total;
       _loadedFilterKey = key;
+      _loadedQuery = query;
+      _loadedStatus = status;
       _applyFilter();
     } catch (e, st) {
       if (!_listRequests.isCurrent(token)) return;
@@ -163,9 +172,12 @@ class PlatformOrganizationsController extends ChangeNotifier
     _isLoadingMore = true;
     notifyListeners();
     try {
+      // Next page of the rows already loaded: the filters may have changed
+      // while a debounced server refresh is pending, and pages of a different
+      // filter must not be appended at this offset.
       final page = await repository.getOrganizationsPage(
-        query: _loadedFilterKey.startsWith('|') ? null : _searchQuery.trim(),
-        statusFilter: _statusFilter,
+        query: _loadedQuery,
+        statusFilter: _loadedStatus,
         offset: _allOrganizations.length,
         limit: pageSize,
       );
@@ -220,8 +232,14 @@ class PlatformOrganizationsController extends ChangeNotifier
       if (!_countRequests.isCurrent(token)) return;
       _counts = counts;
       notifyListeners();
-    } catch (_) {
+    } catch (error, stackTrace) {
       // Summary counts are decorative; the list reports its own errors.
+      developer.log(
+        'Unable to load organization status counts.',
+        name: 'workaxis.platform_organizations',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -610,6 +628,8 @@ class PlatformOrganizationsController extends ChangeNotifier
     _detailRequests.invalidate();
     _countRequests.invalidate();
     _loadedFilterKey = '|';
+    _loadedQuery = null;
+    _loadedStatus = null;
     _loadedTotal = 0;
     _isLoadingMore = false;
     _counts = const OrganizationStatusCounts(active: 0, suspended: 0);

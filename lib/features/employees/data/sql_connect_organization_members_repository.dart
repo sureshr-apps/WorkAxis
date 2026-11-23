@@ -116,7 +116,12 @@ class SqlConnectOrganizationMembersRepository
           access,
           activeBranchId,
         );
-        if (!member.branchIds.contains(branch)) return null;
+        if (!OrganizationMemberPolicy.isVisibleToBranchManager(
+          member,
+          branch,
+        )) {
+          return null;
+        }
       }
       return await _enrichSingle(
         access,

@@ -75,6 +75,8 @@ const RETURN_MAP: Record<string, string> = {
   reviewerName: "reviewer_name",
   reviewedAt: "reviewed_at",
   createdAt: "created_at",
+  billNumber: "bill_number",
+  returnDate: "return_date",
 };
 
 export const returnCols = (alias: string, names: readonly string[]): string =>
@@ -101,6 +103,8 @@ export const RETURN_MANAGER_FIELDS = [
   "reviewerName",
   "reviewedAt",
   "createdAt",
+  "billNumber",
+  "returnDate",
 ] as const;
 
 /** Splits flat `__`-less helper columns into the nested `branch: {id, name}` object. */

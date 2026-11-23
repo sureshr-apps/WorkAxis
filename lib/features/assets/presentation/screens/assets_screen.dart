@@ -14,6 +14,7 @@ import 'package:workaxis/core/widgets/empty_state.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
+import 'package:workaxis/features/assets/domain/models/asset_queue.dart';
 import 'package:workaxis/features/assets/domain/models/employee_asset.dart';
 import 'package:workaxis/features/assets/presentation/controllers/assets_controller.dart';
 import 'package:workaxis/features/assets/presentation/widgets/asset_editor_dialog.dart';
@@ -27,11 +28,8 @@ class AssetsScreen extends StatefulWidget {
   State<AssetsScreen> createState() => _AssetsScreenState();
 }
 
-enum _AssetQueue { mine, employees }
-
 class _AssetsScreenState extends State<AssetsScreen> {
   final _searchController = TextEditingController();
-  _AssetQueue _queue = _AssetQueue.mine;
   String? _loadedScope;
 
   @override
@@ -57,6 +55,8 @@ class _AssetsScreenState extends State<AssetsScreen> {
         context.read<AssetsController>().load(
           access,
           activeBranchId: activeBranchId,
+          // The search box was cleared for the new scope; match it.
+          query: '',
         ),
       );
     });
@@ -90,16 +90,9 @@ class _AssetsScreenState extends State<AssetsScreen> {
     final activeBranch = isManager && activeBranches.isNotEmpty
         ? activeBranches.first
         : null;
-    final scopedAssets = controller.filteredAssets;
-    final visibleAssets = isManager
-        ? scopedAssets
-              .where(
-                (asset) => _queue == _AssetQueue.mine
-                    ? asset.employeeUid == access.user.id
-                    : asset.employeeUid != access.user.id,
-              )
-              .toList(growable: false)
-        : scopedAssets;
+    final visibleAssets = controller.assets;
+    final isOwnQueue = controller.queue == AssetQueue.mine;
+    final canAddHere = canEdit && !(isManager && isOwnQueue);
     final padding = context.responsivePagePadding;
     Widget buildAssetCard(EmployeeAsset asset) {
       final canManageAsset =
@@ -188,26 +181,37 @@ class _AssetsScreenState extends State<AssetsScreen> {
                     hintText: isEmployee
                         ? 'Search your assets'
                         : 'Search assets, employees, or tags',
-                    onChanged: controller.setQuery,
+                    onChanged: (value) => unawaited(
+                      controller.setQuery(
+                        access,
+                        value,
+                        activeBranchId: activeBranchId,
+                      ),
+                    ),
                   ),
                   if (isManager) ...[
                     const SizedBox(height: AppSpacing.md),
-                    SegmentedButton<_AssetQueue>(
+                    SegmentedButton<AssetQueue>(
                       segments: const [
                         ButtonSegment(
-                          value: _AssetQueue.mine,
+                          value: AssetQueue.mine,
                           label: Text('My assets'),
                           icon: Icon(Icons.person_outline),
                         ),
                         ButtonSegment(
-                          value: _AssetQueue.employees,
+                          value: AssetQueue.branchEmployees,
                           label: Text('Employee assets'),
                           icon: Icon(Icons.groups_outlined),
                         ),
                       ],
-                      selected: {_queue},
-                      onSelectionChanged: (selection) =>
-                          setState(() => _queue = selection.first),
+                      selected: {controller.queue ?? AssetQueue.mine},
+                      onSelectionChanged: (selection) => unawaited(
+                        controller.setQueue(
+                          access,
+                          selection.first,
+                          activeBranchId: activeBranchId,
+                        ),
+                      ),
                     ),
                   ],
                   if (controller.actionErrorMessage != null) ...[
@@ -225,7 +229,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
                       controller.errorMessage == null) ...[
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      '${visibleAssets.length} ${visibleAssets.length == 1 ? 'asset' : 'assets'}',
+                      '${controller.totalCount} ${controller.totalCount == 1 ? 'asset' : 'assets'}',
                       style: AppTypography.labelMedium.copyWith(
                         color: AppColors.onSurfaceVariant,
                       ),
@@ -256,9 +260,8 @@ class _AssetsScreenState extends State<AssetsScreen> {
                 child: _EmptyAssets(
                   hasSearch: controller.query.trim().isNotEmpty,
                   isEmployee: isEmployee,
-                  canEdit:
-                      canEdit && !(isManager && _queue == _AssetQueue.mine),
-                  onAdd: canEdit && !(isManager && _queue == _AssetQueue.mine)
+                  canEdit: canAddHere,
+                  onAdd: canAddHere
                       ? () => _openEditor(
                           access: access,
                           controller: controller,
@@ -267,17 +270,23 @@ class _AssetsScreenState extends State<AssetsScreen> {
                       : null,
                   onClearSearch: () {
                     _searchController.clear();
-                    controller.setQuery('');
+                    unawaited(
+                      controller.setQuery(
+                        access,
+                        '',
+                        activeBranchId: activeBranchId,
+                      ),
+                    );
                   },
                 ),
               )
-            else
+            else ...[
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
                   padding.left,
                   0,
                   padding.right,
-                  padding.bottom,
+                  controller.hasMore ? AppSpacing.md : padding.bottom,
                 ),
                 sliver: context.isExpanded
                     ? SliverGrid(
@@ -306,6 +315,31 @@ class _AssetsScreenState extends State<AssetsScreen> {
                         }, childCount: visibleAssets.length),
                       ),
               ),
+              if (controller.hasMore)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    padding.left,
+                    0,
+                    padding.right,
+                    padding.bottom,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: Center(
+                      child: AppButton.outlined(
+                        text: 'Load more',
+                        isFullWidth: false,
+                        isLoading: controller.isLoadingMore,
+                        onPressed: () => unawaited(
+                          controller.loadMore(
+                            access,
+                            activeBranchId: activeBranchId,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ],
         ),
       ),

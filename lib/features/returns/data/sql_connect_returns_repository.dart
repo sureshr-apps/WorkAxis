@@ -1,5 +1,6 @@
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/core/storage/attachment_storage.dart';
 import 'package:workaxis/core/storage/attachment_uploader.dart';
 import 'package:workaxis/core/time/clock.dart';
@@ -9,6 +10,7 @@ import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/returns/data/data_connect_returns_remote.dart';
 import 'package:workaxis/features/returns/data/returns_remote.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
+import 'package:workaxis/features/returns/domain/models/return_status_counts.dart';
 import 'package:workaxis/features/returns/domain/repositories/returns_repository.dart';
 import 'package:workaxis/features/returns/domain/services/returns_scope.dart';
 
@@ -31,9 +33,6 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
        _remote = remote ?? DataConnectReturnsRemote(gateway: gateway!),
        _now = now ?? systemNow;
 
-  /// Rows fetched per query.
-  static const int pageSize = 100;
-
   final ReturnsRemote _remote;
   final ReturnsScope _scope;
   final Now _now;
@@ -42,49 +41,97 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
   final AttachmentUploader? _attachments;
 
   @override
-  Future<List<ReturnItem>> getReturns({
+  Future<PageResult<ReturnItem>> getReturnsPage({
     required UserAccessContext access,
     String? activeBranchId,
-    ReturnStatus? statusFilter,
+    ReturnQueue? queue,
+    ReturnStatus? status,
+    String? query,
+    int offset = 0,
+    int limit = defaultPageSize,
   }) async {
     try {
       final scope = _scope.forRead(access, activeBranchId);
       final orgId = access.organization!.id;
-
-      final all = <ReturnItem>[];
-      var offset = 0;
-      while (true) {
-        final List<ReturnItem> page;
-        if (scope.ownOnly) {
-          page = await _remote.listMine(
-            organizationId: orgId,
-            employeeUid: access.user.id,
-            limit: pageSize,
-            offset: offset,
-            status: statusFilter,
-          );
-        } else if (access.user.role == UserRole.orgAdmin) {
-          page = await _remote.listByOrganization(
-            organizationId: orgId,
-            limit: pageSize,
-            offset: offset,
-            branchId: activeBranchId,
-            status: statusFilter,
-          );
-        } else {
-          page = await _remote.listByBranch(
-            organizationId: orgId,
-            branch: scope.branches.single,
-            limit: pageSize,
-            offset: offset,
-            status: statusFilter,
-          );
-        }
-        all.addAll(page);
-        if (page.length < pageSize) break;
-        offset += page.length;
+      if (scope.ownOnly) {
+        return await _remote.listMine(
+          organizationId: orgId,
+          employeeUid: access.user.id,
+          limit: limit,
+          offset: offset,
+          status: status,
+          query: query,
+        );
       }
-      return all..sort((a, b) => b.returnDate.compareTo(a.returnDate));
+      if (access.user.role == UserRole.orgAdmin) {
+        return await _remote.listByOrganization(
+          organizationId: orgId,
+          limit: limit,
+          offset: offset,
+          branchId: activeBranchId,
+          status: status,
+          query: query,
+        );
+      }
+      return await _remote.listByBranch(
+        organizationId: orgId,
+        branch: scope.branches.single,
+        limit: limit,
+        offset: offset,
+        queue: queue,
+        status: status,
+        query: query,
+      );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
+  Future<ReturnStatusCounts> getReturnCounts({
+    required UserAccessContext access,
+    String? activeBranchId,
+    ReturnQueue? queue,
+  }) async {
+    try {
+      final scope = _scope.forRead(access, activeBranchId);
+      if (scope.ownOnly) return await _remote.countMine();
+      if (access.user.role == UserRole.orgAdmin) {
+        return await _remote.countByOrganization(
+          organizationId: access.organization!.id,
+          branchId: activeBranchId,
+        );
+      }
+      return await _remote.countByBranch(
+        branchId: scope.branches.single.id,
+        queue: queue,
+      );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
+  Future<ReturnItem?> getReturn({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required String returnId,
+  }) async {
+    try {
+      final scope = _scope.forRead(access, activeBranchId);
+      final item = await _remote.getById(
+        organizationId: access.organization!.id,
+        returnId: returnId,
+      );
+      if (item == null) return null;
+      // The server already scoped the row; keep a Branch Manager to the
+      // active branch, as the list does.
+      if (!scope.ownOnly &&
+          access.user.role == UserRole.branchManager &&
+          !scope.branches.any((b) => b.id == item.branchId)) {
+        return null;
+      }
+      return item;
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -121,55 +168,45 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
             kind: AttachmentKind.returnBill,
           ) ??
           input.billImageUrl;
-      final createdList = <ReturnItem>[];
-      for (final line in input.items) {
-        final combinedRemarks = [
-          if (input.remarks != null && input.remarks!.trim().isNotEmpty)
-            input.remarks!.trim(),
-          if (line.remarks != null && line.remarks!.trim().isNotEmpty)
-            line.remarks!.trim(),
-        ].join(' - ');
-        final singleInput = CreateReturnInput(
-          branchId: branch.id,
-          branchName: branch.name,
-          billNumber: input.billNumber,
-          invoiceNumber: input.invoiceNumber,
-          returnDate: input.returnDate,
-          productTitle: line.productTitle,
-          quantity: line.quantity,
-          unit: line.unit,
-          reason: line.reason,
-          billImageUrl: billImage,
-          remarks: combinedRemarks.isEmpty ? null : combinedRemarks,
-        );
-        final id = await _remote.submit(
-          branchId: branch.id,
-          input: singleInput,
-        );
-        createdList.add(
+      final stored = CreateReturnBatchInput(
+        branchId: branch.id,
+        branchName: branch.name,
+        billNumber: input.billNumber,
+        invoiceNumber: input.invoiceNumber,
+        returnDate: input.returnDate,
+        billImageUrl: billImage,
+        remarks: input.remarks,
+        items: input.items,
+      );
+      // One call: the server saves every line of the bill or none of them.
+      final ids = await _remote.submitBatch(branchId: branch.id, input: stored);
+      final lines = stored.toCreateReturnInputs();
+      if (ids.length != lines.length) {
+        throw const DatabaseException('Return batch response is incomplete.');
+      }
+      return [
+        for (var i = 0; i < lines.length; i++)
           ReturnItem(
-            id: id,
+            id: ids[i],
             organizationId: access.organization!.id,
             branchId: branch.id,
             branchName: branch.name,
             employeeId: access.user.id,
             employeeName: access.user.name,
             submittedByUid: access.user.id,
-            productTitle: line.productTitle,
-            reason: line.reason,
-            quantity: line.quantity,
-            unit: line.unit,
+            productTitle: lines[i].productTitle,
+            reason: lines[i].reason,
+            quantity: lines[i].quantity,
+            unit: lines[i].unit,
             billNumber: input.billNumber,
             invoiceNumber: input.invoiceNumber,
-            // Display value until the next load returns the server timestamp.
+            // Display value until the next load returns the server value.
             returnDate: input.returnDate ?? _now(),
             status: ReturnStatus.pending,
             billImageUrl: billImage,
-            remarks: singleInput.remarks,
+            remarks: lines[i].remarks,
           ),
-        );
-      }
-      return createdList;
+      ];
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -241,15 +278,13 @@ class SqlConnectReturnsRepository implements ReturnsRepository {
       );
 
       // Re-read so reviewer name and review time are the server's values.
-      final refreshed = await _remote.listByBranch(
+      final updated = await _remote.getById(
         organizationId: access.organization!.id,
-        branch: branch,
-        limit: pageSize,
+        returnId: returnItem.id,
       );
-      final updated = refreshed.where((r) => r.id == returnItem.id).firstOrNull;
-      // The decision is already saved; if the row fell outside the first page,
+      // The decision is already saved; if the re-read fails to find the row,
       // reflect it locally rather than reporting a failure.
-      return updated ??
+      return updated?.copyWith(branchName: branch.name) ??
           returnItem.copyWith(
             status: decision,
             reviewerNotes: reviewerNotes,

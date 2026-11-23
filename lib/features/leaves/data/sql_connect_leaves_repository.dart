@@ -1,10 +1,15 @@
 import 'package:workaxis/core/errors/backend_error_mapper.dart';
 import 'package:workaxis/core/errors/validation_exception.dart';
 import 'package:workaxis/core/backend/data_gateway.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/leaves/data/leaves_remote_data_source.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_preview.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_queue.dart';
 import 'package:workaxis/features/leaves/domain/models/leave_request.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_status_counts.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_type_option.dart';
 import 'package:workaxis/features/leaves/domain/repositories/leaves_repository.dart';
 import 'package:workaxis/features/leaves/domain/services/leave_scope.dart';
 
@@ -14,38 +19,100 @@ class SqlConnectLeavesRepository implements LeavesRepository {
     this._scope = const LeaveScope(),
   }) : _remote = LeavesRemoteDataSource(gateway);
 
-  static const int pageSize = 100;
-
   final LeavesRemoteDataSource _remote;
   final LeaveScope _scope;
 
   @override
-  Future<List<LeaveRequest>> getLeaveRequests({
+  Future<PageResult<LeaveRequest>> getLeaveRequestsPage({
     required UserAccessContext access,
     String? activeBranchId,
+    required LeaveQueue queue,
+    LeaveStatus? status,
+    int offset = 0,
+    int limit = defaultPageSize,
   }) async {
     try {
-      final scope = _scope.forRead(access, activeBranchId);
-      if (scope.ownOnly) return await _loadPages(_remote.listMine);
-      if (scope.organizationWide) {
-        return await _loadPages(_remote.listByOrganization);
-      }
-      final branch = scope.activeBranch!;
-      final lists = await Future.wait([
-        _loadPages(_remote.listMine),
-        _loadPages(
-          ({required int limit, required int offset}) =>
-              _remote.listEmployeeRequestsByBranch(
-                branchId: branch.id,
-                limit: limit,
-                offset: offset,
-              ),
-        ),
-      ]);
-      final byId = <String, LeaveRequest>{
-        for (final request in [...lists[0], ...lists[1]]) request.id: request,
-      };
-      return _sort(byId.values.toList());
+      final scope = _scope.forRead(access, activeBranchId, queue);
+      return await _remote.listPage(
+        queue: queue,
+        branchId: scope.branch?.id,
+        status: status,
+        limit: limit,
+        offset: offset,
+      );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
+  Future<LeaveStatusCounts> getLeaveStatusCounts({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required LeaveQueue queue,
+  }) async {
+    try {
+      final scope = _scope.forRead(access, activeBranchId, queue);
+      return await _remote.statusCounts(
+        queue: queue,
+        branchId: scope.branch?.id,
+      );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
+  Future<List<LeaveTypeOption>> getLeaveTypes({
+    required UserAccessContext access,
+  }) async {
+    try {
+      _scope.assertMember(access);
+      return await _remote.listLeaveTypes();
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
+  Future<LeavePreview> previewLeaveDraft({
+    required UserAccessContext access,
+    required String leaveTypeId,
+    required DateTime startDate,
+    required DateTime endDate,
+    String? editingRequestId,
+  }) async {
+    try {
+      _scope.assertApplicant(access);
+      return await _remote.previewDraft(
+        leaveTypeId: leaveTypeId,
+        startDate: startDate,
+        endDate: endDate,
+        requestId: editingRequestId,
+      );
+    } catch (e, st) {
+      throw mapBackendError(e, st);
+    }
+  }
+
+  @override
+  Future<LeavePreview> previewLeaveReview({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required LeaveRequest request,
+  }) async {
+    try {
+      _scope.forReview(
+        access,
+        activeBranchId: activeBranchId,
+        request: request,
+      );
+      return await _remote.previewReview(
+        requestId: request.id,
+        activeBranchId: access.user.role == UserRole.branchManager
+            ? activeBranchId ?? access.activeBranch?.branchId
+            : null,
+      );
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
@@ -130,34 +197,5 @@ class SqlConnectLeavesRepository implements LeavesRepository {
     } catch (e, st) {
       throw mapBackendError(e, st);
     }
-  }
-
-  Future<List<LeaveRequest>> _loadPages(
-    Future<List<LeaveRequest>> Function({
-      required int limit,
-      required int offset,
-    })
-    loadPage,
-  ) async {
-    final requests = <LeaveRequest>[];
-    var offset = 0;
-    while (true) {
-      final page = await loadPage(limit: pageSize, offset: offset);
-      requests.addAll(page);
-      if (page.length < pageSize) return _sort(requests);
-      offset += page.length;
-    }
-  }
-
-  List<LeaveRequest> _sort(List<LeaveRequest> requests) {
-    requests.sort((a, b) {
-      final pendingOrder = (a.status == LeaveStatus.pending ? 0 : 1).compareTo(
-        b.status == LeaveStatus.pending ? 0 : 1,
-      );
-      return pendingOrder != 0
-          ? pendingOrder
-          : a.startDate.compareTo(b.startDate);
-    });
-    return requests;
   }
 }

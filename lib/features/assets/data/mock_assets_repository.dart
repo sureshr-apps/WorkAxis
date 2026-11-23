@@ -1,9 +1,13 @@
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/core/errors/validation_exception.dart';
+import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/core/time/clock.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
+import 'package:workaxis/features/assets/domain/models/asset_queue.dart';
 import 'package:workaxis/features/assets/domain/models/employee_asset.dart';
+import 'package:workaxis/features/assets/domain/policies/asset_listing_policy.dart';
 import 'package:workaxis/features/assets/domain/repositories/assets_repository.dart';
+import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/repositories/organization_members_repository.dart';
 
@@ -93,54 +97,72 @@ class MockAssetsRepository implements AssetsRepository {
   int _nextId = 6;
 
   @override
-  Future<List<EmployeeAsset>> getAssets({
+  Future<PageResult<EmployeeAsset>> getAssetsPage({
     required UserAccessContext access,
+    required AssetQueue queue,
     String? activeBranchId,
+    String? query,
+    int offset = 0,
+    int limit = defaultPageSize,
   }) async {
-    final orgId = _requireOrganization(access);
     final role = access.user.role;
-    if (role == UserRole.employee) {
-      return List.unmodifiable(
-        _assets.where(
-          (asset) =>
-              asset.organizationId == orgId &&
-              (asset.employeeUid == access.user.id ||
-                  asset.employeeId == access.user.id),
-        ),
-      );
+    if (!AssetQueue.allowedFor(role).contains(queue)) {
+      throw const AccessDeniedException();
     }
+    final orgId = _requireOrganization(access);
+    final scoped = await _assetsInQueue(access, queue, orgId, activeBranchId);
+    final matching =
+        scoped
+            .where((asset) => AssetListingPolicy.matchesQuery(asset, query))
+            .toList()
+          ..sort(AssetListingPolicy.compare);
+    return PageResult(
+      items: List.unmodifiable(matching.skip(offset).take(limit)),
+      total: matching.length,
+      offset: offset,
+    );
+  }
 
-    if (role == UserRole.orgAdmin) {
-      return List.unmodifiable(
-        _assets.where((asset) => asset.organizationId == orgId),
-      );
-    }
-
-    if (role == UserRole.branchManager) {
-      final branchId = _requireManagedBranch(access, activeBranchId);
-      final assignedEmployees = await members.getMembers(
-        access: access,
-        activeBranchId: branchId,
-      );
-      final employeesById = {
-        for (final member in assignedEmployees)
-          if (member.role == UserRole.employee) member.id: member,
-      };
-      return List.unmodifiable(
-        _assets.where((asset) {
-          if (asset.organizationId != orgId) return false;
-          if (asset.employeeUid == access.user.id ||
-              asset.employeeId == access.user.id) {
-            return asset.branchId == branchId;
-          }
+  /// Mirrors the scope of the server listing behind each [queue].
+  Future<Iterable<EmployeeAsset>> _assetsInQueue(
+    UserAccessContext access,
+    AssetQueue queue,
+    String orgId,
+    String? activeBranchId,
+  ) async {
+    bool isOwn(EmployeeAsset asset) =>
+        asset.employeeUid == access.user.id ||
+        asset.employeeId == access.user.id;
+    final inOrganization = _assets.where(
+      (asset) => asset.organizationId == orgId,
+    );
+    switch (queue) {
+      case AssetQueue.organization:
+        return inOrganization;
+      case AssetQueue.mine:
+        if (access.user.role != UserRole.branchManager) {
+          return inOrganization.where(isOwn);
+        }
+        final branchId = _requireManagedBranch(access, activeBranchId);
+        return inOrganization.where(
+          (asset) => isOwn(asset) && asset.branchId == branchId,
+        );
+      case AssetQueue.branchEmployees:
+        final branchId = _requireManagedBranch(access, activeBranchId);
+        final assignedEmployees = await members.getMembers(
+          access: access,
+          activeBranchId: branchId,
+        );
+        final employeesById = {
+          for (final member in assignedEmployees)
+            if (member.role == UserRole.employee) member.id: member,
+        };
+        return inOrganization.where((asset) {
           final employee = employeesById[asset.employeeId];
           return employee != null &&
               employee.branchIds.contains(asset.branchId);
-        }),
-      );
+        });
     }
-
-    throw const AccessDeniedException();
   }
 
   @override
@@ -200,6 +222,15 @@ class MockAssetsRepository implements AssetsRepository {
         existing.branchId != branchId ||
         (existing.status == AssetStatus.returned &&
             asset.status == AssetStatus.assigned);
+    // Inactive members keep (and may return) what they hold, but cannot be
+    // handed an asset. Mirrors `SaveEmployeeAsset` on the server.
+    if (assignmentChanged &&
+        asset.status != AssetStatus.returned &&
+        employee.status != AccountStatus.active) {
+      throw ValidationException(
+        'Assets can only be assigned to active members.',
+      );
+    }
     final clearPendingAcknowledgement =
         asset.status == AssetStatus.returned &&
         existing?.acknowledgementStatus == AssetAcknowledgementStatus.pending;

@@ -7,6 +7,7 @@ import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
 import 'package:workaxis/features/assets/domain/models/employee_asset.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
+import 'package:workaxis/features/authentication/domain/models/account_status.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
 class AssetEditorDialog extends StatefulWidget {
@@ -67,10 +68,14 @@ class _AssetEditorDialogState extends State<AssetEditorDialog> {
             .where((branch) => branch.id == widget.fixedBranchId)
             .toList(growable: false);
 
+  /// Active members of the branch, plus the current holder when editing so
+  /// an asset held by a suspended member is not silently reassigned.
   List<OrganizationMember> get _employeesForBranch => widget.employees
       .where(
         (member) =>
             member.branchIds.contains(_branchId) &&
+            (member.status == AccountStatus.active ||
+                member.id == widget.asset?.employeeId) &&
             (member.role == UserRole.employee ||
                 (widget.canAssignManagers &&
                     member.role == UserRole.branchManager)),

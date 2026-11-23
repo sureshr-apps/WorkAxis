@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 import 'package:workaxis/core/errors/user_message.dart';
 import 'package:workaxis/core/session/session_scoped.dart';
@@ -102,8 +104,14 @@ class AccessController extends ChangeNotifier
       onResolved?.call(context);
       notifyListeners();
       return true;
-    } catch (_) {
-      if (!_requests.isCurrent(token)) return false;
+    } catch (error, stackTrace) {
+      // A failed refresh keeps the current context; callers get `false`.
+      developer.log(
+        'Unable to refresh access context.',
+        name: 'workaxis.access',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return false;
     }
   }

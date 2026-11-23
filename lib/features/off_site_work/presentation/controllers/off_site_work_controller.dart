@@ -87,27 +87,29 @@ class OffSiteWorkController extends ChangeNotifier
     required UserAccessContext access,
     String? activeBranchId,
     required OffSiteWorkAssignmentDraft draft,
-  }) => _perform(() async {
-    final saved = await repository.createAssignment(
+  }) => _perform(
+    () => repository.createAssignment(
       access: access,
       activeBranchId: activeBranchId,
       draft: draft,
-    );
-    _replace(saved);
-  }, fallback: 'The assignment could not be created.');
+    ),
+    _replace,
+    fallback: 'The assignment could not be created.',
+  );
 
   Future<bool> deleteAssignment({
     required UserAccessContext access,
     String? activeBranchId,
     required String assignmentId,
-  }) => _perform(() async {
-    await repository.deleteAssignment(
+  }) => _perform<void>(
+    () => repository.deleteAssignment(
       access: access,
       activeBranchId: activeBranchId,
       assignmentId: assignmentId,
-    );
-    _items = _items.where((item) => item.id != assignmentId).toList();
-  }, fallback: 'The assignment could not be deleted. Refresh and try again.');
+    ),
+    (_) => _items = _items.where((item) => item.id != assignmentId).toList(),
+    fallback: 'The assignment could not be deleted. Refresh and try again.',
+  );
 
   Future<bool> recordMilestone({
     required UserAccessContext access,
@@ -117,23 +119,25 @@ class OffSiteWorkController extends ChangeNotifier
     String? note,
     List<String> evidenceLocalPaths = const [],
   }) => _perform(
-    () async {
-      final updated = await repository.recordMilestone(
-        access: access,
-        activeBranchId: activeBranchId,
-        assignmentId: assignmentId,
-        milestone: milestone,
-        note: note,
-        evidenceLocalPaths: evidenceLocalPaths,
-      );
-      _replace(updated);
-    },
+    () => repository.recordMilestone(
+      access: access,
+      activeBranchId: activeBranchId,
+      assignmentId: assignmentId,
+      milestone: milestone,
+      note: note,
+      evidenceLocalPaths: evidenceLocalPaths,
+    ),
+    _replace,
     fallback:
         'The milestone could not be saved. Check your location and retry.',
   );
 
-  Future<bool> _perform(
-    Future<void> Function() action, {
+  /// Runs [request] and applies its result only while the scope that started
+  /// it is still current, so a response that lands after a branch switch or
+  /// sign-out never reaches the new scope's list.
+  Future<bool> _perform<T>(
+    Future<T> Function() request,
+    void Function(T result) apply, {
     required String fallback,
   }) async {
     final epoch = _scopeEpoch;
@@ -141,8 +145,10 @@ class OffSiteWorkController extends ChangeNotifier
     _actionErrorMessage = null;
     notifyListeners();
     try {
-      await action();
-      return _isCurrent(epoch);
+      final result = await request();
+      if (!_isCurrent(epoch)) return false;
+      apply(result);
+      return true;
     } catch (e, st) {
       if (_isCurrent(epoch)) {
         _actionErrorMessage = userMessageFor(e, st, fallback: fallback);

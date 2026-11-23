@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/core/errors/app_exceptions.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/leaves/domain/models/leave_queue.dart';
 import 'package:workaxis/features/leaves/domain/models/leave_request.dart';
 import 'package:workaxis/features/leaves/domain/services/leave_scope.dart';
 
@@ -105,6 +106,55 @@ void main() {
       );
     });
 
+    test('each role may read only its own queues', () {
+      expect(
+        scope.forRead(employeeAccess(), null, LeaveQueue.mine).queue,
+        LeaveQueue.mine,
+      );
+      expect(
+        () => scope.forRead(employeeAccess(), null, LeaveQueue.organization),
+        throwsA(isA<AccessDeniedException>()),
+      );
+      expect(
+        () => scope.forRead(orgAdminAccess(), null, LeaveQueue.mine),
+        throwsA(isA<AccessDeniedException>()),
+      );
+      expect(
+        scope.forRead(orgAdminAccess(), null, LeaveQueue.organization).branch,
+        isNull,
+      );
+      expect(
+        () => scope.forRead(platformAccess(), null, LeaveQueue.mine),
+        throwsA(isA<AccessDeniedException>()),
+      );
+    });
+
+    test('Branch Manager employee queue is bound to an assigned branch', () {
+      final access = branchManagerAccess();
+
+      expect(
+        scope.forRead(access, 'br-02', LeaveQueue.branchEmployees).branch?.id,
+        'br-02',
+      );
+      expect(
+        scope.forRead(access, null, LeaveQueue.branchEmployees).branch?.id,
+        'br-01',
+      );
+      expect(
+        () => scope.forRead(access, 'br-04', LeaveQueue.branchEmployees),
+        throwsA(isA<BranchAuthorizationException>()),
+      );
+      expect(
+        () => scope.forRead(
+          branchManagerAccess(activeBranchId: null),
+          null,
+          LeaveQueue.branchEmployees,
+        ),
+        throwsA(isA<BranchAuthorizationException>()),
+      );
+      expect(scope.forRead(access, null, LeaveQueue.mine).branch, isNull);
+    });
+
     test('customer users cannot read across organizations', () {
       expect(
         () => scope.forReview(
@@ -133,7 +183,9 @@ LeaveRequest _request({
   applicantUid: applicantUid,
   applicantName: 'Applicant',
   applicantRole: applicantRole,
-  leaveType: LeaveType.annual,
+  leaveTypeId: 'lt-annual',
+  leaveTypeName: 'Annual leave',
+  leaveTypePaid: true,
   startDate: DateTime.utc(2026, 11, 20),
   endDate: DateTime.utc(2026, 11, 21),
   reason: 'Personal leave',

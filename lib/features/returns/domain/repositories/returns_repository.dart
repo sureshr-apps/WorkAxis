@@ -1,5 +1,7 @@
+import 'package:workaxis/core/pagination/page_result.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/returns/domain/models/return_item.dart';
+import 'package:workaxis/features/returns/domain/models/return_status_counts.dart';
 
 /// Return requests, scoped by the caller's [UserAccessContext]:
 ///
@@ -9,13 +11,36 @@ import 'package:workaxis/features/returns/domain/models/return_item.dart';
 /// * Organization Admins see their organization (all branches, or one).
 /// * Platform users have no returns scope.
 abstract interface class ReturnsRepository {
-  /// Returns visible to [access], newest first. [activeBranchId] is the
-  /// active branch context; it is required for Branch Managers with several
-  /// branches and optional for Organization Admins.
-  Future<List<ReturnItem>> getReturns({
+  /// One page of the returns visible to [access], newest return date first.
+  /// [activeBranchId] is the active branch context; it is required for Branch
+  /// Managers with several branches and optional for Organization Admins.
+  /// [queue] splits a Branch Manager's branch into their own and others'
+  /// returns (null: the whole branch); other roles ignore it. [status] and
+  /// [query] (product, invoice, bill, submitter or branch) narrow the page.
+  Future<PageResult<ReturnItem>> getReturnsPage({
     required UserAccessContext access,
     String? activeBranchId,
-    ReturnStatus? statusFilter,
+    ReturnQueue? queue,
+    ReturnStatus? status,
+    String? query,
+    int offset = 0,
+    int limit = defaultPageSize,
+  });
+
+  /// Status totals for the same scope as [getReturnsPage], ignoring status
+  /// and search filters.
+  Future<ReturnStatusCounts> getReturnCounts({
+    required UserAccessContext access,
+    String? activeBranchId,
+    ReturnQueue? queue,
+  });
+
+  /// One return visible to [access], or null when it does not exist or is
+  /// outside the caller's scope (deep links, detail pages).
+  Future<ReturnItem?> getReturn({
+    required UserAccessContext access,
+    String? activeBranchId,
+    required String returnId,
   });
 
   /// Submits a return for [branchId] (default: active or only assigned
