@@ -39,11 +39,15 @@ AppException _mapFirebaseCode(FirebaseException error) {
   switch (error.code) {
     case 'permission-denied':
     case 'unauthenticated':
+    // Firebase Storage reports a request its rules refused as `unauthorized`.
+    case 'unauthorized':
       return AccessDeniedException('Firebase ${error.code}');
     case 'not-found':
+    case 'object-not-found':
       return NotFoundException('Firebase ${error.code}');
     case 'unavailable':
     case 'network-request-failed':
+    case 'retry-limit-exceeded':
       return NetworkException('Firebase ${error.code}');
     case 'deadline-exceeded':
       return RequestTimeoutException('Firebase ${error.code}');

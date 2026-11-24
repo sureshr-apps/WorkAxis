@@ -27,6 +27,44 @@ void main() {
       expect(mapped.userMessage, isNot(contains('projects/')));
     });
 
+    test('Storage refusals and retries map to clear errors, not a generic '
+        'save failure', () {
+      final refused = mapBackendError(
+        FirebaseException(
+          plugin: 'firebase_storage',
+          code: 'unauthorized',
+          message: leakyText,
+        ),
+      );
+      expect(refused, isA<AccessDeniedException>());
+      expect(
+        userMessageFor(
+          refused,
+          null,
+          fallback: 'The account could not be saved.',
+        ),
+        'You do not have permission to perform this action.',
+      );
+      expect(
+        mapBackendError(
+          FirebaseException(
+            plugin: 'firebase_storage',
+            code: 'object-not-found',
+          ),
+        ),
+        isA<NotFoundException>(),
+      );
+      expect(
+        mapBackendError(
+          FirebaseException(
+            plugin: 'firebase_storage',
+            code: 'retry-limit-exceeded',
+          ),
+        ),
+        isA<NetworkException>(),
+      );
+    });
+
     test('unavailable and deadline-exceeded map to network and timeout', () {
       expect(
         mapBackendError(FirebaseException(plugin: 'p', code: 'unavailable')),
