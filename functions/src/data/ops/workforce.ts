@@ -2,8 +2,9 @@ import { denied, invalid, notFound, precondition } from "../../errors";
 import type { Actor } from "../../auth/roles";
 import { requireRole } from "../authz";
 import type { OperationRegistry } from "../operation";
-import { parseDate, reqDate, reqId, reqInt } from "../vars";
+import { parseDate, reqDate, reqId } from "../vars";
 import { reqNumber, reqString } from "../../util/input";
+import { parseWeeklyDaysOff, weeklyDaysOffFrom } from "../../util/weeklyDaysOff";
 import { selectOne } from "../sql";
 
 type Row = Record<string, unknown>;
@@ -21,7 +22,7 @@ interface HistoryRow {
   effectiveTo: string | Date | null;
   dailyWorkHours?: number | string;
   shiftHours?: string;
-  weeklyDayOff?: number;
+  weeklyDaysOff?: number[] | null;
   monthlySalary?: number | string;
 }
 
@@ -32,7 +33,7 @@ export const workforceOps: OperationRegistry = {
       db.query<HistoryRow>(
         `SELECT id, effective_from AS "effectiveFrom", effective_to AS "effectiveTo",
                 daily_work_hours AS "dailyWorkHours", shift_hours AS "shiftHours",
-                weekly_day_off AS "weeklyDayOff"
+                weekly_days_off AS "weeklyDaysOff"
            FROM employee_schedule_history WHERE member_id = $1
           ORDER BY effective_from DESC`,
         [member.id],
@@ -59,7 +60,8 @@ export const workforceOps: OperationRegistry = {
     requireTodayOrFuture(effectiveFrom);
     const dailyWorkHours = reqNumber(vars, "dailyWorkHours", 0.5, 24);
     const shiftHours = reqString(vars, "shiftHours", 1, 100).trim();
-    const weeklyDayOff = reqInt(vars, "weeklyDayOff", 0, 6);
+    const weeklyDaysOff = parseWeeklyDaysOff(vars);
+    if (!weeklyDaysOff) throw invalid("weeklyDaysOff is required (an empty list means no day off).");
     const shiftDuration = parseShiftDurationHours(shiftHours);
     if (Math.abs(shiftDuration - dailyWorkHours) > 0.01) {
       throw invalid("Daily work hours must match the shift window.");
@@ -69,7 +71,7 @@ export const workforceOps: OperationRegistry = {
       await insertEffectiveVersion(tx, member.id, "schedule", effectiveFrom, actor.uid, {
         dailyWorkHours,
         shiftHours,
-        weeklyDayOff,
+        weeklyDaysOff,
       });
     });
     return { saved: true };
@@ -161,7 +163,12 @@ async function insertEffectiveVersion(
   kind: HistoryKind,
   effectiveFrom: string,
   actorUid: string,
-  values: { dailyWorkHours?: number; shiftHours?: string; weeklyDayOff?: number; monthlySalary?: number },
+  values: {
+    dailyWorkHours?: number;
+    shiftHours?: string;
+    weeklyDaysOff?: number[];
+    monthlySalary?: number;
+  },
 ): Promise<void> {
   const table = kind === "schedule" ? "employee_schedule_history" : "employee_compensation_history";
   const rows = await tx.query<HistoryRow>(
@@ -174,9 +181,9 @@ async function insertEffectiveVersion(
     if (kind === "schedule") {
       await tx.query(
         `UPDATE employee_schedule_history SET daily_work_hours = $2, shift_hours = $3,
-                weekly_day_off = $4, created_by_uid = $5, created_at = now()
+                weekly_days_off = $4, created_by_uid = $5, created_at = now()
           WHERE id = $1`,
-        [same.id, values.dailyWorkHours, values.shiftHours, values.weeklyDayOff, actorUid],
+        [same.id, values.dailyWorkHours, values.shiftHours, values.weeklyDaysOff ?? [], actorUid],
       );
     } else {
       await tx.query(
@@ -200,9 +207,10 @@ async function insertEffectiveVersion(
   if (kind === "schedule") {
     await tx.query(
       `INSERT INTO employee_schedule_history
-        (member_id, effective_from, effective_to, daily_work_hours, shift_hours, weekly_day_off, created_by_uid)
+        (member_id, effective_from, effective_to, daily_work_hours, shift_hours,
+         weekly_days_off, created_by_uid)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [memberId, effectiveFrom, effectiveTo, values.dailyWorkHours, values.shiftHours, values.weeklyDayOff, actorUid],
+      [memberId, effectiveFrom, effectiveTo, values.dailyWorkHours, values.shiftHours, values.weeklyDaysOff ?? [], actorUid],
     );
   } else {
     await tx.query(
@@ -256,7 +264,7 @@ function scheduleDto(row: HistoryRow): Row {
     effectiveTo: row.effectiveTo ? dateOnly(row.effectiveTo) : null,
     dailyWorkHours: Number(row.dailyWorkHours),
     shiftHours: row.shiftHours,
-    weeklyDayOff: row.weeklyDayOff,
+    weeklyDaysOff: weeklyDaysOffFrom(row.weeklyDaysOff),
   };
 }
 

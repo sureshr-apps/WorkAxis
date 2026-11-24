@@ -46,7 +46,7 @@ abstract final class MonthlyAttendanceSummaryCalculator {
       hasScheduleCoverage = true;
 
       // ScheduleVersion stores Sunday as 0 through Saturday as 6.
-      if (date.weekday % 7 == schedule.weeklyDayOff) continue;
+      if (schedule.weeklyDaysOff.contains(date.weekday % 7)) continue;
 
       scheduledDays++;
       final dailyAttendance = summariesByDate[BusinessTime.keyOfDate(date)];

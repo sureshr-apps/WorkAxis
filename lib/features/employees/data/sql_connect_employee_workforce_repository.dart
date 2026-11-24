@@ -37,7 +37,7 @@ class SqlConnectEmployeeWorkforceRepository
     required String effectiveFrom,
     required double dailyWorkHours,
     required String shiftHours,
-    required int weeklyDayOff,
+    required List<int> weeklyDaysOff,
     String? activeBranchId,
   }) async {
     try {
@@ -46,7 +46,7 @@ class SqlConnectEmployeeWorkforceRepository
         'effectiveFrom': effectiveFrom,
         'dailyWorkHours': dailyWorkHours,
         'shiftHours': shiftHours,
-        'weeklyDayOff': weeklyDayOff,
+        'weeklyDaysOff': weeklyDaysOff,
         'activeBranchId': ?activeBranchId,
       });
     } catch (error, stackTrace) {

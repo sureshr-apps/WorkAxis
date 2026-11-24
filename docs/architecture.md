@@ -650,7 +650,10 @@ Employee schedules and compensation are effective-dated PostgreSQL history in
 backfill. New employee provisioning writes the initial schedule and salary
 version; later edits use separate Schedule & Shifts and Salary tabs so those
 saves do not update general employee fields. Schedule periods carry the
-employee's recurring weekday off and are independent of branch assignments.
+employee's selected recurring weekdays off and are independent of branch
+assignments. Migration 014 replaced the single `weekly_day_off` column with
+the `weekly_days_off` list, copying existing values; new employee schedules
+start with no weekly day off unless one is selected.
 
 Migration 010 and the backend, rules, indexes, and web deployment completed
 on 22 November 2026. All customer organizations were deleted before the new
@@ -670,8 +673,9 @@ history. Each punch session has a distinct `attendance_entries` document, and a
 server-controlled `attendance_session_state/{uid}_{workDate}` document keeps
 the single-open-session invariant. Checkout is bound to that session's branch;
 a later session can start at another assigned branch. Punches use the
-employee's effective schedule to block their weekly day off. Manager group
-attendance uses the same weekly-off rule. Employee home aggregates worked time
+employee's effective schedule to block all selected recurring days off. An
+empty days-off list means no weekly day off. Manager group attendance uses the
+same rule. Employee home aggregates worked time
 across sessions and allows branch selection before each new check-in.
 
 Organization pay settings select hours or workdays and whether overtime is

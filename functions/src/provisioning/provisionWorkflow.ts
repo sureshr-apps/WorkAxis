@@ -26,7 +26,7 @@ export interface ProvisionPlan {
   createdByUid?: string;
   dailyWorkHours?: number;
   shiftHours?: string;
-  weeklyDayOff?: number;
+  weeklyDaysOff?: number[];
   employeeCode?: string;
   aadhaarNumber?: string;
   aadhaarPhotoUrl?: string;
@@ -78,7 +78,7 @@ export async function runProvision(plan: ProvisionPlan): Promise<ProvisionResult
               effectiveFrom: plan.joiningDate,
               dailyWorkHours: plan.dailyWorkHours,
               shiftHours: plan.shiftHours,
-              weeklyDayOff: plan.weeklyDayOff ?? 0,
+              weeklyDaysOff: plan.weeklyDaysOff,
               monthlySalary: plan.salary,
             }
           : undefined,

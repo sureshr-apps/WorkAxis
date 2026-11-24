@@ -21,7 +21,7 @@ function input(over: Partial<LedgerInput> = {}): LedgerInput {
   return {
     types: [annual(2), unpaid],
     accrual: [{ effectiveFrom: "1970-01-01", monthlyAccrual: false }],
-    schedules: [{ effectiveFrom: "2020-01-01", weeklyDayOff: 0 }],
+    schedules: [{ effectiveFrom: "2020-01-01", weeklyDaysOff: [0] }],
     leaves: [],
     ...over,
   };
@@ -52,6 +52,21 @@ describe("leave ledger", () => {
     const ledger = leaveLedger(input({ leaves: [leave("2026-01-03", "2026-01-06")] }));
     assert.deepEqual(ledger.map((d) => d.date), ["2026-01-03", "2026-01-05", "2026-01-06"]);
     assert.deepEqual(unpaidDates(ledger), ["2026-01-06"]);
+  });
+
+  it("skips every selected weekly day off, and none when no day is off", () => {
+    // Friday 2 Jan to Monday 5 Jan 2026.
+    const span = [leave("2026-01-02", "2026-01-05")];
+    const weekend = leaveLedger(input({
+      leaves: span,
+      schedules: [{ effectiveFrom: "2020-01-01", weeklyDaysOff: [0, 6] }],
+    }));
+    assert.deepEqual(weekend.map((d) => d.date), ["2026-01-02", "2026-01-05"]);
+    const none = leaveLedger(input({
+      leaves: span,
+      schedules: [{ effectiveFrom: "2020-01-01", weeklyDaysOff: [] }],
+    }));
+    assert.equal(none.length, 4);
   });
 
   it("never pays an unpaid leave type", () => {

@@ -160,7 +160,8 @@ export interface InitialMemberWorkforce {
   effectiveFrom?: string;
   dailyWorkHours?: number;
   shiftHours?: string;
-  weeklyDayOff?: number;
+  /** Recurring days off (0 = Sunday); omitted means none. */
+  weeklyDaysOff?: number[];
   monthlySalary?: number | null;
 }
 
@@ -285,14 +286,15 @@ export async function insertMember(
         const effectiveFrom = workforce.effectiveFrom ?? today;
         await tx.query(
           `INSERT INTO employee_schedule_history
-            (member_id, effective_from, daily_work_hours, shift_hours, weekly_day_off, created_by_uid)
+            (member_id, effective_from, daily_work_hours, shift_hours,
+             weekly_days_off, created_by_uid)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             member.id,
             effectiveFrom,
             workforce.dailyWorkHours ?? 8,
             workforce.shiftHours ?? "09:00 AM - 05:00 PM",
-            workforce.weeklyDayOff ?? 0,
+            workforce.weeklyDaysOff ?? [],
             workforce.createdByUid ?? null,
           ],
         );

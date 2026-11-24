@@ -14,7 +14,7 @@
  *   allowance is available from the start of the year.
  * - At year end unused days lapse, unless the type's version in force on
  *   31 December carries forward; then they are added to the next year.
- * - Only scheduled working days count; the weekly day off and days without a
+ * - Only scheduled working days count; selected weekly days off and days without a
  *   schedule are not leave days. Days before joining or after relieving are
  *   ignored.
  * - Days are consumed in date order. A day is paid only while at least one
@@ -42,7 +42,8 @@ export interface AccrualVersion {
 export interface LedgerSchedule {
   effectiveFrom: string;
   effectiveTo?: string | null;
-  weeklyDayOff: number;
+  /** Recurring days off, Sunday = 0. Empty means none. */
+  weeklyDaysOff: readonly number[];
 }
 
 export interface LedgerLeave {
@@ -225,7 +226,7 @@ function isScheduledWorkday(schedules: readonly LedgerSchedule[], date: string):
     (s) => s.effectiveFrom <= date && (!s.effectiveTo || date < s.effectiveTo),
   );
   if (!schedule) return false;
-  return new Date(`${date}T00:00:00.000Z`).getUTCDay() !== schedule.weeklyDayOff;
+  return !schedule.weeklyDaysOff.includes(new Date(`${date}T00:00:00.000Z`).getUTCDay());
 }
 
 function nextDate(date: string): string {

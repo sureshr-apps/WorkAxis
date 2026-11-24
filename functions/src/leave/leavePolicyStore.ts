@@ -1,5 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import type { SqlExecutor } from "../db/executor";
+import { weeklyDaysOffFrom } from "../util/weeklyDaysOff";
 import type {
   AccrualVersion,
   LedgerInput,
@@ -66,7 +67,7 @@ export async function loadLeaveHistory(
       `SELECT member_id AS "memberId", to_char(effective_from, 'YYYY-MM-DD') AS "effectiveFrom",
               CASE WHEN effective_to IS NULL THEN NULL
                    ELSE to_char(effective_to, 'YYYY-MM-DD') END AS "effectiveTo",
-              weekly_day_off AS "weeklyDayOff"
+              weekly_days_off AS "weeklyDaysOff"
          FROM employee_schedule_history
         WHERE member_id = ANY($1::text[]) AND effective_from <= $2::date`,
       [memberIds, until],
@@ -82,7 +83,10 @@ export async function loadLeaveHistory(
     ),
   ]);
   for (const { memberId, ...schedule } of schedules) {
-    history.get(memberId)?.schedules.push({ ...schedule, weeklyDayOff: Number(schedule.weeklyDayOff) });
+    history.get(memberId)?.schedules.push({
+      ...schedule,
+      weeklyDaysOff: weeklyDaysOffFrom(schedule.weeklyDaysOff),
+    });
   }
   for (const { memberId, ...leave } of leaves) history.get(memberId)?.leaves.push(leave);
   return history;

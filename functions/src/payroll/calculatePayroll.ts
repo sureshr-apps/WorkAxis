@@ -4,7 +4,8 @@ export interface ScheduleVersion {
   effectiveFrom: string;
   effectiveTo?: string | null;
   dailyWorkHours: number;
-  weeklyDayOff: number;
+  /** Recurring days off, Sunday = 0. Empty means none. */
+  weeklyDaysOff: readonly number[];
 }
 
 export interface CompensationVersion {
@@ -118,7 +119,7 @@ export function calculatePayroll(input: PayrollCalculationInput): PayrollCalcula
     if (!schedule && employed) missingSchedule = true;
     if (!compensation && employed) missingSalary = true;
     const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
-    const scheduled = schedule !== undefined && weekday !== schedule.weeklyDayOff;
+    const scheduled = schedule !== undefined && !schedule.weeklyDaysOff.includes(weekday);
     const leave = employed ? leaveByDate.get(date) : undefined;
     const sessions = employed ? attendanceByDate.get(date) ?? [] : [];
     days.push({

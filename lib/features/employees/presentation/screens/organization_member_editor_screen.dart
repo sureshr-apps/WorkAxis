@@ -23,6 +23,7 @@ import 'package:workaxis/features/employees/presentation/screens/widgets/employe
 import 'package:workaxis/features/employees/presentation/screens/widgets/employee_id_input.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/employee_photo_picker.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/member_form_feedback.dart';
+import 'package:workaxis/features/employees/presentation/screens/widgets/weekly_days_off_field.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/work_hours_shift_section.dart';
 
 /// Create/edit page for organization accounts & employee profiles.
@@ -93,7 +94,7 @@ class _OrganizationMemberEditorScreenState
   // Schedule & Work Hours
   late final TextEditingController _workHours;
   late final TextEditingController _shiftHours;
-  int _weeklyDayOff = 0;
+  List<int> _weeklyDaysOff = [];
 
   // Demographics & KYC
   late final TextEditingController _aadhaar;
@@ -160,7 +161,8 @@ class _OrganizationMemberEditorScreenState
     _shiftHours = TextEditingController(
       text: member?.shiftHours ?? '09:00 AM - 05:00 PM',
     );
-    _weeklyDayOff = member?.weeklyDayOff ?? 0;
+    _weeklyDaysOff = member == null ? [] : [...member.weeklyDaysOff]
+      ..sort();
 
     _aadhaar = TextEditingController(text: member?.aadhaarNumber ?? '');
     _address = TextEditingController(text: member?.address ?? '');
@@ -457,22 +459,9 @@ class _OrganizationMemberEditorScreenState
           if (feedback.errorFor(MemberField.shiftHours) case final error?)
             _InlineError(error),
           const SizedBox(height: AppSpacing.md),
-          DropdownButtonFormField<int>(
-            isExpanded: true,
-            initialValue: _weeklyDayOff,
-            decoration: const InputDecoration(labelText: 'Weekly day off'),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Sunday')),
-              DropdownMenuItem(value: 1, child: Text('Monday')),
-              DropdownMenuItem(value: 2, child: Text('Tuesday')),
-              DropdownMenuItem(value: 3, child: Text('Wednesday')),
-              DropdownMenuItem(value: 4, child: Text('Thursday')),
-              DropdownMenuItem(value: 5, child: Text('Friday')),
-              DropdownMenuItem(value: 6, child: Text('Saturday')),
-            ],
-            onChanged: (value) {
-              if (value != null) setState(() => _weeklyDayOff = value);
-            },
+          WeeklyDaysOffField(
+            selectedDays: _weeklyDaysOff,
+            onChanged: (days) => setState(() => _weeklyDaysOff = days),
           ),
         ],
 
@@ -722,7 +711,7 @@ class _OrganizationMemberEditorScreenState
       status: _status,
       dailyWorkHours: workHours,
       shiftHours: shiftHours,
-      weeklyDayOff: _weeklyDayOff,
+      weeklyDaysOff: _weeklyDaysOff,
       employeeCode: _employeeCode.text.trim().isNotEmpty
           ? _employeeCode.text.trim()
           : null,

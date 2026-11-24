@@ -14,7 +14,7 @@ abstract interface class EmployeeWorkforceRepository {
     required String effectiveFrom,
     required double dailyWorkHours,
     required String shiftHours,
-    required int weeklyDayOff,
+    required List<int> weeklyDaysOff,
     String? activeBranchId,
   });
 

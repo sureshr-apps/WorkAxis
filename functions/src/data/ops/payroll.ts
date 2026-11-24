@@ -9,6 +9,7 @@ import { findActiveBranch, requireActiveBranch, requireRole } from "../authz";
 import type { OperationRegistry } from "../operation";
 import { reqId } from "../vars";
 import { reqString } from "../../util/input";
+import { weeklyDaysOffFrom } from "../../util/weeklyDaysOff";
 
 type Row = Record<string, unknown>;
 interface MemberRow extends Row {
@@ -39,7 +40,7 @@ interface ScheduleRow extends Row {
   effectiveFrom: string | Date;
   effectiveTo: string | Date | null;
   dailyWorkHours: number | string;
-  weeklyDayOff: number;
+  weeklyDaysOff: number[];
 }
 interface CompensationRow extends Row {
   memberId: string;
@@ -120,7 +121,8 @@ export const payrollOps: OperationRegistry = {
       db.query<ScheduleRow>(
         `SELECT member_id AS "memberId", to_char(effective_from, 'YYYY-MM-DD') AS "effectiveFrom",
                 CASE WHEN effective_to IS NULL THEN NULL ELSE to_char(effective_to, 'YYYY-MM-DD') END AS "effectiveTo",
-                daily_work_hours AS "dailyWorkHours", weekly_day_off AS "weeklyDayOff"
+                daily_work_hours AS "dailyWorkHours",
+                weekly_days_off AS "weeklyDaysOff"
            FROM employee_schedule_history
           WHERE member_id = ANY($1::text[]) AND effective_from < $3::date
             AND (effective_to IS NULL OR effective_to > $2::date)
@@ -412,7 +414,7 @@ function scheduleVersion(row: ScheduleRow): ScheduleVersion {
     effectiveFrom: dateOnly(row.effectiveFrom),
     effectiveTo: row.effectiveTo ? dateOnly(row.effectiveTo) : null,
     dailyWorkHours: Number(row.dailyWorkHours),
-    weeklyDayOff: Number(row.weeklyDayOff),
+    weeklyDaysOff: weeklyDaysOffFrom(row.weeklyDaysOff),
   };
 }
 

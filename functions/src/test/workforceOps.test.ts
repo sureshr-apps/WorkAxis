@@ -84,7 +84,7 @@ test("schedule edits close surrounding ranges without touching compensation or m
     effectiveFrom,
     dailyWorkHours: 7.5,
     shiftHours: "08:30 AM - 04:00 PM",
-    weeklyDayOff: 2,
+    weeklyDaysOff: [6, 2, 6],
   });
 
   assert.deepEqual(result, { saved: true });
@@ -101,10 +101,31 @@ test("schedule edits close surrounding ranges without touching compensation or m
     successorDate,
     7.5,
     "08:30 AM - 04:00 PM",
-    2,
+    [2, 6],
     admin.uid,
   ]);
   assert.equal(db.calls.some((call) => /employee_compensation_history|UPDATE organization_member/i.test(call.sql)), false);
+});
+
+test("schedule edits require the weekly days off list and reject the old single day", async () => {
+  const vars = {
+    memberId: member.id,
+    effectiveFrom: dateAfter(businessDate(new Date()), 1),
+    dailyWorkHours: 8,
+    shiftHours: "09:00 AM - 05:00 PM",
+  };
+  for (const extra of [{}, { weeklyDayOff: 0 }, { weeklyDaysOff: [7] }]) {
+    const db = baseDb();
+    await assert.rejects(
+      run(db, admin, "SaveEmployeeSchedule", { ...vars, ...extra }),
+      (e: { code?: string }) => e.code === "invalid-argument",
+    );
+    assert.equal(db.calls.some((call) => call.sql.includes("INSERT INTO employee_schedule_history")), false);
+  }
+  const none = baseDb();
+  await run(none, admin, "SaveEmployeeSchedule", { ...vars, weeklyDaysOff: [] });
+  const insert = none.calls.find((call) => call.sql.includes("INSERT INTO employee_schedule_history"));
+  assert.deepEqual(insert?.params.at(-2), []);
 });
 
 test("compensation edits write only salary history and reject past effective dates", async () => {

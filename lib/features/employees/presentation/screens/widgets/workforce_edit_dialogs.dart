@@ -6,24 +6,15 @@ import 'package:workaxis/core/errors/user_message.dart';
 import 'package:workaxis/core/time/business_time.dart';
 import 'package:workaxis/core/widgets/app_date_picker_field.dart';
 import 'package:workaxis/core/widgets/app_text_field.dart';
-
-/// Weekday names indexed like `weeklyDayOff` (0 = Sunday).
-const workforceWeekdayNames = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-];
+import 'package:workaxis/features/employees/domain/models/employee_workforce_history.dart';
+import 'package:workaxis/features/employees/presentation/screens/widgets/weekly_days_off_field.dart';
 
 /// A new schedule version entered in [ScheduleEditDialog].
 typedef ScheduleDraft = ({
   String effectiveFrom,
   double dailyWorkHours,
   String shiftHours,
-  int weeklyDayOff,
+  List<int> weeklyDaysOff,
 });
 
 /// A new salary version entered in [SalaryEditDialog].
@@ -39,10 +30,15 @@ class ScheduleEditDialog extends StatefulWidget {
     super.key,
     required this.businessToday,
     required this.onSave,
+    this.schedules = const [],
   });
 
   final DateTime businessToday;
   final Future<void> Function(ScheduleDraft draft) onSave;
+
+  /// Existing schedule versions. The days off start as those of the version
+  /// in force on the chosen effective date.
+  final List<ScheduleVersion> schedules;
 
   @override
   State<ScheduleEditDialog> createState() => _ScheduleEditDialogState();
@@ -52,9 +48,20 @@ class _ScheduleEditDialogState extends State<ScheduleEditDialog> {
   final _dailyHours = TextEditingController(text: '8');
   final _shift = TextEditingController(text: '09:00 AM - 05:00 PM');
   late DateTime _effectiveFrom = widget.businessToday;
-  int _weekdayOff = DateTime.sunday % 7;
+  late Set<int> _weeklyDaysOff = _daysOffInForceOn(_effectiveFrom);
+
+  /// Once the admin edits the days off, a date change no longer replaces them.
+  bool _daysOffEdited = false;
   bool _saving = false;
   String? _validation;
+
+  Set<int> _daysOffInForceOn(DateTime date) =>
+      scheduleInForceOn(widget.schedules, date)?.weeklyDaysOff.toSet() ?? {};
+
+  void _changeEffectiveFrom(DateTime date) => setState(() {
+    _effectiveFrom = date;
+    if (!_daysOffEdited) _weeklyDaysOff = _daysOffInForceOn(date);
+  });
 
   @override
   void dispose() {
@@ -78,7 +85,7 @@ class _ScheduleEditDialogState extends State<ScheduleEditDialog> {
         effectiveFrom: BusinessTime.keyOfDate(_effectiveFrom),
         dailyWorkHours: hours,
         shiftHours: _shift.text.trim(),
-        weeklyDayOff: _weekdayOff,
+        weeklyDaysOff: _weeklyDaysOff.toList()..sort(),
       ));
       if (mounted) Navigator.pop(context, true);
     } catch (error, stackTrace) {
@@ -106,7 +113,7 @@ class _ScheduleEditDialogState extends State<ScheduleEditDialog> {
             _EffectiveFromField(
               value: _effectiveFrom,
               firstDate: widget.businessToday,
-              onChanged: (picked) => setState(() => _effectiveFrom = picked),
+              onChanged: _changeEffectiveFrom,
             ),
             const SizedBox(height: AppSpacing.md),
             AppTextField(
@@ -123,19 +130,12 @@ class _ScheduleEditDialogState extends State<ScheduleEditDialog> {
               hintText: '09:00 AM - 05:00 PM',
             ),
             const SizedBox(height: AppSpacing.md),
-            DropdownButtonFormField<int>(
-              initialValue: _weekdayOff,
-              decoration: const InputDecoration(labelText: 'Weekly day off'),
-              items: [
-                for (var day = 0; day < workforceWeekdayNames.length; day++)
-                  DropdownMenuItem(
-                    value: day,
-                    child: Text(workforceWeekdayNames[day]),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => _weekdayOff = value);
-              },
+            WeeklyDaysOffField(
+              selectedDays: _weeklyDaysOff.toList()..sort(),
+              onChanged: (days) => setState(() {
+                _weeklyDaysOff = days.toSet();
+                _daysOffEdited = true;
+              }),
             ),
             if (_validation != null) _ValidationText(_validation!),
           ],

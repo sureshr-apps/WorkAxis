@@ -288,7 +288,7 @@ class SqlConnectOrganizationMembersRepository
       branchIds: prepared.branchIds,
       dailyWorkHours: prepared.dailyWorkHours,
       shiftHours: prepared.shiftHours,
-      weeklyDayOff: prepared.weeklyDayOff,
+      weeklyDaysOff: prepared.weeklyDaysOff,
       employeeCode: prepared.employeeCode,
       aadhaarNumber: prepared.aadhaarNumber,
       aadhaarPhotoUrl: prepared.aadhaarPhotoUrl,

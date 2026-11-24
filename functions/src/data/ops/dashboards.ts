@@ -29,7 +29,7 @@ export const dashboardsOps: OperationRegistry = {
          FROM organization_member m
          CROSS JOIN business_day d
          LEFT JOIN LATERAL (
-           SELECT h.weekly_day_off
+           SELECT h.weekly_days_off
              FROM employee_schedule_history h
             WHERE h.member_id = m.id
               AND h.effective_from <= d.today
@@ -40,7 +40,11 @@ export const dashboardsOps: OperationRegistry = {
         WHERE m.organization_id = $1
           AND m.role = 'employee'
           AND m.status = 'active'
-          AND COALESCE(schedule.weekly_day_off, 0) <> EXTRACT(DOW FROM d.today)`,
+          AND NOT (
+            EXTRACT(DOW FROM d.today)::smallint = ANY(
+              COALESCE(schedule.weekly_days_off, ARRAY[0]::smallint[])
+            )
+          )`,
       [orgId],
     );
     const returnsByStatus = await groupRows(
@@ -103,7 +107,7 @@ export const dashboardsOps: OperationRegistry = {
          JOIN organization_member m ON m.id = a.member_id
          CROSS JOIN business_day d
          LEFT JOIN LATERAL (
-           SELECT h.weekly_day_off
+           SELECT h.weekly_days_off
              FROM employee_schedule_history h
             WHERE h.member_id = m.id
               AND h.effective_from <= d.today
@@ -114,7 +118,11 @@ export const dashboardsOps: OperationRegistry = {
         WHERE a.branch_id = $1
           AND m.role = 'employee'
           AND m.status = 'active'
-          AND COALESCE(schedule.weekly_day_off, 0) <> EXTRACT(DOW FROM d.today)`,
+          AND NOT (
+            EXTRACT(DOW FROM d.today)::smallint = ANY(
+              COALESCE(schedule.weekly_days_off, ARRAY[0]::smallint[])
+            )
+          )`,
       [branchId],
     );
     const q = new Query().eq("branch_id", branchId).period("created_at", from, to);

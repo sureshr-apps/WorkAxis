@@ -480,6 +480,7 @@ class OrganizationMemberPolicy {
       status: status,
       dailyWorkHours: member.dailyWorkHours,
       shiftHours: member.shiftHours?.trim(),
+      weeklyDaysOff: member.weeklyDaysOff,
       employeeCode: _blankToNull(member.employeeCode),
       aadhaarNumber: rawAadhaar,
       aadhaarPhotoUrl: _blankToNull(member.aadhaarPhotoUrl),

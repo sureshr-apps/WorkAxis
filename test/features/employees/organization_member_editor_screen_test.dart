@@ -6,6 +6,7 @@ import 'package:workaxis/features/authentication/domain/models/account_status.da
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employees/domain/models/organization_member.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/organization_member_card.dart';
+import 'package:workaxis/features/employees/presentation/screens/widgets/weekly_days_off_field.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/work_hours_shift_section.dart';
 import 'package:workaxis/features/employees/presentation/screens/organization_member_editor_screen.dart';
 
@@ -136,7 +137,8 @@ void main() {
     await pumpEditor(tester, onSave: (draft) async => draft, member: null);
 
     expect(find.byType(WorkHoursShiftSection), findsOneWidget);
-    expect(find.text('Weekly day off'), findsOneWidget);
+    expect(find.byType(WeeklyDaysOffField), findsOneWidget);
+    expect(find.text('No day off'), findsOneWidget);
 
     await tester.tap(find.text('6 hrs'));
     await tester.pumpAndSettle();

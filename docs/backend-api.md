@@ -68,7 +68,7 @@ Errors are `HttpsError` codes; internal details are never returned:
 
 | Callable | Request | Response | Who |
 |---|---|---|---|
-| `provisionUser` | `{requestId, fullName, username, email?, phone?, password, role, organizationId?, branchIds?}` | `{uid, memberId, username, loginEmail}` | see matrix |
+| `provisionUser` | `{requestId, fullName, username, email?, phone?, password, role, organizationId?, branchIds?, weeklyDaysOff?}` | `{uid, memberId, username, loginEmail}` | see matrix |
 | `updateUserAccount` | `{targetUid, fullName?, email?, phone? (null clears), role?, branchIds?}` | `{uid}` | see matrix |
 | `resetUserPassword` | `{targetUid, newPassword}` | `{uid}` | see matrix |
 | `setUserStatus` | `{targetUid, status: 'active'\|'suspended'}` | `{uid, status}` | see matrix; refuses to suspend an organization's only active administrator |
@@ -89,7 +89,7 @@ Errors are `HttpsError` codes; internal details are never returned:
 - explicit **`null`**: clear the stored value (`FieldValue.delete()`; `salary`, `aadhaarNumber` and `aadhaarPhotoUrl` are removed from `employee_private/{uid}`, the rest from `users/{uid}`);
 - a value: set it (validated as before).
 
-`dailyWorkHours`, `shiftHours` and `employeeCode` can never be cleared (`null` is rejected with `invalid-argument`). Clearing an employment-control field counts as editing it, so `assertNoSelfEmploymentEdit` denies it on one's own account. The client sends `null` only for a field the user emptied whose stored value was known and non-empty; private values outside a Branch Manager's active branch scope remain unknown and are never cleared. `provisionUser` ignores `null`. It also rejects creating an `employee` without `aadhaarNumber`, `aadhaarPhotoUrl`, `designation`, `salary`, `dailyWorkHours` and `shiftHours` (same rule as `OrganizationMemberPolicy.requiredFields`).
+`dailyWorkHours`, `shiftHours` and `employeeCode` can never be cleared (`null` is rejected with `invalid-argument`). Clearing an employment-control field counts as editing it, so `assertNoSelfEmploymentEdit` denies it on one's own account. The client sends `null` only for a field the user emptied whose stored value was known and non-empty; private values outside a Branch Manager's active branch scope remain unknown and are never cleared. `provisionUser` ignores `null`. It also rejects creating an `employee` without `aadhaarNumber`, `aadhaarPhotoUrl`, `designation`, `salary`, `dailyWorkHours` and `shiftHours` (same rule as `OrganizationMemberPolicy.requiredFields`). `weeklyDaysOff` is optional and defaults to an empty list; the legacy `weeklyDayOff` scalar is accepted for older clients.
 
 Authorization matrix (`functions/src/auth/authorization.ts`, unit-tested):
 
@@ -299,8 +299,8 @@ to an approved request, including changes to its review details.
 
 `from` is inclusive and `to` exclusive (business-timezone period).
 The scheduled counts use the effective schedule for today's Asia/Kolkata date
-and exclude active employees whose recurring weekly day off is today. Employees
-without imported schedule history use the existing-employee Sunday default.
+and exclude active employees whose recurring weekly days off include today.
+Employees without schedule history use the existing-employee Sunday fallback.
 
 ### License plans (`ops/licensePlans.ts`)
 
@@ -647,12 +647,18 @@ history indexes rather than scanning the table.
 | Operation | Who may call | Key vars | Response |
 | --- | --- | --- | --- |
 | `GetEmployeeWorkforceHistory` | Employee (self); Org Admin (own org); Branch Manager (self or employee in active assigned branch) | `memberId` for another member; Branch Manager supplies `activeBranchId` | `{ member, schedules, compensations }` |
-| `SaveEmployeeSchedule` | Org Admin (own org); Branch Manager (employee assigned to active branch) | `memberId`, `effectiveFrom` (`YYYY-MM-DD`), `dailyWorkHours`, `shiftHours`, `weeklyDayOff`; Branch Manager supplies `activeBranchId` | `{ saved: true }` |
+| `SaveEmployeeSchedule` | Org Admin (own org); Branch Manager (employee assigned to active branch) | `memberId`, `effectiveFrom` (`YYYY-MM-DD`), `dailyWorkHours`, `shiftHours`, `weeklyDaysOff` (required; weekday values 0–6; empty means no weekly day off); Branch Manager supplies `activeBranchId` | `{ saved: true }` |
 | `SaveEmployeeCompensation` | Org Admin (own org); Branch Manager (employee assigned to active branch) | `memberId`, `effectiveFrom` (`YYYY-MM-DD`), `monthlySalary`; Branch Manager supplies `activeBranchId` | `{ saved: true }` |
 | `GetMonthlyPayroll` | Employee (self); Org Admin (own org); Branch Manager (self and employees in active assigned branch) | `month` (`YYYY-MM`); Branch Manager supplies `activeBranchId` | `{ month, basis, overtimeEnabled, paySlips }` |
 
 Schedule and salary changes are separate operations and cannot be backdated.
-Schedule writes include the recurring weekday off. New employees receive
+`weeklyDaysOff` replaced the single `weeklyDayOff` field: schedule history
+returns only `weeklyDaysOff`, and `SaveEmployeeSchedule`, `provisionUser` and
+`updateUserAccount` reject `weeklyDayOff` with an "update the app" message, so
+an older app build cannot save the wrong days off. `provisionUser` treats an
+omitted `weeklyDaysOff` as no day off. Migration 014 copied each existing
+single day off into the list and dropped the `weekly_day_off` column.
+Schedule writes include the recurring weekly days off. New employees receive
 initial schedule and salary history during provisioning. The legacy Firestore
 backfill operation was removed after verifying that the Cloud SQL organization
 table was empty on 22 November 2026.
@@ -715,7 +721,7 @@ Whether an approved leave day is paid is decided by the leave ledger
 (`functions/src/payroll/leaveLedger.ts`), walking the member's approved leave
 in date order:
 
-- Only scheduled working days count (not the weekly day off), and only between
+- Only scheduled working days count (excluding selected weekly days off), and only between
   the joining and relieving dates.
 - A day is paid while at least one whole day of the type's allowance remains;
   later days are unpaid. Applying beyond the balance is allowed.

@@ -3,10 +3,41 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
+import 'package:workaxis/features/employees/domain/models/employee_workforce_history.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/workforce_edit_dialogs.dart';
 
 void main() {
   final today = DateTime(2026, 11, 23);
+
+  // Sunday off until 1 Jan 2027, then a future version with Saturday off.
+  final current = ScheduleVersion(
+    id: 'current',
+    effectiveFrom: DateTime(2026, 11, 1),
+    effectiveTo: DateTime(2027, 1, 1),
+    dailyWorkHours: 8,
+    shiftHours: '09:00 AM - 05:00 PM',
+    weeklyDaysOff: const [0],
+  );
+  final future = ScheduleVersion(
+    id: 'future',
+    effectiveFrom: DateTime(2027, 1, 1),
+    dailyWorkHours: 8,
+    shiftHours: '09:00 AM - 05:00 PM',
+    weeklyDaysOff: const [6],
+  );
+  // Newest first, as the history API returns them.
+  final schedules = [future, current];
+
+  /// Picks [date] in the effective-from date picker using text input.
+  Future<void> pickEffectiveFrom(WidgetTester tester, String date) async {
+    await tester.tap(find.byIcon(Icons.event_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Switch to input'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, date);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+  }
 
   /// Opens [dialog] from a button and records what the dialog popped with.
   Future<List<bool?>> open(WidgetTester tester, Widget dialog) async {
@@ -100,5 +131,63 @@ void main() {
 
     expect(calls, 0);
     expect(find.text('Enter work hours between 0.5 and 24.'), findsOneWidget);
+  });
+
+  test('scheduleInForceOn finds the version covering a day', () {
+    expect(scheduleInForceOn(schedules, today)?.id, 'current');
+    expect(scheduleInForceOn(schedules, DateTime(2026, 12, 31))?.id, 'current');
+    expect(scheduleInForceOn(schedules, DateTime(2027, 1, 1))?.id, 'future');
+    expect(scheduleInForceOn(schedules, DateTime(2026, 10, 31)), isNull);
+    expect(scheduleInForceOn(const [], today), isNull);
+  });
+
+  testWidgets('schedule dialog starts with the days off in force on the '
+      'effective date, not those of a future version', (tester) async {
+    ScheduleDraft? saved;
+    await open(
+      tester,
+      ScheduleEditDialog(
+        businessToday: today,
+        schedules: schedules,
+        onSave: (draft) async => saved = draft,
+      ),
+    );
+
+    expect(find.text('Sunday'), findsOneWidget);
+    await tester.tap(find.text('Save schedule'));
+    await tester.pumpAndSettle();
+    expect(saved?.weeklyDaysOff, [0]);
+  });
+
+  testWidgets('changing the effective date refreshes the days off until the '
+      'admin edits them', (tester) async {
+    ScheduleDraft? saved;
+    await open(
+      tester,
+      ScheduleEditDialog(
+        businessToday: today,
+        schedules: schedules,
+        onSave: (draft) async => saved = draft,
+      ),
+    );
+
+    await pickEffectiveFrom(tester, '01/05/2027');
+    expect(find.text('Saturday'), findsOneWidget);
+
+    // Edit the days off: add Sunday to Saturday.
+    await tester.tap(find.text('Saturday'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Sunday'));
+    await tester.pumpAndSettle();
+    // Close the menu by tapping the field again.
+    await tester.tap(find.text('Sunday, Saturday'));
+    await tester.pumpAndSettle();
+
+    // A later date change keeps the edited days.
+    await pickEffectiveFrom(tester, '12/01/2026');
+    await tester.tap(find.text('Save schedule'));
+    await tester.pumpAndSettle();
+    expect(saved?.effectiveFrom, '2026-12-01');
+    expect(saved?.weeklyDaysOff, [0, 6]);
   });
 }

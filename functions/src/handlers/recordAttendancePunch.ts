@@ -2,6 +2,7 @@ import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onCall } from "firebase-functions/v2/https";
 import { resolveActor } from "../auth/actor";
+import { weeklyDaysOffFrom } from "../util/weeklyDaysOff";
 import {
   PUNCH_KINDS,
   assertScheduledWorkday,
@@ -101,16 +102,17 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
     if (branch.organizationId !== actor.organizationId) throw denied();
 
     const database = await getDb();
-    const schedule = await database.query<{ weeklyDayOff: number }>(
-      `SELECT weekly_day_off AS "weeklyDayOff"
+    const schedule = await database.query<{ weeklyDaysOff: number[] }>(
+      `SELECT weekly_days_off AS "weeklyDaysOff"
          FROM employee_schedule_history
         WHERE member_id = $1 AND effective_from <= $2::date
           AND (effective_to IS NULL OR effective_to > $2::date)
         ORDER BY effective_from DESC LIMIT 1`,
       [member.id, workDate],
     );
-    const weeklyDayOff = schedule.length ? Number(schedule[0].weeklyDayOff) : 0;
-    assertScheduledWorkday(workDate, weeklyDayOff);
+    // Without a schedule version Sunday stays the day off, as before.
+    const weeklyDaysOff = schedule.length ? weeklyDaysOffFrom(schedule[0].weeklyDaysOff) : [0];
+    assertScheduledWorkday(workDate, weeklyDaysOff);
 
     const settingsRef = getFirestore()
       .collection("organization_settings")

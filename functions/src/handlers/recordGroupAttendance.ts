@@ -16,6 +16,7 @@ import {
   type RecordedSession,
 } from "../attendance/groupRules";
 import { assertScheduledWorkday } from "../attendance/punchRules";
+import { weeklyDaysOffFrom } from "../util/weeklyDaysOff";
 import { callableOptions } from "../config";
 import { conflict, guarded, notFound } from "../errors";
 import { getDb } from "../db";
@@ -47,18 +48,22 @@ export const recordGroupAttendance = onCall(callableOptions, (request) =>
     const memberIds = attendees.map((member) => member.id);
     const scheduleRows = await database.query<{
       memberId: string;
-      weeklyDayOff: number;
+      weeklyDaysOff: number[];
     }>(
       `SELECT DISTINCT ON (member_id) member_id AS "memberId",
-              weekly_day_off AS "weeklyDayOff"
+              weekly_days_off AS "weeklyDaysOff"
          FROM employee_schedule_history
         WHERE member_id = ANY($1::text[]) AND effective_from <= $2::date
           AND (effective_to IS NULL OR effective_to > $2::date)
         ORDER BY member_id, effective_from DESC`,
       [memberIds, input.workDate],
     );
-    const dayOffByMember = new Map(scheduleRows.map((row) => [row.memberId, Number(row.weeklyDayOff)]));
-    for (const member of attendees) assertScheduledWorkday(input.workDate, dayOffByMember.get(member.id) ?? 0);
+    const dayOffByMember = new Map(
+      scheduleRows.map((row) => [row.memberId, weeklyDaysOffFrom(row.weeklyDaysOff)]),
+    );
+    for (const member of attendees) {
+      assertScheduledWorkday(input.workDate, dayOffByMember.get(member.id) ?? [0]);
+    }
     const batchId = `${actor.uid}_${input.requestId}`;
     const batchRef = firestore
       .collection("group_attendance_batches")

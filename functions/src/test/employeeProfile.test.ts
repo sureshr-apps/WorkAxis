@@ -24,6 +24,7 @@ describe("assertNoSelfEmploymentEdit", () => {
       employeeCode: "EMP-1",
       dailyWorkHours: 8,
       shiftHours: "9-5",
+      weeklyDaysOff: [0, 6],
       assetDetails: "Laptop",
     };
     assert.deepEqual(Object.keys(samples).sort(), [...SELF_LOCKED_FIELDS].sort());
@@ -70,6 +71,15 @@ describe("employee code validation", () => {
     for (const bad of ["", "x".repeat(33), "EMP 1", "EMP/1", "é1"]) {
       denies(() => validateEmployeeCode(bad), "invalid-argument");
     }
+  });
+
+  it("normalizes weekly days off and rejects the replaced single-day field", () => {
+    assert.deepEqual(parseEmployeeExtras({ weeklyDaysOff: [6, 0, 6] }).weeklyDaysOff, [0, 6]);
+    assert.deepEqual(parseEmployeeExtras({ weeklyDaysOff: [] }).weeklyDaysOff, []);
+    for (const bad of [[7], [-1], [1.5], ["1"], 3, null]) {
+      denies(() => parseEmployeeExtras({ weeklyDaysOff: bad }), "invalid-argument");
+    }
+    denies(() => parseEmployeeExtras({ weeklyDayOff: 0 }), "invalid-argument");
   });
 
   it("is applied when parsing request extras", () => {

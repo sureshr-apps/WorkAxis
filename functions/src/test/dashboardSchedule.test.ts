@@ -43,7 +43,7 @@ test("organization dashboard counts only employees scheduled today", async () =>
   assert.match(scheduleQuery.sql, /Asia\/Kolkata/);
   assert.match(scheduleQuery.sql, /effective_from <= d\.today/);
   assert.match(scheduleQuery.sql, /effective_to > d\.today/);
-  assert.match(scheduleQuery.sql, /weekly_day_off/);
+  assert.match(scheduleQuery.sql, /weekly_days_off/);
   assert.deepEqual(scheduleQuery.params, ["org-1"]);
   assert.deepEqual(result.scheduledEmployeeCount, [{ _count: 8 }]);
 });
@@ -62,7 +62,7 @@ test("branch dashboard counts scheduled employees only in that branch", async ()
   );
   assert.ok(scheduleQuery);
   assert.match(scheduleQuery.sql, /a\.branch_id = \$1/);
-  assert.match(scheduleQuery.sql, /weekly_day_off/);
+  assert.match(scheduleQuery.sql, /weekly_days_off/);
   assert.deepEqual(scheduleQuery.params, ["branch-1"]);
   assert.deepEqual(result.scheduledMemberCount, [{ _count: 3 }]);
 });

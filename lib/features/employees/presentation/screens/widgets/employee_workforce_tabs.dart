@@ -12,6 +12,7 @@ import 'package:workaxis/features/access/domain/models/user_access_context.dart'
 import 'package:workaxis/features/employees/domain/models/employee_workforce_history.dart';
 import 'package:workaxis/features/employees/domain/repositories/employee_workforce_repository.dart';
 import 'package:workaxis/features/employees/presentation/screens/widgets/workforce_edit_dialogs.dart';
+import 'package:workaxis/features/employees/presentation/screens/widgets/workforce_weekday_names.dart';
 import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
 class EmployeeWorkforceTabs extends StatefulWidget {
@@ -151,7 +152,7 @@ class _EmployeeWorkforceTabsState extends State<EmployeeWorkforceTabs> {
         _PanelHeader(
           title: 'Schedule & shifts',
           subtitle:
-              'Weekly day off and shift hours, with effective-date history.',
+              'Weekly days off and shift hours, with effective-date history.',
           action: widget.canEdit
               ? AppButton.outlined(
                   text: 'Add schedule',
@@ -169,7 +170,7 @@ class _EmployeeWorkforceTabsState extends State<EmployeeWorkforceTabs> {
             _HistoryRow(
               title: schedule.shiftHours,
               subtitle:
-                  '${_hours(schedule.dailyWorkHours)} · ${workforceWeekdayNames[schedule.weeklyDayOff]} off',
+                  '${_hours(schedule.dailyWorkHours)} · ${_daysOff(schedule.weeklyDaysOff)}',
               dateLabel: _effectiveLabel(
                 schedule.effectiveFrom,
                 schedule.effectiveTo,
@@ -221,13 +222,14 @@ class _EmployeeWorkforceTabsState extends State<EmployeeWorkforceTabs> {
       context: context,
       builder: (_) => ScheduleEditDialog(
         businessToday: BusinessTime.today(systemNow),
+        schedules: _history?.schedules ?? const [],
         onSave: (draft) => _repository.saveSchedule(
           access: widget.access,
           memberId: widget.memberId,
           effectiveFrom: draft.effectiveFrom,
           dailyWorkHours: draft.dailyWorkHours,
           shiftHours: draft.shiftHours,
-          weeklyDayOff: draft.weeklyDayOff,
+          weeklyDaysOff: draft.weeklyDaysOff,
           activeBranchId: widget.activeBranchId,
         ),
       ),
@@ -251,6 +253,13 @@ class _EmployeeWorkforceTabsState extends State<EmployeeWorkforceTabs> {
     );
     if (saved == true && mounted) _load();
   }
+}
+
+String _daysOff(List<int> days) {
+  final validDays = days.where((day) => day >= 0 && day < 7).toSet().toList()
+    ..sort();
+  if (validDays.isEmpty) return 'No weekly day off';
+  return '${validDays.map((day) => workforceWeekdayNames[day]).join(', ')} off';
 }
 
 class _PanelHeader extends StatelessWidget {

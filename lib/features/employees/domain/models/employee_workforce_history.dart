@@ -4,7 +4,7 @@ class ScheduleVersion {
     required this.effectiveFrom,
     required this.dailyWorkHours,
     required this.shiftHours,
-    required this.weeklyDayOff,
+    required this.weeklyDaysOff,
     this.effectiveTo,
   });
 
@@ -14,8 +14,8 @@ class ScheduleVersion {
   final double dailyWorkHours;
   final String shiftHours;
 
-  /// Sunday is 0, Monday is 1, and Saturday is 6.
-  final int weeklyDayOff;
+  /// Recurring days off, with Sunday as 0 and Saturday as 6. Empty means none.
+  final List<int> weeklyDaysOff;
 
   factory ScheduleVersion.fromJson(Map<String, dynamic> json) =>
       ScheduleVersion(
@@ -24,9 +24,32 @@ class ScheduleVersion {
         effectiveTo: _optionalDate(json['effectiveTo']),
         dailyWorkHours: _number(json['dailyWorkHours']),
         shiftHours: _string(json['shiftHours']),
-        weeklyDayOff: _integer(json['weeklyDayOff']),
+        weeklyDaysOff: _parseWeeklyDaysOff(json),
       );
 }
+
+/// The version of [schedules] in force on [date] (compared by calendar day),
+/// or null when none covers it. Order of [schedules] does not matter.
+ScheduleVersion? scheduleInForceOn(
+  Iterable<ScheduleVersion> schedules,
+  DateTime date,
+) {
+  final day = _day(date);
+  ScheduleVersion? found;
+  for (final schedule in schedules) {
+    final from = _day(schedule.effectiveFrom);
+    final to = schedule.effectiveTo == null
+        ? null
+        : _day(schedule.effectiveTo!);
+    if (from.isAfter(day) || (to != null && !day.isBefore(to))) continue;
+    if (found == null || from.isAfter(_day(found.effectiveFrom))) {
+      found = schedule;
+    }
+  }
+  return found;
+}
+
+DateTime _day(DateTime value) => DateTime(value.year, value.month, value.day);
 
 class CompensationVersion {
   const CompensationVersion({
@@ -75,7 +98,19 @@ Map<String, dynamic> _map(Object? value) =>
 List<Object?> _list(Object? value) => value is List ? value : const [];
 String _string(Object? value) => value is String ? value : '';
 double _number(Object? value) => value is num ? value.toDouble() : 0;
-int _integer(Object? value) => value is num ? value.toInt() : 0;
+
+List<int> _parseWeeklyDaysOff(Map<String, dynamic> json) {
+  final days =
+      _list(json['weeklyDaysOff'])
+          .whereType<num>()
+          .map((day) => day.toInt())
+          .where((day) => day >= 0 && day <= 6)
+          .toSet()
+          .toList()
+        ..sort();
+  return List.unmodifiable(days);
+}
+
 DateTime _date(Object? value) =>
     DateTime.tryParse(_string(value)) ?? DateTime(1970);
 DateTime? _optionalDate(Object? value) =>

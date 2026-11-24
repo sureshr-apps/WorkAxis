@@ -17,7 +17,7 @@ class MockEmployeeWorkforceRepository implements EmployeeWorkforceRepository {
         effectiveFrom: DateTime(2026, 1, 1),
         dailyWorkHours: 8,
         shiftHours: '09:00 AM - 05:00 PM',
-        weeklyDayOff: DateTime.sunday % 7,
+        weeklyDaysOff: [DateTime.sunday % 7],
       ),
     ],
     compensations: [
@@ -36,7 +36,7 @@ class MockEmployeeWorkforceRepository implements EmployeeWorkforceRepository {
     required String effectiveFrom,
     required double dailyWorkHours,
     required String shiftHours,
-    required int weeklyDayOff,
+    required List<int> weeklyDaysOff,
     String? activeBranchId,
   }) async {}
 

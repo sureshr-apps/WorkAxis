@@ -10,13 +10,20 @@ export const PUNCH_KINDS: readonly PunchKind[] = [
   "breakEnd",
 ];
 
-/** Rejects all punches on the employee's recurring weekly day off. */
-export function assertScheduledWorkday(workDate: string, weeklyDayOff: number): void {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate) || weeklyDayOff < 0 || weeklyDayOff > 6) {
+/** Rejects punches on any recurring weekly day off. */
+export function assertScheduledWorkday(
+  workDate: string,
+  weeklyDaysOff: readonly number[],
+): void {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(workDate) ||
+    !Array.isArray(weeklyDaysOff) ||
+    weeklyDaysOff.some((day) => !Number.isInteger(day) || day < 0 || day > 6)
+  ) {
     throw precondition("The employee schedule could not be verified.");
   }
   const day = new Date(`${workDate}T00:00:00.000Z`).getUTCDay();
-  if (day === weeklyDayOff) {
+  if (weeklyDaysOff.includes(day)) {
     throw precondition("Attendance punches are not available on your weekly day off.");
   }
 }

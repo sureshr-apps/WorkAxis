@@ -4,7 +4,7 @@ import { calculatePayroll, type PayrollCalculationInput } from "../payroll/calcu
 
 const fullMonth: Omit<PayrollCalculationInput, "attendance" | "basis" | "overtimeEnabled"> = {
   month: "2026-11",
-  schedules: [{ effectiveFrom: "2026-11-01", dailyWorkHours: 8, weeklyDayOff: 0 }],
+  schedules: [{ effectiveFrom: "2026-11-01", dailyWorkHours: 8, weeklyDaysOff: [0] }],
   compensations: [{ effectiveFrom: "2026-11-01", monthlySalary: 30_000 }],
   leaveDays: [],
   asOf: new Date("2026-11-30T18:30:00.000Z"),
@@ -126,13 +126,28 @@ function workedDays(from: number, to: number): PayrollCalculationInput["attendan
 // November 2026 has 25 scheduled days (Sundays 1, 8, 15, 22 and 29 off).
 const NOVEMBER_WORKDAYS = 25;
 
+test("every selected weekly day off is unscheduled, and none means every day is", () => {
+  const base = { ...fullMonth, basis: "hours" as const, overtimeEnabled: false, attendance: [] };
+  // November 2026 has four Saturdays and five Sundays.
+  const weekend = calculatePayroll({
+    ...base,
+    schedules: [{ effectiveFrom: "2026-11-01", dailyWorkHours: 8, weeklyDaysOff: [0, 6] }],
+  });
+  assert.equal(weekend.scheduledWorkdays, 30 - 9);
+  const noDayOff = calculatePayroll({
+    ...base,
+    schedules: [{ effectiveFrom: "2026-11-01", dailyWorkHours: 8, weeklyDaysOff: [] }],
+  });
+  assert.equal(noDayOff.scheduledWorkdays, 30);
+});
+
 test("a mid-month joiner is paid only for the days after joining", () => {
   const attendance = workedDays(16, 30);
   const result = calculatePayroll({
     month: "2026-11",
     basis: "hours",
     overtimeEnabled: false,
-    schedules: [{ effectiveFrom: "2026-11-15", dailyWorkHours: 8, weeklyDayOff: 0 }],
+    schedules: [{ effectiveFrom: "2026-11-15", dailyWorkHours: 8, weeklyDaysOff: [0] }],
     compensations: [{ effectiveFrom: "2026-11-15", monthlySalary: 30_000 }],
     attendance,
     leaveDays: [],

@@ -1,6 +1,6 @@
 # Employee Scheduling, Compensation, and Multi-Branch Attendance
 
-**Status:** Deployed on 22 November 2026. Migration 010 and the application deployment succeeded. The Cloud SQL `organization` table was verified empty after all organizations were deleted, so the legacy backfill callable was removed; new employees are initialized directly in PostgreSQL history.
+**Status:** Initial schedule and attendance feature deployed on 22 November 2026. The multi-day weekly-off update is implemented locally; migration 014 and deployment are pending. The Cloud SQL `organization` table was verified empty after all organizations were deleted, so the legacy backfill callable was removed; new employees are initialized directly in PostgreSQL history.
 
 This file is the working specification for employee details, schedules, weekly days off, salary history, and multi-branch attendance. Add further requirements here for the next implementation batch.
 
@@ -9,7 +9,7 @@ This file is the working specification for employee details, schedules, weekly d
 ### Employee details
 
 - Employee details have three tabs: **Overview**, **Schedule & Shifts**, and **Salary**.
-- Keep the employee creation form and its current fields. Add a weekly day-off selector to its schedule section.
+- Keep the employee creation form and its current fields. The weekly days-off selector in its schedule section is a multi-select and defaults to no selected days (no weekly day off).
 - After creation, edit schedule and salary from their own tabs. Saving either must not update unrelated employee details.
 - Apply existing employee-management permissions. Organization Admins manage employees across their organization. Branch Managers manage employees assigned to their active branch. A schedule or salary change made by a Branch Manager applies to the employee across all assigned branches.
 
@@ -17,10 +17,10 @@ This file is the working specification for employee details, schedules, weekly d
 
 - The shift belongs to the employee, not a branch. Its start time, end time, and daily work target apply at every assigned branch.
 - The existing **Daily Work Hours** field remains. Preserve its current synchronization with the shift window: changing daily hours adjusts the shift end time, and changing the shift end time recalculates daily hours.
-- Each employee has one recurring weekday off per week. The weekday is employee-specific and may change over time.
-- Store the weekly day off in the employee’s effective-dated schedule history. A schedule change, including a day-off change, takes effect today or on a future date. Past effective dates are not allowed.
+- Each employee can have zero or more recurring weekdays off per week. The selected days are employee-specific and may change over time.
+- Store the selected weekly days off in the employee’s effective-dated schedule history. An empty list means no weekly day off. A schedule change, including a day-off change, takes effect today or on a future date. Past effective dates are not allowed.
 - Schedule periods for the same employee must not overlap, regardless of branch.
-- Existing employees receive Sunday as their weekly day off during migration. New employees choose a weekday in the creation form.
+- Existing schedule rows keep their previous day off when migrated to the multi-day representation. New employee schedules start with no day off; administrators can select one or more weekdays in the creation form.
 - Do not include a public or organization-wide holiday calendar in this scope.
 
 ### Salary history
@@ -52,7 +52,7 @@ This file is the working specification for employee details, schedules, weekly d
 - Worked time accumulates across the day’s sessions, less recorded breaks. Time between sessions is not worked time.
 - Show one employee/day attendance summary with the sessions and branch history available from it. Daily headcounts count an employee once, even when they worked at multiple branches.
 - Organization Admins can review organization-wide session history. Branch Managers can see only sessions within their authorized branch scope. Employees can see their own attendance history.
-- When an employee’s effective schedule marks the day as their weekly day off, block attendance punches. Do not count the employee as scheduled or absent for that day.
+- When an employee’s effective schedule marks the day as one of their weekly days off, block attendance punches. Do not count the employee as scheduled or absent for that day.
 - Branch Manager self-attendance follows the existing organization setting that enables or disables it.
 
 ## Implementation Status and Rollout
@@ -68,7 +68,7 @@ This file is the working specification for employee details, schedules, weekly d
 
 ### Employee schedule and compensation storage
 
-- Add a PostgreSQL employee schedule history table keyed by organization member. Each version stores effective dates, shift start/end, daily work hours, and one weekday-off value.
+- Add a PostgreSQL employee schedule history table keyed by organization member. Each version stores effective dates, shift start/end, daily work hours, and a list of recurring weekday-off values. Migration 014 adds `weekly_days_off`, copies existing `weekly_day_off` values into it, and keeps the scalar column for older clients.
 - Add a separate PostgreSQL compensation history table keyed by organization member. Each version stores the existing salary/CTC value and its effective dates.
 - Use non-overlapping half-open effective date ranges per employee: a version applies from its effective date through, but not including, its end date. Index employee ID and effective dates so the applicable schedule and compensation are found without a full-table scan.
 - Route reads and writes through authorized Cloud Functions and the existing SQL data-access layer. Organization Admin access is organization-scoped. Branch Manager access is limited to employees assigned to their active branch. Do not expose salary in manager-readable profile projections.
@@ -90,10 +90,10 @@ This file is the working specification for employee details, schedules, weekly d
 ### Attendance session storage and access
 
 - Store each self-service work session as a separate attendance entry with its own employee, organization, branch, work date, check-in/out times, breaks, selfie paths, and location validation data.
-- Use trusted server-side transaction logic to enforce one open session per employee and business date, bind check-out to the open session’s branch, and reject punches on a weekly day off.
+- Use trusted server-side transaction logic to enforce one open session per employee and business date, bind check-out to the open session’s branch, and reject punches on selected weekly days off.
 - Preserve existing daily attendance entries as historical single-session records. New sessions use unique IDs so an employee can create more than one entry on a date.
 - Group entries by employee and business date for daily views. Deduplicate employee IDs for headcounts. Branch-scoped reads must return only sessions in the caller’s authorized branch scope.
-- Apply weekly-day-off validation to employee self-service punches and manager-recorded group attendance. Do not provide an override to punch on the weekly day off.
+- Apply weekly-days-off validation to employee self-service punches and manager-recorded group attendance. Do not provide an override to punch on a weekly day off.
 - Show a **Weekly Off** state in the employee attendance experience instead of a check-in action on that day.
 
 ### User interface
@@ -101,7 +101,7 @@ This file is the working specification for employee details, schedules, weekly d
 - The employee detail page uses Overview, Schedule & Shifts, and Salary tabs.
 - Keep initial schedule and salary entry in the employee creation form and add the weekly-day-off selection there.
 - Remove schedule and salary editing from the general employee edit flow after account creation. Each dedicated tab has its own view and save action.
-- The Schedule & Shifts tab shows the current and historical shift window, daily work hours, and weekly day off.
+- The Schedule & Shifts tab shows the current and historical shift window, daily work hours, and selected weekly days off (or no day off).
 - The Salary tab shows the current and historical salary/CTC values, ordered by effective date.
 - The Payslips page supports a calendar-month selector, scoped employee pay details, individual PDF payslips, and an XLSX export of all employees in the viewer’s authorized scope.
 - The employee attendance home lets the employee choose an assigned active branch before each new check-in. During an open session, it shows the session branch and offers check-out for that session.
@@ -114,7 +114,7 @@ This file is the working specification for employee details, schedules, weekly d
 - [x] A second session is rejected while another session or break is open.
 - [x] GPS, geofence, selfie, and existing role rules apply to every relevant punch.
 - [x] Weekly-day-off punches are rejected, and scheduled weekly days off are excluded from absence counts.
-- [x] Existing employees receive Sunday during migration; newly created employees can choose their weekly day off.
+- [x] New employees can select multiple weekly days off; the default is no day off.
 - [x] Branch and organization attendance views show correctly scoped session history and count employees once per day.
 - [x] Employee home displays the active session branch and accumulates worked time across sessions.
 - [x] The applicable shift and weekly day off are found by employee and business date without scanning schedule history.
@@ -128,10 +128,13 @@ This file is the working specification for employee details, schedules, weekly d
 - [x] Overtime is disabled by default and adds hours beyond the scheduled daily shift at the regular hourly rate only when enabled.
 - [x] Branch Managers and Organization Admins can view their own payslips and employee payslips within their authorized scope.
 - [x] Monthly XLSX exports contain every employee in scope for the selected calendar month; individual payslips can be exported as PDF.
-- [x] The employee creation form retains schedule and salary entry and adds weekly-day-off selection.
+- [x] The employee creation form retains schedule and salary entry and supports multi-select weekly days off with none selected by default.
 - [x] Post-creation schedule and salary edits are isolated from general employee details.
 - [x] Verified there were no existing organizations to backfill and removed the legacy Firestore import callable.
 
-The checked items are implemented and validated. The legacy migration is out
-of scope because the organization table was empty when the new history feature
-was deployed.
+The checked items reflect implemented work. Migration 014 copies each existing
+single day off into `weekly_days_off` and drops `weekly_day_off`; it must be
+applied before deploying the Functions that read and write `weekly_days_off`
+(the previous Functions fail on schedule reads until the deploy finishes). The legacy
+Firestore history import remains out of scope because the organization table
+was empty when the history feature was deployed.

@@ -18,7 +18,7 @@ import { asBag, optString, optStringArray, reqEnum, reqString } from "../util/in
 /**
  * provisionUser (callable, asia-south1)
  * Request:  { requestId, fullName, username, email?, phone?, password, role,
- *             organizationId?, branchIds? }
+ *             organizationId?, branchIds?, weeklyDaysOff? }
  * Response: { uid, memberId, username, loginEmail, employeeCode? }
  */
 export const provisionUser = onCall(callableOptions, (request) =>
@@ -59,6 +59,7 @@ export const provisionUser = onCall(callableOptions, (request) =>
     const {
       dailyWorkHours,
       shiftHours,
+      weeklyDaysOff,
       employeeCode,
       aadhaarNumber,
       aadhaarPhotoUrl,
@@ -84,7 +85,7 @@ export const provisionUser = onCall(callableOptions, (request) =>
       createdByUid: actor.uid,
       dailyWorkHours,
       shiftHours,
-      weeklyDayOff: extras.weeklyDayOff,
+      weeklyDaysOff,
       employeeCode,
       aadhaarNumber,
       aadhaarPhotoUrl,

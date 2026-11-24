@@ -3,9 +3,15 @@ import { test } from "node:test";
 import { assertPunchAllowed, assertScheduledWorkday } from "../attendance/punchRules";
 
 test("weekly days off block every attendance punch by business date", () => {
-  assert.throws(() => assertScheduledWorkday("2026-11-22", 0)); // Sunday
-  assert.doesNotThrow(() => assertScheduledWorkday("2026-11-23", 0));
-  assert.throws(() => assertScheduledWorkday("2026-11-23", 1)); // Monday
+  assert.throws(() => assertScheduledWorkday("2026-11-22", [0])); // Sunday
+  assert.doesNotThrow(() => assertScheduledWorkday("2026-11-23", [0]));
+  assert.throws(() => assertScheduledWorkday("2026-11-23", [1])); // Monday
+  // Several days off: Saturday and Sunday both blocked, Monday allowed.
+  assert.throws(() => assertScheduledWorkday("2026-11-21", [0, 6]));
+  assert.throws(() => assertScheduledWorkday("2026-11-22", [0, 6]));
+  assert.doesNotThrow(() => assertScheduledWorkday("2026-11-23", [0, 6]));
+  // No day off: every day is a workday.
+  assert.doesNotThrow(() => assertScheduledWorkday("2026-11-22", []));
 });
 
 test("a new session may start after an earlier session is closed", () => {
