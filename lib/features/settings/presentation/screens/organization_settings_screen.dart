@@ -10,6 +10,7 @@ import 'package:workaxis/features/settings/domain/validators/settings_validators
 import 'package:workaxis/features/settings/presentation/controllers/settings_controller.dart';
 import 'package:workaxis/features/settings/presentation/widgets/settings_page.dart';
 import 'package:workaxis/features/settings/presentation/widgets/settings_section_card.dart';
+import 'package:workaxis/features/settings/presentation/widgets/shift_session_settings_section.dart';
 
 class OrganizationSettingsScreen extends StatefulWidget {
   const OrganizationSettingsScreen({super.key});
@@ -25,6 +26,10 @@ class _OrganizationSettingsScreenState
   final _phoneController = TextEditingController();
   final _geofenceRadiusController = TextEditingController();
   final _gracePeriodController = TextEditingController();
+  final _earlyCheckInController = TextEditingController();
+  final _checkoutReminderController = TextEditingController();
+  final _overtimeReviewController = TextEditingController();
+  final _maxSessionController = TextEditingController();
 
   bool _allowBreaks = OrganizationSettings.defaults.allowBreaks;
   bool _requireGeolocation = OrganizationSettings.defaults.requireGeolocation;
@@ -62,6 +67,10 @@ class _OrganizationSettingsScreenState
     _phoneController.text = settings.emergencyPhone ?? '';
     _geofenceRadiusController.text = '${settings.geofenceRadiusMeters}';
     _gracePeriodController.text = '${settings.gracePeriodMinutes}';
+    _earlyCheckInController.text = '${settings.earlyCheckInMinutes}';
+    _checkoutReminderController.text = '${settings.checkoutReminderMinutes}';
+    _overtimeReviewController.text = '${settings.overtimeReviewMinutes}';
+    _maxSessionController.text = '${settings.maxSessionHours}';
     _allowBreaks = settings.allowBreaks;
     _requireGeolocation = settings.requireGeolocation;
     _dailyDigest = settings.dailyDigest;
@@ -79,6 +88,10 @@ class _OrganizationSettingsScreenState
     geofenceRadiusMeters:
         int.tryParse(_geofenceRadiusController.text.trim()) ?? -1,
     gracePeriodMinutes: int.tryParse(_gracePeriodController.text.trim()) ?? -1,
+    earlyCheckInMinutes: _intOrInvalid(_earlyCheckInController),
+    checkoutReminderMinutes: _intOrInvalid(_checkoutReminderController),
+    overtimeReviewMinutes: _intOrInvalid(_overtimeReviewController),
+    maxSessionHours: _intOrInvalid(_maxSessionController),
     allowBreaks: _allowBreaks,
     requireGeolocation: _requireGeolocation,
     dailyDigest: _dailyDigest,
@@ -92,6 +105,9 @@ class _OrganizationSettingsScreenState
     emergencyPhone: _blankToNull(_phoneController.text),
   );
 
+  int _intOrInvalid(TextEditingController controller) =>
+      int.tryParse(controller.text.trim()) ?? -1;
+
   String? _blankToNull(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
@@ -103,6 +119,10 @@ class _OrganizationSettingsScreenState
     _phoneController.dispose();
     _geofenceRadiusController.dispose();
     _gracePeriodController.dispose();
+    _earlyCheckInController.dispose();
+    _checkoutReminderController.dispose();
+    _overtimeReviewController.dispose();
+    _maxSessionController.dispose();
     super.dispose();
   }
 
@@ -190,7 +210,7 @@ class _OrganizationSettingsScreenState
                   _edited();
                 },
                 title: 'Pay overtime',
-                subtitle: 'Pays time beyond scheduled daily hours at the regular hourly rate.',
+                subtitle: 'Pays manager-approved time beyond scheduled daily hours at the regular hourly rate. Unapproved overtime is not paid.',
               ),
             ],
           ),
@@ -335,6 +355,14 @@ class _OrganizationSettingsScreenState
               ),
             ],
           ),
+        ),
+        ShiftSessionSettingsSection(
+          earlyCheckInController: _earlyCheckInController,
+          checkoutReminderController: _checkoutReminderController,
+          overtimeReviewController: _overtimeReviewController,
+          maxSessionController: _maxSessionController,
+          errors: errors,
+          onChanged: _edited,
         ),
         SettingsSectionCard(
           icon: Icons.notifications_active_outlined,

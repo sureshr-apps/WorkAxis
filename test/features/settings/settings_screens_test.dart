@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
+import 'package:workaxis/core/widgets/app_text_field.dart';
 import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
@@ -306,6 +307,105 @@ void main() {
       expect(saved.allowBreaks, isFalse);
       expect(saved.dailyDigest, isFalse);
       expect(saved.returnAlerts, isFalse);
+    });
+
+    group('Shift sessions', () {
+      Finder field(String label) => find.descendant(
+        of: find.widgetWithText(AppTextField, label),
+        matching: find.byType(TextField),
+      );
+
+      Future<void> setField(
+        WidgetTester tester,
+        String label,
+        String value,
+      ) async {
+        await tester.ensureVisible(field(label));
+        await tester.pumpAndSettle();
+        await tester.enterText(field(label), value);
+      }
+
+      Future<void> save(WidgetTester tester) async {
+        // A focused field would scroll itself back into view.
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Save Changes'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Save Changes'));
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets('shows the four timing fields with defaults and help', (
+        tester,
+      ) async {
+        await pumpOrganizationSettingsScreen(tester, width: 1200);
+
+        expect(find.text('Shift Sessions'), findsOneWidget);
+        String valueOf(String label) =>
+            tester.widget<TextField>(field(label)).controller!.text;
+        expect(valueOf('Early Check-in Window (Minutes)'), '120');
+        expect(valueOf('Check-out Reminder (Minutes)'), '30');
+        expect(valueOf('Overtime Allowance Before Review (Minutes)'), '240');
+        expect(valueOf('Maximum Session Length (Hours)'), '16');
+        expect(
+          find.textContaining('No check-out is recorded automatically'),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('out-of-range values show inline errors and are not saved', (
+        tester,
+      ) async {
+        await pumpOrganizationSettingsScreen(tester, width: 1200);
+
+        await setField(tester, 'Maximum Session Length (Hours)', '30');
+        await setField(
+          tester,
+          'Overtime Allowance Before Review (Minutes)',
+          '800',
+        );
+        await save(tester);
+
+        expect(
+          find.text('Maximum session length must be between 8 and 24 h.'),
+          findsWidgets,
+        );
+        expect(
+          find.text(
+            'Overtime allowance before review must be between 0 and 720 min.',
+          ),
+          findsWidgets,
+        );
+        expect(settingsController.lastSaveSucceeded, isFalse);
+      });
+
+      testWidgets('valid timings are saved', (tester) async {
+        await pumpOrganizationSettingsScreen(tester, width: 1200);
+
+        await setField(tester, 'Early Check-in Window (Minutes)', '60');
+        await setField(tester, 'Check-out Reminder (Minutes)', '15');
+        await setField(
+          tester,
+          'Overtime Allowance Before Review (Minutes)',
+          '120',
+        );
+        await setField(tester, 'Maximum Session Length (Hours)', '12');
+        await save(tester);
+
+        final saved = settingsController.organizationSettings!;
+        expect(saved.earlyCheckInMinutes, 60);
+        expect(saved.checkoutReminderMinutes, 15);
+        expect(saved.overtimeReviewMinutes, 120);
+        expect(saved.maxSessionHours, 12);
+      });
+
+      testWidgets('renders on a phone without overflow', (tester) async {
+        await pumpOrganizationSettingsScreen(tester, width: 390, height: 844);
+        await tester.ensureVisible(find.text('Shift Sessions'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
     });
   });
 }

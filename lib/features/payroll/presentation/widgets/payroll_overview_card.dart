@@ -5,6 +5,7 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/widgets/kpi/app_kpi_card.dart';
 import 'package:workaxis/core/widgets/kpi/responsive_kpi_section.dart';
+import 'package:workaxis/features/payroll/presentation/payroll_overtime_labels.dart';
 
 class PayrollOverviewCard extends StatelessWidget {
   const PayrollOverviewCard({
@@ -17,6 +18,7 @@ class PayrollOverviewCard extends StatelessWidget {
     required this.payableHours,
     required this.payableWorkdays,
     required this.overtimeHours,
+    required this.approvedOvertimeHours,
     required this.overtimePay,
   });
 
@@ -27,7 +29,12 @@ class PayrollOverviewCard extends StatelessWidget {
   final String monthLabel;
   final double payableHours;
   final double payableWorkdays;
+
+  /// Potential overtime (approved or not).
   final double overtimeHours;
+
+  /// The approved part of [overtimeHours]; only this is paid.
+  final double approvedOvertimeHours;
   final double overtimePay;
 
   @override
@@ -133,13 +140,18 @@ class PayrollOverviewCard extends StatelessWidget {
             footerText: 'For $monthLabel',
           ),
           AppKpiCard(
-            title: 'Overtime',
-            value: overtimeEnabled ? overtimeHours.toStringAsFixed(1) : 'Off',
+            title: 'Approved overtime',
+            value: overtimeEnabled
+                ? approvedOvertimeHours.toStringAsFixed(1)
+                : 'Off',
             total: overtimeEnabled ? 'h' : null,
             icon: Icons.more_time_outlined,
             accentColor: overtimeEnabled ? AppColors.statusActive : null,
             footerText: overtimeEnabled
-                ? '${_money(overtimePay)} included'
+                ? PayrollOvertimeLabels.potentialAndPaid(
+                    overtimeHours,
+                    _money(overtimePay),
+                  )
                 : 'Overtime pay disabled',
           ),
         ],

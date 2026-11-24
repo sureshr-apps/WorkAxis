@@ -12,6 +12,7 @@ import { offSiteWorkOps } from "./ops/offSiteWork";
 import { returnsOps } from "./ops/returns";
 import { workforceOps } from "./ops/workforce";
 import { payrollOps } from "./ops/payroll";
+import { attendanceReviewOps } from "./ops/attendanceReview";
 
 /** Every operation reachable through the `dataOp` callable, by name. */
 export const operations: OperationRegistry = {
@@ -28,4 +29,5 @@ export const operations: OperationRegistry = {
   ...organizationLicenseOps,
   ...workforceOps,
   ...payrollOps,
+  ...attendanceReviewOps,
 };

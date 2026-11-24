@@ -74,6 +74,10 @@ class FirestoreSettingsRepository implements SettingsRepository {
             settings.requireBranchManagerAttendance,
         'payCalculationBasis': settings.payCalculationBasis.wireValue,
         'overtimeEnabled': settings.overtimeEnabled,
+        'earlyCheckInMinutes': settings.earlyCheckInMinutes,
+        'checkoutReminderMinutes': settings.checkoutReminderMinutes,
+        'overtimeReviewMinutes': settings.overtimeReviewMinutes,
+        'maxSessionHours': settings.maxSessionHours,
         'operationsEmail': _blankToNull(settings.operationsEmail),
         'emergencyPhone': _blankToNull(settings.emergencyPhone),
         'updatedBy': access.user.id,
@@ -147,6 +151,17 @@ class FirestoreSettingsRepository implements SettingsRepository {
         data['payCalculationBasis'],
       ),
       overtimeEnabled: data['overtimeEnabled'] as bool? ?? d.overtimeEnabled,
+      earlyCheckInMinutes:
+          (data['earlyCheckInMinutes'] as num?)?.toInt() ??
+          d.earlyCheckInMinutes,
+      checkoutReminderMinutes:
+          (data['checkoutReminderMinutes'] as num?)?.toInt() ??
+          d.checkoutReminderMinutes,
+      overtimeReviewMinutes:
+          (data['overtimeReviewMinutes'] as num?)?.toInt() ??
+          d.overtimeReviewMinutes,
+      maxSessionHours:
+          (data['maxSessionHours'] as num?)?.toInt() ?? d.maxSessionHours,
       operationsEmail: data['operationsEmail'] as String?,
       emergencyPhone: data['emergencyPhone'] as String?,
     );

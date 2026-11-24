@@ -10,6 +10,7 @@ import type { OperationRegistry } from "../operation";
 import { reqId } from "../vars";
 import { reqString } from "../../util/input";
 import { weeklyDaysOffFrom } from "../../util/weeklyDaysOff";
+import { DEFAULT_ATTENDANCE_TIMING } from "../../attendance/sessionPolicy";
 
 type Row = Record<string, unknown>;
 interface MemberRow extends Row {
@@ -31,6 +32,7 @@ interface PayrollSummaryRow {
   unpaidLeaveDays: number;
   unpaidLeaveImpact: number;
   overtimeHours: number;
+  approvedOvertimeHours: number;
   overtimePay: number;
   basePay: number;
   grossPay: number;
@@ -273,7 +275,7 @@ function emptySummary(): PayrollSummaryRow {
   return {
     employeeCount: 0, availableCount: 0, scheduledHours: 0, payableHours: 0,
     actualHours: 0, scheduledWorkdays: 0, payableWorkdays: 0, paidLeaveDays: 0, unpaidLeaveDays: 0,
-    unpaidLeaveImpact: 0, overtimeHours: 0, overtimePay: 0, basePay: 0, grossPay: 0,
+    unpaidLeaveImpact: 0, overtimeHours: 0, approvedOvertimeHours: 0, overtimePay: 0, basePay: 0, grossPay: 0,
   };
 }
 
@@ -282,7 +284,7 @@ function sumCalculations(rows: readonly { calculation: PayrollCalculation }[]): 
   summary.employeeCount = rows.length;
   for (const { calculation } of rows) {
     if (calculation.available === true) summary.availableCount++;
-    for (const key of ["scheduledHours", "payableHours", "actualHours", "scheduledWorkdays", "payableWorkdays", "paidLeaveDays", "unpaidLeaveDays", "unpaidLeaveImpact", "overtimeHours", "overtimePay", "basePay", "grossPay"] as const) {
+    for (const key of ["scheduledHours", "payableHours", "actualHours", "scheduledWorkdays", "payableWorkdays", "paidLeaveDays", "unpaidLeaveDays", "unpaidLeaveImpact", "overtimeHours", "approvedOvertimeHours", "overtimePay", "basePay", "grossPay"] as const) {
       summary[key] += calculation[key];
     }
   }
@@ -302,6 +304,7 @@ function scaleCalculation(calculation: PayrollCalculation, share: number): Payro
     unpaidLeaveDays: scale(calculation.unpaidLeaveDays),
     unpaidLeaveImpact: scale(calculation.unpaidLeaveImpact),
     overtimeHours: scale(calculation.overtimeHours),
+    approvedOvertimeHours: scale(calculation.approvedOvertimeHours),
     overtimePay: scale(calculation.overtimePay),
     basePay: scale(calculation.basePay),
     grossPay: scale(calculation.grossPay),
@@ -372,6 +375,7 @@ async function attendanceForScope(
   const uidSet = new Set(members.map((member) => member.authUid));
   const byUid = new Map<string, PayrollAttendanceSession[]>();
   const seen = new Set<string>();
+  const now = new Date();
   for (const snapshot of snapshots) {
     for (const document of snapshot.docs) {
       if (seen.has(document.id)) continue;
@@ -388,13 +392,39 @@ async function attendanceForScope(
         const startAt = timestampDate(value.startAt);
         return startAt ? [{ startAt, endAt: timestampDate(value.endAt) }] : [];
       }) : [];
-      const record: PayrollAttendanceSession = { workDate, checkInAt, checkOutAt, breaks, status: typeof data.status === "string" ? data.status : undefined };
+      const record: PayrollAttendanceSession = {
+        workDate,
+        checkInAt,
+        checkOutAt,
+        breaks,
+        status: typeof data.status === "string" ? data.status : undefined,
+        openUntil: openSessionEnd(data, checkInAt, checkOutAt, now),
+        approvedOvertimeHours: data.overtimeStatus === "approved"
+          ? Math.max(0, Number(data.approvedOvertimeHours ?? 0))
+          : 0,
+      };
       const items = byUid.get(uid) ?? [];
       items.push(record);
       byUid.set(uid, items);
     }
   }
   return byUid;
+}
+
+/**
+ * Until when an open session counts: now, but never past its expiry (16 hours
+ * after check-in when the entry has none). Closed sessions return null.
+ */
+function openSessionEnd(
+  data: DocumentData,
+  checkInAt: Date | undefined,
+  checkOutAt: Date | undefined,
+  now: Date,
+): Date | null {
+  if (!checkInAt || checkOutAt || data.open === false || data.sessionClosure) return null;
+  const expiresAt = timestampDate(data.sessionExpiresAt) ??
+    new Date(checkInAt.getTime() + DEFAULT_ATTENDANCE_TIMING.maxSessionHours * 60 * 60 * 1000);
+  return new Date(Math.min(now.getTime(), expiresAt.getTime()));
 }
 
 function timestampDate(value: unknown): Date | undefined {

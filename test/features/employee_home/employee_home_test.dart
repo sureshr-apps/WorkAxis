@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
+import 'package:workaxis/features/attendance/data/mock_attendance_exceptions_repository.dart';
+import 'package:workaxis/features/attendance/domain/repositories/attendance_exceptions_repository.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 import 'package:workaxis/features/employee_home/data/mock_employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
@@ -18,6 +20,9 @@ import 'package:workaxis/features/employee_home/presentation/screens/widgets/tod
 import '../../helpers/access_controller_fixture.dart';
 import '../../helpers/access_fixtures.dart';
 import '../../helpers/fallback_maps.dart';
+
+AttendanceExceptionsRepository _noCorrections() =>
+    MockAttendanceExceptionsRepository(entries: const []);
 
 void main() {
   group('Employee Home Repository & Controller', () {
@@ -134,6 +139,9 @@ void main() {
                 ),
                 ChangeNotifierProvider<EmployeeHomeController>.value(
                   value: controller,
+                ),
+                Provider<AttendanceExceptionsRepository>.value(
+                  value: _noCorrections(),
                 ),
               ],
               child: const EmployeeHomeScreen(),
@@ -266,6 +274,9 @@ void main() {
               ChangeNotifierProvider<EmployeeHomeController>.value(
                 value: controller,
               ),
+              Provider<AttendanceExceptionsRepository>.value(
+                value: _noCorrections(),
+              ),
             ],
             child: const EmployeeHomeScreen(),
           ),
@@ -312,6 +323,9 @@ void main() {
               ),
               ChangeNotifierProvider<EmployeeHomeController>.value(
                 value: controller,
+              ),
+              Provider<AttendanceExceptionsRepository>.value(
+                value: _noCorrections(),
               ),
             ],
             child: const EmployeeHomeScreen(),

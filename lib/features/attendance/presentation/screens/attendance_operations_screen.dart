@@ -21,6 +21,7 @@ import 'package:workaxis/features/access/presentation/controllers/branch_context
 import 'package:workaxis/features/attendance/domain/models/attendance_day_summary.dart';
 import 'package:workaxis/features/attendance/presentation/controllers/attendance_controller.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_date_selector.dart';
+import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_exceptions_section.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_records_sliver.dart';
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
 
@@ -100,6 +101,7 @@ class _AttendanceOperationsScreenState
                         isManager: isManager,
                         canReview: canReview,
                         branchName: branchContext?.branchName,
+                        branchId: branchContext?.branchId,
                       ),
                     ),
                   ),
@@ -131,6 +133,7 @@ class _AttendanceOperationsScreenState
     required bool isManager,
     required bool canReview,
     required String? branchName,
+    required String? branchId,
   }) {
     final title = isEmployee
         ? 'My Attendance'
@@ -210,6 +213,15 @@ class _AttendanceOperationsScreenState
             ),
           ],
         ),
+        if (canReview && access != null && (!isManager || branchId != null))
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.lg),
+            child: AttendanceExceptionsSection(
+              access: access,
+              activeBranchId: isManager ? branchId : null,
+              onDecided: _load,
+            ),
+          ),
         const SizedBox(height: AppSpacing.lg),
         Row(
           children: [

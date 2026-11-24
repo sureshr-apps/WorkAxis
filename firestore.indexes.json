@@ -141,6 +141,14 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "attendance_session_state",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "overdueFlagged", "order": "ASCENDING" },
+        { "fieldPath": "checkoutOverdueAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

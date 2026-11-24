@@ -4,6 +4,7 @@ import 'package:excel/excel.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:workaxis/features/payroll/data/payroll_export_rows.dart';
 import 'package:workaxis/features/payroll/domain/models/monthly_payroll.dart';
 
 class PayrollExportService {
@@ -18,44 +19,18 @@ class PayrollExportService {
         'Multi-branch employees are allocated evenly across active assigned branches.',
       ),
     ]);
-    sheet.appendRow([
-      for (final label in [
-        'Branch',
-        'Employees',
-        'Scheduled hours',
-        'Payable hours',
-        'Unpaid leave days',
-        'Overtime hours',
-        'Overtime pay (INR)',
-        'Gross pay (INR)',
-      ])
-        TextCellValue(label),
-    ]);
+    sheet.appendRow([TextCellValue(PayrollExportRows.overtimeNote)]);
+    sheet.appendRow(
+      PayrollExportRows.summaryHeaders.map(TextCellValue.new).toList(),
+    );
     final total = payroll.summary;
     if (total != null) {
-      sheet.appendRow([
-        TextCellValue('All branches'),
-        IntCellValue(total.employeeCount),
-        DoubleCellValue(total.scheduledHours),
-        DoubleCellValue(total.payableHours),
-        DoubleCellValue(total.unpaidLeaveDays),
-        DoubleCellValue(total.overtimeHours),
-        DoubleCellValue(total.overtimePay),
-        DoubleCellValue(total.grossPay),
-      ]);
+      sheet.appendRow(PayrollExportRows.summaryRow('All branches', total));
     }
     for (final branch in payroll.branchSummaries) {
-      final summary = branch.summary;
-      sheet.appendRow([
-        TextCellValue(branch.branchName),
-        IntCellValue(summary.employeeCount),
-        DoubleCellValue(summary.scheduledHours),
-        DoubleCellValue(summary.payableHours),
-        DoubleCellValue(summary.unpaidLeaveDays),
-        DoubleCellValue(summary.overtimeHours),
-        DoubleCellValue(summary.overtimePay),
-        DoubleCellValue(summary.grossPay),
-      ]);
+      sheet.appendRow(
+        PayrollExportRows.summaryRow(branch.branchName, branch.summary),
+      );
     }
     final bytes = workbook.encode();
     if (bytes == null) throw StateError('Could not create the summary export.');
@@ -72,45 +47,13 @@ class PayrollExportService {
     final workbook = Excel.createExcel();
     workbook.rename('Sheet1', 'Monthly Payroll');
     final sheet = workbook['Monthly Payroll'];
-    final headers = [
-      'Employee',
-      'Employee ID',
-      'Role',
-      'Scheduled hours',
-      'Payable hours',
-      'Scheduled days',
-      'Payable days',
-      'Paid leave days',
-      'Unpaid leave days',
-      'Unpaid leave impact (INR)',
-      'Overtime hours',
-      'Overtime pay (INR)',
-      'Base pay (INR)',
-      'Gross pay (INR)',
-      'Status',
-    ];
-    sheet.appendRow(headers.map(TextCellValue.new).toList());
+    sheet.appendRow(
+      PayrollExportRows.monthlyHeaders.map(TextCellValue.new).toList(),
+    );
     for (final record in payroll.records) {
-      sheet.appendRow([
-        TextCellValue(record.fullName),
-        TextCellValue(record.employeeCode ?? ''),
-        TextCellValue(record.role),
-        DoubleCellValue(record.scheduledHours),
-        DoubleCellValue(record.payableHours),
-        IntCellValue(record.scheduledWorkdays),
-        IntCellValue(record.payableWorkdays),
-        IntCellValue(record.paidLeaveDays),
-        IntCellValue(record.unpaidLeaveDays),
-        DoubleCellValue(record.unpaidLeaveImpact),
-        DoubleCellValue(record.overtimeHours),
-        DoubleCellValue(record.overtimePay),
-        DoubleCellValue(record.basePay),
-        DoubleCellValue(record.grossPay),
-        TextCellValue(
-          record.available ? 'Available' : 'Needs schedule or salary history',
-        ),
-      ]);
+      sheet.appendRow(PayrollExportRows.monthlyRow(record));
     }
+    sheet.appendRow([TextCellValue(PayrollExportRows.overtimeNote)]);
     final bytes = workbook.encode();
     if (bytes == null) throw StateError('Could not create the XLSX export.');
     await FileSaver.instance.saveToDownloads(
@@ -149,29 +92,30 @@ class PayrollExportService {
               'This payslip is unavailable because schedule or salary history is missing.',
             )
           else ...[
-            _pdfRow(
-              'Calculation basis',
-              payBasis == 'workdays' ? 'Workdays' : 'Hours',
-            ),
-            _pdfRow('Scheduled hours', _hours(record.scheduledHours)),
-            _pdfRow('Payable hours', _hours(record.payableHours)),
-            _pdfRow('Actual hours', _hours(record.actualHours)),
-            _pdfRow('Scheduled workdays', '${record.scheduledWorkdays}'),
-            _pdfRow('Payable workdays', '${record.payableWorkdays}'),
-            if (record.outsideEmploymentDays > 0)
-              _pdfRow(
-                'Days before joining / after relieving',
-                '${record.outsideEmploymentDays}',
+            for (final (label, value) in PayrollExportRows.payslipLines(
+              record,
+              payBasis: payBasis,
+              overtimeEnabled: overtimeEnabled,
+            ))
+              _pdfRow(label, value),
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 4),
+              child: pw.Text(
+                PayrollExportRows.overtimeNote,
+                style: const pw.TextStyle(fontSize: 9),
               ),
-            _pdfRow('Paid leave days', '${record.paidLeaveDays}'),
-            _pdfRow('Approved unpaid leave days', '${record.unpaidLeaveDays}'),
-            _pdfRow('Unpaid leave impact', _money(record.unpaidLeaveImpact)),
-            _pdfRow('Overtime hours', _hours(record.overtimeHours)),
-            _pdfRow('Overtime policy', overtimeEnabled ? 'Enabled' : 'Off'),
-            _pdfRow('Overtime pay', _money(record.overtimePay)),
+            ),
             pw.Divider(height: 32),
-            _pdfRow('Base pay', _money(record.basePay), bold: true),
-            _pdfRow('Gross pay', _money(record.grossPay), bold: true),
+            _pdfRow(
+              'Base pay',
+              PayrollExportRows.money(record.basePay),
+              bold: true,
+            ),
+            _pdfRow(
+              'Gross pay',
+              PayrollExportRows.money(record.grossPay),
+              bold: true,
+            ),
           ],
         ],
       ),
@@ -206,7 +150,4 @@ class PayrollExportService {
           ],
         ),
       );
-
-  String _money(double value) => 'INR ${value.toStringAsFixed(2)}';
-  String _hours(double value) => '${value.toStringAsFixed(2)} h';
 }

@@ -159,6 +159,21 @@ WorkAxis defines stable domain repository contracts in `lib/features/*/domain/re
 - `AttendanceRepository`:
   - date-scoped attendance listing for an organization, active branch, or employee
   - exception verification and dismissal with role and branch checks
+- `AttendanceExceptionsRepository` (provided app-wide; screens build their own
+  controllers from it):
+  - an employee's sessions with a missing or late check-out, and check-out
+    correction requests (`RequestCheckoutCorrection`)
+  - pending corrections and pending overtime for an organization or active
+    branch, and their approval (`ReviewCheckoutCorrection`, `ReviewOvertime`)
+  - reads come from Firestore (scoped to satisfy the rules); every decision goes
+    through `dataOp`, which updates the attendance entry server-side
+
+Attendance sessions are dated by their shift: a night shift belongs to the day
+it started even when it is checked out after midnight. Scheduled shift end,
+actual check-out and session expiry are separate; `CheckoutStage`
+(`checkout_stage.dart`) derives the in-app reminder and overdue state from the
+deadlines the server stores on each entry. See "Shift sessions, overtime and
+check-out corrections" in `docs/backend-api.md`.
 
 ### Mock Isolation
 
@@ -173,6 +188,7 @@ Mock implementations live exclusively under `lib/features/*/data/`:
 - `MockBranchManagementRepository`: Uses `MockAccessDataSource` as the authoritative branch and user-to-branch assignment source; keeps geofence and kiosk state in branch-specific mock settings. Pairing codes are generated in memory and not persisted.
 - `MockOrganizationMembersRepository`: Stores typed organization member fixtures, enforces role and branch scopes, and updates the access projection after mock profile changes. The initial password is discarded; newly created mock profiles do not authenticate until a future auth integration wires them to Firebase Authentication.
 - `MockAttendanceRepository`: Stores typed daily/history fixtures, scopes employee reads to the current employee and manager reads to the active assigned branch, and supports mock exception review.
+- `MockAttendanceExceptionsRepository`: In-memory check-out corrections and overtime approvals (a night shift with a missing check-out, a pending correction and pending overtime) with the same role and branch scoping.
 
 Controllers interact strictly with the abstract repository interfaces injected via `Provider`. Replacing mock data with real Firebase / PostgreSQL (through the `dataOp` data gateway) data sources requires zero modifications to presentation widgets or controllers.
 

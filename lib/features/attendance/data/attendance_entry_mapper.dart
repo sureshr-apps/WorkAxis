@@ -21,7 +21,50 @@ abstract final class AttendanceEntryMapper {
       breaks: _breaks(data['breaks']),
       note: data['note'] as String?,
       kioskEntry: data['kioskEntry'] as bool? ?? false,
+      scheduledStartAt: instant(data['scheduledStartAt']),
+      scheduledEndAt: instant(data['scheduledEndAt']),
+      scheduledHours: _number(data['scheduledHours']),
+      checkoutReminderAt: instant(data['checkoutReminderAt']),
+      checkoutOverdueAt: instant(data['checkoutOverdueAt']),
+      sessionExpiresAt: instant(data['sessionExpiresAt']),
+      checkoutStatus: _enum(
+        CheckoutStatus.values,
+        data['checkoutStatus'],
+        CheckoutStatus.none,
+      ),
+      sessionClosedAt: _sessionClosedAt(data['sessionClosure']),
+      checkOutCorrected: data['checkOutSource'] == 'correction',
+      potentialOvertimeHours: _number(data['potentialOvertimeHours']) ?? 0,
+      overtimeStatus: _enum(
+        OvertimeStatus.values,
+        data['overtimeStatus'],
+        OvertimeStatus.none,
+      ),
+      approvedOvertimeHours: _number(data['approvedOvertimeHours']),
+      correctionStatus: _enum(
+        CorrectionStatus.values,
+        data['correctionStatus'],
+        CorrectionStatus.none,
+      ),
+      correctionId: data['correctionId'] as String?,
     );
+  }
+
+  /// The closure time; a pending server timestamp still marks the session closed.
+  static DateTime? _sessionClosedAt(Object? closure) {
+    if (closure is! Map) return null;
+    return instant(closure['closedAt']) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  static double? _number(Object? value) =>
+      value is num ? value.toDouble() : null;
+
+  static T _enum<T extends Enum>(List<T> values, Object? raw, T fallback) {
+    for (final value in values) {
+      if (value.name == raw) return value;
+    }
+    return fallback;
   }
 
   /// The business calendar date: `workDateString` wins; otherwise the stored

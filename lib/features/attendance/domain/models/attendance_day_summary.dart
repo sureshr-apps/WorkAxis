@@ -30,11 +30,10 @@ class AttendanceDaySummary {
     sessions.map((session) => session.checkInAt).whereType<DateTime>(),
   );
 
-  /// A day is still in progress while any session is open.
+  /// A day is still in progress while any session is open. A session the
+  /// system closed without a check-out is not open.
   DateTime? get lastCheckOut {
-    if (sessions.any(
-      (session) => session.checkInAt != null && session.checkOutAt == null,
-    )) {
+    if (sessions.any((session) => session.isOpen)) {
       return null;
     }
     return _latest(

@@ -12,6 +12,7 @@ class PayrollRecord {
     required this.unpaidLeaveDays,
     required this.unpaidLeaveImpact,
     required this.overtimeHours,
+    this.approvedOvertimeHours = 0,
     required this.overtimePay,
     required this.basePay,
     required this.grossPay,
@@ -42,7 +43,12 @@ class PayrollRecord {
 
   /// Scheduled days of the month before joining or after relieving (unpaid).
   final int outsideEmploymentDays;
+
+  /// Hours worked beyond the schedule, approved or not.
   final double overtimeHours;
+
+  /// The approved part of [overtimeHours]; only this is paid.
+  final double approvedOvertimeHours;
   final double overtimePay;
   final double basePay;
   final double grossPay;
@@ -67,6 +73,7 @@ class PayrollRecord {
       unpaidLeaveDays: _integer(calculation['unpaidLeaveDays']),
       unpaidLeaveImpact: _number(calculation['unpaidLeaveImpact']),
       overtimeHours: _number(calculation['overtimeHours']),
+      approvedOvertimeHours: _number(calculation['approvedOvertimeHours']),
       overtimePay: _number(calculation['overtimePay']),
       basePay: _number(calculation['basePay']),
       grossPay: _number(calculation['grossPay']),
@@ -119,6 +126,7 @@ class PayrollSummary {
     required this.unpaidLeaveDays,
     required this.unpaidLeaveImpact,
     required this.overtimeHours,
+    this.approvedOvertimeHours = 0,
     required this.overtimePay,
     required this.basePay,
     required this.grossPay,
@@ -135,7 +143,12 @@ class PayrollSummary {
   final double paidLeaveDays;
   final double unpaidLeaveDays;
   final double unpaidLeaveImpact;
+
+  /// Hours worked beyond the schedule, approved or not.
   final double overtimeHours;
+
+  /// The approved part of [overtimeHours]; only this is paid.
+  final double approvedOvertimeHours;
   final double overtimePay;
   final double basePay;
   final double grossPay;
@@ -152,6 +165,7 @@ class PayrollSummary {
     unpaidLeaveDays: _number(json['unpaidLeaveDays']),
     unpaidLeaveImpact: _number(json['unpaidLeaveImpact']),
     overtimeHours: _number(json['overtimeHours']),
+    approvedOvertimeHours: _number(json['approvedOvertimeHours']),
     overtimePay: _number(json['overtimePay']),
     basePay: _number(json['basePay']),
     grossPay: _number(json['grossPay']),

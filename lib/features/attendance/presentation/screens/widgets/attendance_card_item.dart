@@ -7,6 +7,9 @@ import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_day_summary.dart';
 import 'package:workaxis/features/attendance/presentation/attendance_presentation.dart';
+import 'package:workaxis/features/attendance/presentation/attendance_session_presentation.dart';
+import 'package:workaxis/features/attendance/presentation/attendance_time_format.dart';
+import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_shift_status_lines.dart';
 
 /// Responsive card for one employee/day; underlying sessions open in details.
 class AttendanceCardItem extends StatelessWidget {
@@ -33,6 +36,12 @@ class AttendanceCardItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final needsReview = summary.needsReviewCount > 0;
+    final statusLines = AttendanceShiftStatusLines(
+      shiftWindow: summary.shiftWindowLabel,
+      checkoutState: summary.checkoutStateDisplay,
+      overtimeLabel: summary.overtimeLabel,
+      overtimeType: summary.overtimeChipType,
+    );
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
@@ -99,9 +108,13 @@ class AttendanceCardItem extends StatelessWidget {
                   branchNames: branchNames,
                   branchCount: summary.branchIds.length,
                   sessionCount: summary.sessions.length,
-                  firstCheckIn: summary.firstCheckIn,
-                  lastCheckOut: summary.lastCheckOut,
+                  firstCheckIn: AttendanceTimeFormat.time(summary.firstCheckIn),
+                  lastCheckOut: summary.lastCheckOutLabel,
                 ),
+                if (!statusLines.isEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  statusLines,
+                ],
                 if (needsReview) ...[
                   const SizedBox(height: AppSpacing.sm),
                   Row(
@@ -152,8 +165,8 @@ class _InfoPanel extends StatelessWidget {
   final String branchNames;
   final int branchCount;
   final int sessionCount;
-  final DateTime? firstCheckIn;
-  final DateTime? lastCheckOut;
+  final String firstCheckIn;
+  final String lastCheckOut;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -201,14 +214,14 @@ class _InfoPanel extends StatelessWidget {
               child: _TimeLabel(
                 icon: Icons.login_rounded,
                 label: 'First in',
-                time: firstCheckIn,
+                value: firstCheckIn,
               ),
             ),
             Expanded(
               child: _TimeLabel(
                 icon: Icons.logout_rounded,
                 label: 'Last out',
-                time: lastCheckOut,
+                value: lastCheckOut,
               ),
             ),
           ],
@@ -222,12 +235,12 @@ class _TimeLabel extends StatelessWidget {
   const _TimeLabel({
     required this.icon,
     required this.label,
-    required this.time,
+    required this.value,
   });
 
   final IconData icon;
   final String label;
-  final DateTime? time;
+  final String value;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -236,7 +249,7 @@ class _TimeLabel extends StatelessWidget {
       const SizedBox(width: AppSpacing.xs),
       Flexible(
         child: Text(
-          '$label: ${AppFormatters.formatTime(time, placeholder: time == null ? 'In progress' : '—')}',
+          '$label: $value',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppTypography.labelMono.copyWith(fontSize: 11),

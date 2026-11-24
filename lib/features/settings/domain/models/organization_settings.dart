@@ -27,6 +27,10 @@ class OrganizationSettings {
     this.requireBranchManagerAttendance = false,
     this.payCalculationBasis = PayCalculationBasis.hours,
     this.overtimeEnabled = false,
+    this.earlyCheckInMinutes = 120,
+    this.checkoutReminderMinutes = 30,
+    this.overtimeReviewMinutes = 240,
+    this.maxSessionHours = 16,
     this.operationsEmail,
     this.emergencyPhone,
   });
@@ -60,6 +64,19 @@ class OrganizationSettings {
   final bool requireBranchManagerAttendance;
   final PayCalculationBasis payCalculationBasis;
   final bool overtimeEnabled;
+
+  /// How long before a shift starts a check-in still counts toward it.
+  final int earlyCheckInMinutes;
+
+  /// How long after the shift ends the employee is reminded to check out.
+  final int checkoutReminderMinutes;
+
+  /// Overtime allowed after the shift ends before an open session is
+  /// flagged for the manager (a later check-out is still recorded).
+  final int overtimeReviewMinutes;
+
+  /// After this long an open session is closed as a missing check-out.
+  final int maxSessionHours;
   final String? operationsEmail;
   final String? emergencyPhone;
 
@@ -75,6 +92,10 @@ class OrganizationSettings {
     bool? requireBranchManagerAttendance,
     PayCalculationBasis? payCalculationBasis,
     bool? overtimeEnabled,
+    int? earlyCheckInMinutes,
+    int? checkoutReminderMinutes,
+    int? overtimeReviewMinutes,
+    int? maxSessionHours,
     String? operationsEmail,
     String? emergencyPhone,
   }) => OrganizationSettings(
@@ -93,6 +114,11 @@ class OrganizationSettings {
         requireBranchManagerAttendance ?? this.requireBranchManagerAttendance,
     payCalculationBasis: payCalculationBasis ?? this.payCalculationBasis,
     overtimeEnabled: overtimeEnabled ?? this.overtimeEnabled,
+    earlyCheckInMinutes: earlyCheckInMinutes ?? this.earlyCheckInMinutes,
+    checkoutReminderMinutes:
+        checkoutReminderMinutes ?? this.checkoutReminderMinutes,
+    overtimeReviewMinutes: overtimeReviewMinutes ?? this.overtimeReviewMinutes,
+    maxSessionHours: maxSessionHours ?? this.maxSessionHours,
     operationsEmail: operationsEmail ?? this.operationsEmail,
     emergencyPhone: emergencyPhone ?? this.emergencyPhone,
   );
@@ -112,11 +138,15 @@ class OrganizationSettings {
       other.requireBranchManagerAttendance == requireBranchManagerAttendance &&
       other.payCalculationBasis == payCalculationBasis &&
       other.overtimeEnabled == overtimeEnabled &&
+      other.earlyCheckInMinutes == earlyCheckInMinutes &&
+      other.checkoutReminderMinutes == checkoutReminderMinutes &&
+      other.overtimeReviewMinutes == overtimeReviewMinutes &&
+      other.maxSessionHours == maxSessionHours &&
       other.operationsEmail == operationsEmail &&
       other.emergencyPhone == emergencyPhone;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     geofenceRadiusMeters,
     gracePeriodMinutes,
     allowBreaks,
@@ -128,7 +158,11 @@ class OrganizationSettings {
     requireBranchManagerAttendance,
     payCalculationBasis,
     overtimeEnabled,
+    earlyCheckInMinutes,
+    checkoutReminderMinutes,
+    overtimeReviewMinutes,
+    maxSessionHours,
     operationsEmail,
     emergencyPhone,
-  );
+  ]);
 }

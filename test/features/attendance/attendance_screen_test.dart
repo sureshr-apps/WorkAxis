@@ -9,9 +9,11 @@ import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/domain/models/user_access_context.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
+import 'package:workaxis/features/attendance/data/mock_attendance_exceptions_repository.dart';
 import 'package:workaxis/features/attendance/data/mock_attendance_repository.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
+import 'package:workaxis/features/attendance/domain/repositories/attendance_exceptions_repository.dart';
 import 'package:workaxis/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:workaxis/features/attendance/presentation/controllers/attendance_controller.dart';
 import 'package:workaxis/features/attendance/presentation/screens/attendance_details_screen.dart';
@@ -97,6 +99,7 @@ void main() {
     required UserRole role,
     double width = 1200,
     AttendanceRepository? repository,
+    AttendanceExceptionsRepository? exceptionsRepository,
     String userId = 'user-oa-01',
   }) async {
     tester.view.physicalSize = Size(width, 1400);
@@ -140,6 +143,15 @@ void main() {
           ),
           Provider<OrganizationMembersRepository>.value(
             value: membersRepository,
+          ),
+          Provider<AttendanceExceptionsRepository>.value(
+            value:
+                exceptionsRepository ??
+                MockAttendanceExceptionsRepository(
+                  now: fixedNow,
+                  entries: [],
+                  corrections: [],
+                ),
           ),
         ],
         child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),

@@ -6,13 +6,15 @@ import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_day_summary.dart';
 import 'package:workaxis/features/attendance/presentation/attendance_presentation.dart';
+import 'package:workaxis/features/attendance/presentation/attendance_session_presentation.dart';
+import 'package:workaxis/features/attendance/presentation/attendance_time_format.dart';
 
 /// Column flex weights shared by the daily summary table header and rows.
 abstract final class AttendanceTableColumns {
   static const int employee = 4;
   static const int branches = 4;
-  static const int checkIn = 2;
-  static const int checkOut = 2;
+  static const int checkIn = 3;
+  static const int checkOut = 3;
   static const int sessions = 2;
   static const int status = 2;
   static const int review = 3;
@@ -64,11 +66,14 @@ class AttendanceTableRow extends StatelessWidget {
             ),
             Expanded(
               flex: AttendanceTableColumns.checkIn,
-              child: _TimeCell(time: summary.firstCheckIn),
+              child: _TimeCell(
+                label: AttendanceTimeFormat.time(summary.firstCheckIn),
+                shiftWindow: summary.shiftWindowLabel,
+              ),
             ),
             Expanded(
               flex: AttendanceTableColumns.checkOut,
-              child: _TimeCell(time: summary.lastCheckOut, inProgress: true),
+              child: _CheckOutCell(summary: summary),
             ),
             Expanded(
               flex: AttendanceTableColumns.sessions,
@@ -89,17 +94,7 @@ class AttendanceTableRow extends StatelessWidget {
             ),
             Expanded(
               flex: AttendanceTableColumns.review,
-              child: Text(
-                summary.needsReviewCount == 0
-                    ? 'No review'
-                    : '${summary.needsReviewCount} pending',
-                style: AppTypography.bodySmall.copyWith(
-                  color: summary.needsReviewCount > 0
-                      ? AppColors.statusPendingText
-                      : AppColors.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: _ReviewCell(summary: summary),
             ),
             SizedBox(
               width: AttendanceTableColumns.actions,
@@ -180,17 +175,81 @@ class _EmployeeCell extends StatelessWidget {
 }
 
 class _TimeCell extends StatelessWidget {
-  const _TimeCell({required this.time, this.inProgress = false});
+  const _TimeCell({required this.label, this.shiftWindow});
 
-  final DateTime? time;
-  final bool inProgress;
+  final String label;
+  final String? shiftWindow;
 
   @override
-  Widget build(BuildContext context) => Text(
-    AppFormatters.formatTime(
-      time,
-      placeholder: inProgress ? 'In progress' : '—',
-    ),
-    style: AppTypography.labelMono,
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(label, style: AppTypography.labelMono),
+      if (shiftWindow != null)
+        Text(
+          shiftWindow!,
+          style: AppTypography.labelSmall.copyWith(color: AppColors.kpiMuted),
+        ),
+    ],
   );
+}
+
+/// Last check-out with its state chip (overdue, missing, late, corrected).
+class _CheckOutCell extends StatelessWidget {
+  const _CheckOutCell({required this.summary});
+
+  final AttendanceDaySummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = summary.checkoutStateDisplay;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(summary.lastCheckOutLabel, style: AppTypography.labelMono),
+        if (state != null) ...[
+          const SizedBox(height: AppSpacing.xxs),
+          StatusChip(label: state.label, type: state.type, width: null),
+        ],
+      ],
+    );
+  }
+}
+
+/// Review count plus overtime awaiting or past approval.
+class _ReviewCell extends StatelessWidget {
+  const _ReviewCell({required this.summary});
+
+  final AttendanceDaySummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = summary.needsReviewCount;
+    final overtime = summary.overtimeLabel;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          pending == 0 ? 'No review' : '$pending pending',
+          style: AppTypography.bodySmall.copyWith(
+            color: pending > 0
+                ? AppColors.statusPendingText
+                : AppColors.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (overtime != null) ...[
+          const SizedBox(height: AppSpacing.xxs),
+          StatusChip(
+            label: overtime,
+            type: summary.overtimeChipType,
+            width: null,
+          ),
+        ],
+      ],
+    );
+  }
 }

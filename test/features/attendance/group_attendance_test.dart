@@ -9,9 +9,11 @@ import 'package:workaxis/features/access/data/mock_access_data_source.dart';
 import 'package:workaxis/features/access/data/mock_access_repository.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
+import 'package:workaxis/features/attendance/data/mock_attendance_exceptions_repository.dart';
 import 'package:workaxis/features/attendance/data/mock_attendance_repository.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 import 'package:workaxis/features/attendance/domain/models/group_attendance_request.dart';
+import 'package:workaxis/features/attendance/domain/repositories/attendance_exceptions_repository.dart';
 import 'package:workaxis/features/attendance/presentation/controllers/attendance_controller.dart';
 import 'package:workaxis/features/attendance/presentation/screens/attendance_operations_screen.dart';
 import 'package:workaxis/features/attendance/presentation/screens/group_attendance_screen.dart';
@@ -199,6 +201,13 @@ void main() {
             ),
             Provider<OrganizationMembersRepository>.value(
               value: membersRepository,
+            ),
+            Provider<AttendanceExceptionsRepository>.value(
+              value: MockAttendanceExceptionsRepository(
+                now: fixedNow,
+                entries: [],
+                corrections: [],
+              ),
             ),
           ],
           child: MaterialApp.router(

@@ -32,10 +32,12 @@ class MockPayrollRepository implements PayrollRepository {
       payableWorkdays: 25,
       unpaidLeaveDays: 1,
       unpaidLeaveImpact: 961.54,
-      overtimeHours: 0,
-      overtimePay: 0,
+      // 3.5 h worked beyond the schedule, 2 h approved: only those are paid.
+      overtimeHours: 3.5,
+      approvedOvertimeHours: 2,
+      overtimePay: 245.28,
       basePay: 24038.46,
-      grossPay: 24038.46,
+      grossPay: 24283.74,
     );
 
     final sample = record(
@@ -55,6 +57,7 @@ class MockPayrollRepository implements PayrollRepository {
       unpaidLeaveDays: sample.unpaidLeaveDays.toDouble(),
       unpaidLeaveImpact: sample.unpaidLeaveImpact,
       overtimeHours: sample.overtimeHours,
+      approvedOvertimeHours: sample.approvedOvertimeHours,
       overtimePay: sample.overtimePay,
       basePay: sample.basePay,
       grossPay: sample.grossPay,
@@ -68,7 +71,7 @@ class MockPayrollRepository implements PayrollRepository {
     return MonthlyPayroll(
       month: month,
       basis: 'hours',
-      overtimeEnabled: false,
+      overtimeEnabled: true,
       records: switch (view) {
         PayrollView.self => [sample],
         PayrollView.employee => selectedMemberId == null ? const [] : [sample],

@@ -192,6 +192,12 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
           0,
           (sum, record) => sum + record.overtimeHours,
         );
+    final approvedOvertimeHours =
+        payroll?.summary?.approvedOvertimeHours ??
+        availableRecords.fold<double>(
+          0,
+          (sum, record) => sum + record.approvedOvertimeHours,
+        );
     final overtimePay =
         payroll?.summary?.overtimePay ??
         availableRecords.fold<double>(
@@ -355,6 +361,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                     payableHours: payableHours,
                     payableWorkdays: payableWorkdays,
                     overtimeHours: overtimeHours,
+                    approvedOvertimeHours: approvedOvertimeHours,
                     overtimePay: overtimePay,
                   ),
                   if (isSummaryView) ...[

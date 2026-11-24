@@ -15,6 +15,7 @@ import 'package:workaxis/features/attendance/data/attendance_entry_mapper.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart'
     hide AttendanceStatus;
 import 'package:workaxis/features/authentication/domain/models/user_role.dart';
+import 'package:workaxis/features/employee_home/data/employee_session_day_reader.dart';
 import 'package:workaxis/features/employee_home/domain/models/attendance_session.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_policy.dart';
@@ -30,8 +31,10 @@ import 'package:workaxis/features/returns/domain/repositories/returns_repository
 
 /// Production [EmployeeHomeRepository].
 ///
-/// Reads the signed-in user's own entry for today from `attendance_entries`
-/// (queried by uid, as `firestore.rules` require). Punches are recorded only
+/// Reads the signed-in user's own entries from `attendance_entries` (queried
+/// by uid, as `firestore.rules` require): today's, or the shift day of a
+/// session still open after midnight (see [EmployeeSessionDayReader]).
+/// Punches are recorded only
 /// through the `recordAttendancePunch` callable: the server stamps the time,
 /// computes the business day and validates the geofence. When required, the
 /// client uploads a selfie and sends its storage reference with the punch.
@@ -48,7 +51,12 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
        _customFunctions = functions,
        _location =
            locationProvider ?? const UnavailableAttendanceLocationProvider(),
-       _now = now ?? systemNow;
+       _now = now ?? systemNow {
+    _sessions = EmployeeSessionDayReader(
+      firestore: () => _firestore,
+      now: _now,
+    );
+  }
 
   /// Name of the punch callable (see `docs/backend-api.md`).
   static const String punchCallable = 'recordAttendancePunch';
@@ -61,6 +69,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   final EmployeeWorkforceRepository? _workforceRepository;
   final ReturnsRepository? _returnsRepository;
   final Now _now;
+  late final EmployeeSessionDayReader _sessions;
 
   FirebaseFirestore get _firestore =>
       _customFirestore ?? FirebaseFirestore.instance;
@@ -75,16 +84,16 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     try {
       _requireAttendanceUser(access);
       final policyFuture = _fetchAttendancePolicy();
-      final entriesFuture = _todayEntries(access.user.id);
+      final dayFuture = _sessions.read(access.user.id);
       final monthlyEntriesFuture = _monthlyEntries(access.user.id);
       final policy = await policyFuture;
       _requireManagerAttendanceEnabled(access, policy);
       final returnCountsFuture = _loadOwnReturnCounts(access);
-      final entries = await entriesFuture;
+      final day = await dayFuture;
       final monthlyEntries = await monthlyEntriesFuture;
       return await _summarize(
         access,
-        entries,
+        day,
         monthlyEntries: monthlyEntries,
         policy: policy,
         requestLocationPermission: requestLocationPermission,
@@ -116,10 +125,11 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
   }) async {
     try {
       _requireAttendanceUser(access);
-      final todayEntries = await _todayEntries(access.user.id);
-      final activeEntry = _activeEntry(todayEntries);
+      // The open session may belong to yesterday's shift (a night shift
+      // after midnight); the server finds it the same way.
+      final day = await _sessions.read(access.user.id);
       final selectedBranch = _punchBranch(access);
-      final sessionBranch = _branchForEntry(access, activeEntry);
+      final sessionBranch = _branchForEntry(access, day.openEntry);
       if (access.user.role == UserRole.employee &&
           action != AttendanceAction.checkIn &&
           sessionBranch != null &&
@@ -256,24 +266,6 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     return active.length == 1 ? active.single : null;
   }
 
-  Future<List<Map<String, dynamic>>> _todayEntries(String uid) async {
-    final key = BusinessTime.keyOfInstant(_now());
-    final snapshot = await _firestore
-        .collection('attendance_entries')
-        .where('employeeId', isEqualTo: uid)
-        .where('workDateString', isEqualTo: key)
-        .get();
-    final entries = snapshot.docs.map((document) => document.data()).toList();
-    entries.sort(
-      (a, b) =>
-          (AttendanceEntryMapper.instant(a['checkInAt']) ?? DateTime(1970))
-              .compareTo(
-                AttendanceEntryMapper.instant(b['checkInAt']) ?? DateTime(1970),
-              ),
-    );
-    return entries;
-  }
-
   Future<List<AttendanceEntry>?> _monthlyEntries(String uid) async {
     final today = BusinessTime.today(_now);
     final startKey = BusinessTime.keyOfDate(DateTime(today.year, today.month));
@@ -303,21 +295,11 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     }
   }
 
-  Map<String, dynamic>? _activeEntry(List<Map<String, dynamic>> entries) {
-    for (final entry in entries.reversed) {
-      if (AttendanceEntryMapper.instant(entry['checkInAt']) != null &&
-          AttendanceEntryMapper.instant(entry['checkOutAt']) == null) {
-        return entry;
-      }
-    }
-    return null;
-  }
-
   BranchSummary? _branchForEntry(
     UserAccessContext access,
-    Map<String, dynamic>? entry,
+    SessionDayEntry? entry,
   ) {
-    final branchId = entry?['branchId'];
+    final branchId = entry?.data['branchId'];
     if (branchId is! String) return null;
     return access.assignedBranches
         .where((branch) => branch.id == branchId)
@@ -347,20 +329,22 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
 
   Future<EmployeeHomeSummary> _summarize(
     UserAccessContext access,
-    List<Map<String, dynamic>> entries, {
+    SessionDay day, {
     required List<AttendanceEntry>? monthlyEntries,
     required EmployeeAttendancePolicy policy,
     required bool requestLocationPermission,
     required ({int pending, int approved})? returnCounts,
   }) async {
-    final current =
-        _activeEntry(entries) ?? (entries.isEmpty ? null : entries.last);
-    final checkIn = AttendanceEntryMapper.instant(current?['checkInAt']);
-    final checkOut = AttendanceEntryMapper.instant(current?['checkOutAt']);
-    final breaks = _breaks(current?['breaks']);
-    final onBreak = breaks.any((b) => b.end == null);
+    final entries = day.entries;
+    final current = day.current;
+    final checkIn = current?.checkInAt;
+    final checkOut = current?.checkOutAt;
+    // A session the system closed has no check-out and is no longer running.
+    final missingCheckOut = current?.closedWithoutCheckOut ?? false;
+    final breaks = _breaks(current?.data['breaks']);
+    final onBreak = !missingCheckOut && breaks.any((b) => b.end == null);
 
-    final status = checkOut != null
+    final status = checkOut != null || missingCheckOut
         ? AttendanceStatus.checkedOut
         : onBreak
         ? AttendanceStatus.onBreak
@@ -368,9 +352,9 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
         ? AttendanceStatus.checkedIn
         : AttendanceStatus.notCheckedIn;
 
-    final recordedByManager = current?['source'] == 'manager-group';
+    final recordedByManager = current?.data['source'] == 'manager-group';
 
-    final activeSession = _activeEntry(entries);
+    final activeSession = day.openEntry;
     final branch = activeSession == null
         ? _displayBranch(access)
         : _branchForEntry(access, activeSession);
@@ -424,14 +408,16 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
           activeBranchId: access.activeBranch?.branchId,
         );
         scheduleHistory = history.schedules;
-        final todayKey = BusinessTime.keyOfInstant(_now());
+        // The schedule of the shift day shown, which is yesterday while an
+        // overnight session is still open.
+        final dayKey = day.dayKey;
         final schedule = history.schedules.where((version) {
           final from = _dateKey(version.effectiveFrom);
           final to = version.effectiveTo == null
               ? null
               : _dateKey(version.effectiveTo!);
-          return from.compareTo(todayKey) <= 0 &&
-              (to == null || todayKey.compareTo(to) < 0);
+          return from.compareTo(dayKey) <= 0 &&
+              (to == null || dayKey.compareTo(to) < 0);
         }).firstOrNull;
         if (schedule != null) {
           dailyWorkHours = schedule.dailyWorkHours;
@@ -472,7 +458,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       totalWorked += duration;
       if (index != currentIndex) previousWorkedSeconds += duration.inSeconds;
     }
-    final session = checkIn == null
+    final session = checkIn == null || missingCheckOut
         ? null
         : AttendanceSession(
             checkIn: checkIn,
@@ -500,6 +486,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
       checkInTime: AppFormatters.formatTime(checkIn, placeholder: '-- : --'),
       checkInNote: recordedByManager ? 'Recorded by your manager' : null,
       checkOutTime: AppFormatters.formatTime(checkOut, placeholder: '-- : --'),
+      checkOutNote: missingCheckOut ? 'Check-out missing' : null,
       workingDuration: AttendanceSession.formatDuration(worked),
       shiftProgress: progress,
       elapsedActive: AttendanceSession.formatDuration(worked),
@@ -524,6 +511,7 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
                 ? branch.geofenceRadiusMeters
                 : policy.defaultGeofenceRadiusMeters),
       session: session,
+      attendanceEntry: current?.toAttendanceEntry(),
     );
   }
 
@@ -596,13 +584,14 @@ class FirestoreEmployeeHomeRepository implements EmployeeHomeRepository {
     ];
   }
 
-  Duration _workedDuration(Map<String, dynamic> entry, DateTime now) {
-    final start = AttendanceEntryMapper.instant(entry['checkInAt']);
-    if (start == null) return Duration.zero;
-    final checkOut = AttendanceEntryMapper.instant(entry['checkOutAt']);
-    final end = checkOut ?? now;
+  /// Worked time of one session. A session closed without a check-out counts
+  /// nothing until a correction supplies the real check-out.
+  Duration _workedDuration(SessionDayEntry entry, DateTime now) {
+    final start = entry.checkInAt;
+    if (start == null || entry.closedWithoutCheckOut) return Duration.zero;
+    final end = entry.checkOutAt ?? now;
     var worked = end.difference(start);
-    for (final pause in _breaks(entry['breaks'])) {
+    for (final pause in _breaks(entry.data['breaks'])) {
       final pauseEnd = pause.end ?? end;
       if (!pause.start.isAfter(end)) {
         worked -= pauseEnd.isAfter(end)

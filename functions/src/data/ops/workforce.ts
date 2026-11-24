@@ -5,6 +5,7 @@ import type { OperationRegistry } from "../operation";
 import { parseDate, reqDate, reqId } from "../vars";
 import { reqNumber, reqString } from "../../util/input";
 import { parseWeeklyDaysOff, weeklyDaysOffFrom } from "../../util/weeklyDaysOff";
+import { parseShiftHours } from "../../attendance/shiftWindow";
 import { selectOne } from "../sql";
 
 type Row = Record<string, unknown>;
@@ -237,19 +238,7 @@ function businessDate(value: Date): string {
 }
 
 function parseShiftDurationHours(value: string): number {
-  const match = value.match(/^\s*(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)\s*$/i);
-  if (!match) throw invalid("Shift must use a start and end time such as 09:00 AM - 05:00 PM.");
-  const [, startHourText, startMinuteText, startMeridiem, endHourText, endMinuteText, endMeridiem] = match;
-  const minutes = (hourText: string, minuteText: string, meridiem: string): number => {
-    const hour = Number(hourText);
-    const minute = Number(minuteText);
-    if (hour < 1 || hour > 12 || minute < 0 || minute > 59) throw invalid("Shift time is invalid.");
-    return ((hour % 12) + (meridiem.toUpperCase() === "PM" ? 12 : 0)) * 60 + minute;
-  };
-  const start = minutes(startHourText, startMinuteText, startMeridiem);
-  let end = minutes(endHourText, endMinuteText, endMeridiem);
-  if (end <= start) end += 24 * 60;
-  return (end - start) / 60;
+  return parseShiftHours(value).durationMinutes / 60;
 }
 
 function dateOnly(value: string | Date): string {

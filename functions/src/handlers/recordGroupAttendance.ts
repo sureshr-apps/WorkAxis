@@ -15,7 +15,14 @@ import {
   parseGroupAttendance,
   type RecordedSession,
 } from "../attendance/groupRules";
+import {
+  SESSION_STATE,
+  sessionStateData,
+  shiftFields,
+} from "../attendance/attendanceStore";
 import { assertScheduledWorkday } from "../attendance/punchRules";
+import { attendanceTiming, sessionDeadlines } from "../attendance/sessionPolicy";
+import { shiftOn, type ShiftWindow } from "../attendance/shiftWindow";
 import { weeklyDaysOffFrom } from "../util/weeklyDaysOff";
 import { callableOptions } from "../config";
 import { conflict, guarded, notFound } from "../errors";
@@ -49,9 +56,12 @@ export const recordGroupAttendance = onCall(callableOptions, (request) =>
     const scheduleRows = await database.query<{
       memberId: string;
       weeklyDaysOff: number[];
+      shiftHours: string;
+      dailyWorkHours: number | string;
     }>(
       `SELECT DISTINCT ON (member_id) member_id AS "memberId",
-              weekly_days_off AS "weeklyDaysOff"
+              weekly_days_off AS "weeklyDaysOff", shift_hours AS "shiftHours",
+              daily_work_hours AS "dailyWorkHours"
          FROM employee_schedule_history
         WHERE member_id = ANY($1::text[]) AND effective_from <= $2::date
           AND (effective_to IS NULL OR effective_to > $2::date)
@@ -64,6 +74,22 @@ export const recordGroupAttendance = onCall(callableOptions, (request) =>
     for (const member of attendees) {
       assertScheduledWorkday(input.workDate, dayOffByMember.get(member.id) ?? [0]);
     }
+    // The shift each attendee is scheduled for on the chosen day, so the
+    // session gets the same overdue and expiry handling as a self check-in.
+    const shiftByMember = new Map<string, ShiftWindow | null>(
+      scheduleRows.map((row) => [
+        row.memberId,
+        shiftOn([{
+          effectiveFrom: input.workDate,
+          shiftHours: row.shiftHours,
+          dailyWorkHours: Number(row.dailyWorkHours),
+          weeklyDaysOff: weeklyDaysOffFrom(row.weeklyDaysOff),
+        }], input.workDate),
+      ]),
+    );
+    const timing = attendanceTiming(
+      (await firestore.collection("organization_settings").doc(branch.organizationId).get()).data(),
+    );
     const batchId = `${actor.uid}_${input.requestId}`;
     const batchRef = firestore
       .collection("group_attendance_batches")
@@ -75,12 +101,9 @@ export const recordGroupAttendance = onCall(callableOptions, (request) =>
     const refs = attendees.map((member) =>
       entries.doc(`${member.authUid}_${input.workDate}_${actor.uid}_${input.requestId}`),
     );
-    const legacyRefs = attendees.map((member) =>
-      entries.doc(`${member.authUid}_${input.workDate}`),
-    );
+    // One open-session document per employee (see recordAttendancePunch).
     const stateRefs = attendees.map((member) =>
-      firestore.collection("attendance_session_state")
-        .doc(`${member.authUid}_${input.workDate}`),
+      firestore.collection(SESSION_STATE).doc(member.authUid),
     );
     await firestore.runTransaction(async (tx) => {
       const existingBatch = await tx.get(batchRef);
@@ -92,9 +115,7 @@ export const recordGroupAttendance = onCall(callableOptions, (request) =>
         return;
       }
       const states = await Promise.all(stateRefs.map((ref) => tx.get(ref)));
-      const legacy = await Promise.all(legacyRefs.map((ref) => tx.get(ref)));
-      if (states.some((doc) => doc.exists && doc.get("activeEntryId")) ||
-          legacy.some((doc) => doc.exists && doc.get("checkInAt") && !doc.get("checkOutAt")))
+      if (states.some((doc) => doc.exists && doc.get("activeEntryId")))
         throw conflict(
           "Some selected employees already have an open attendance session.",
         );
@@ -111,6 +132,9 @@ export const recordGroupAttendance = onCall(callableOptions, (request) =>
           "Some selected employees already have attendance after this check-in time.",
         );
       }
+      const deadlines = attendees.map((member) =>
+        sessionDeadlines(input.checkInAt, shiftByMember.get(member.id) ?? null, timing),
+      );
       attendees.forEach((member, index) =>
         tx.create(refs[index], {
           id: refs[index].id,
@@ -127,17 +151,20 @@ export const recordGroupAttendance = onCall(callableOptions, (request) =>
           note: input.note,
           kioskEntry: false,
           source: "manager-group",
+          ...shiftFields(shiftByMember.get(member.id) ?? null, deadlines[index]),
           createdAt: FieldValue.serverTimestamp(),
         }),
       );
       attendees.forEach((member, index) =>
-        tx.set(stateRefs[index], {
+        tx.set(stateRefs[index], sessionStateData({
           employeeId: member.authUid,
-          workDateString: input.workDate,
-          activeEntryId: refs[index].id,
+          organizationId: branch.organizationId,
           branchId: branch.id,
-          updatedAt: FieldValue.serverTimestamp(),
-        }),
+          entryId: refs[index].id,
+          workDate: input.workDate,
+          checkInAt: input.checkInAt,
+          deadlines: deadlines[index],
+        })),
       );
       tx.create(batchRef, {
         id: batchId,

@@ -10,7 +10,7 @@ const fullMonth: Omit<PayrollCalculationInput, "attendance" | "basis" | "overtim
   asOf: new Date("2026-11-30T18:30:00.000Z"),
 };
 
-test("hours basis caps base pay at scheduled hours and pays overtime separately at 1x", () => {
+test("hours basis caps base pay at scheduled hours and pays approved overtime separately at 1x", () => {
   const result = calculatePayroll({
     ...fullMonth,
     basis: "hours",
@@ -21,13 +21,75 @@ test("hours basis caps base pay at scheduled hours and pays overtime separately 
       checkOutAt: new Date("2026-11-02T13:30:00Z"),
       breaks: [{ startAt: new Date("2026-11-02T07:30:00Z"), endAt: new Date("2026-11-02T08:30:00Z") }],
       status: "present",
+      approvedOvertimeHours: 1,
     }],
   });
   assert.equal(result.actualHours, 9);
   assert.equal(result.payableHours, 8);
   assert.equal(result.overtimeHours, 1);
+  assert.equal(result.approvedOvertimeHours, 1);
   assert.equal(result.overtimePay, 30000 / result.scheduledHours);
   assert.equal(result.grossPay, result.basePay + result.overtimePay);
+});
+
+test("overtime is paid only once approved and never beyond the hours worked", () => {
+  const session = {
+    workDate: "2026-11-02",
+    checkInAt: new Date("2026-11-02T03:30:00Z"),
+    checkOutAt: new Date("2026-11-02T13:30:00Z"), // 10 hours, 2 beyond the schedule
+    status: "present",
+  };
+  const run = (approvedOvertimeHours?: number) => calculatePayroll({
+    ...fullMonth,
+    basis: "hours",
+    overtimeEnabled: true,
+    attendance: [{ ...session, approvedOvertimeHours }],
+  });
+  const pending = run();
+  assert.equal(pending.overtimeHours, 2);
+  assert.equal(pending.approvedOvertimeHours, 0);
+  assert.equal(pending.overtimePay, 0);
+  const partly = run(1.5);
+  assert.equal(partly.approvedOvertimeHours, 1.5);
+  assert.equal(partly.overtimePay, Math.round(30000 * 1.5 / partly.scheduledHours * 100) / 100);
+  // Approval above what was worked pays only the worked overtime.
+  assert.equal(run(5).approvedOvertimeHours, 2);
+});
+
+test("a night shift counts on the day it started and an open session counts only until its limit", () => {
+  // Monday 9 PM to Tuesday 5 AM (IST) belongs to Monday 2 November.
+  const night = calculatePayroll({
+    ...fullMonth,
+    basis: "hours",
+    overtimeEnabled: false,
+    attendance: [{
+      workDate: "2026-11-02",
+      checkInAt: new Date("2026-11-02T15:30:00Z"),
+      checkOutAt: new Date("2026-11-02T23:30:00Z"),
+      status: "present",
+    }],
+  });
+  assert.equal(night.actualHours, 8);
+  assert.equal(night.payableHours, 8);
+
+  const open = (openUntil: Date | null, status = "present") => calculatePayroll({
+    ...fullMonth,
+    basis: "hours",
+    overtimeEnabled: false,
+    asOf: new Date("2026-11-03T00:30:00Z"),
+    attendance: [{
+      workDate: "2026-11-02",
+      checkInAt: new Date("2026-11-02T15:30:00Z"),
+      status,
+      openUntil,
+    }],
+  });
+  // Still open after midnight: counts until now (asOf), 9 hours.
+  assert.equal(open(new Date("2026-11-03T07:30:00Z")).actualHours, 9);
+  // A missing check-out (closed by the system) counts nothing until corrected.
+  const missing = open(null, "incomplete");
+  assert.equal(missing.actualHours, 0);
+  assert.equal(missing.payableWorkdays, 0);
 });
 
 test("overtime disabled excludes excess hours from pay", () => {

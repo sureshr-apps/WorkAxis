@@ -5,6 +5,7 @@ import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/features/payroll/domain/models/monthly_payroll.dart';
+import 'package:workaxis/features/payroll/presentation/payroll_overtime_labels.dart';
 
 class PayrollRecordCard extends StatelessWidget {
   const PayrollRecordCard({
@@ -139,8 +140,18 @@ class PayrollRecordCard extends StatelessWidget {
                   _PayrollDetailLine(
                     label: 'Overtime',
                     value:
-                        '${record.overtimeHours.toStringAsFixed(2)} h · ${_money(record.overtimePay)}',
+                        '${PayrollOvertimeLabels.approvedOfPotential(record.approvedOvertimeHours, record.overtimeHours)} · ${_money(record.overtimePay)}',
                     valueColor: AppColors.statusActiveText,
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      PayrollOvertimeLabels.paidNote,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
                   ),
                 ],
               ],

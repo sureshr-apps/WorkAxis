@@ -2,10 +2,18 @@ import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onCall } from "firebase-functions/v2/https";
 import { resolveActor } from "../auth/actor";
-import { weeklyDaysOffFrom } from "../util/weeklyDaysOff";
+import {
+  ENTRIES,
+  SESSION_STATE,
+  loadScheduleSpans,
+  recomputeDayOvertime,
+  sessionStateData,
+  shiftFields,
+} from "../attendance/attendanceStore";
+import { attendanceTiming, sessionDeadlines } from "../attendance/sessionPolicy";
+import { resolveShift, type ResolvedShift } from "../attendance/shiftWindow";
 import {
   PUNCH_KINDS,
-  assertScheduledWorkday,
   assertInsideGeofence,
   assertPunchAllowed,
   type BreakSpan,
@@ -66,14 +74,13 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
     if (!member) throw denied();
 
     const now = new Date();
-    const workDate = workDateString(now);
     const firestore = getFirestore();
-    const entries = firestore.collection("attendance_entries");
-    const stateRef = firestore.collection("attendance_session_state")
-      .doc(`${actor.uid}_${workDate}`);
-    const legacyRef = entries.doc(`${actor.uid}_${workDate}`);
+    const entries = firestore.collection(ENTRIES);
+    // One open-session document per employee, whatever the date, so a night
+    // shift (or overtime) can be closed after midnight.
+    const stateRef = firestore.collection(SESSION_STATE).doc(actor.uid);
     const initialState = await stateRef.get();
-    let activeEntryId = typeof initialState.get("activeEntryId") === "string"
+    const activeEntryId = typeof initialState.get("activeEntryId") === "string"
       ? initialState.get("activeEntryId") as string
       : null;
     let branchId: string;
@@ -84,15 +91,7 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
         ? initialState.get("branchId") as string
         : "";
     } else {
-      // Supports existing daily documents and manager-recorded check-ins while
-      // they are active. The transaction below rechecks this legacy state.
-      const legacy = await legacyRef.get();
-      const legacyData = legacy.data();
-      if (!legacy.exists || !legacyData?.checkInAt || legacyData.checkOutAt) {
-        throw precondition("Check in before recording this attendance action.");
-      }
-      activeEntryId = legacy.id;
-      branchId = typeof legacyData.branchId === "string" ? legacyData.branchId : "";
+      throw precondition("Check in before recording this attendance action.");
     }
     if (!branchId || !actor.branchIds.includes(branchId)) {
       throw denied("You are not assigned to the active attendance branch.");
@@ -101,22 +100,22 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
     if (!branch || branch.status !== "active") throw notFound("Branch not found.");
     if (branch.organizationId !== actor.organizationId) throw denied();
 
-    const database = await getDb();
-    const schedule = await database.query<{ weeklyDaysOff: number[] }>(
-      `SELECT weekly_days_off AS "weeklyDaysOff"
-         FROM employee_schedule_history
-        WHERE member_id = $1 AND effective_from <= $2::date
-          AND (effective_to IS NULL OR effective_to > $2::date)
-        ORDER BY effective_from DESC LIMIT 1`,
-      [member.id, workDate],
-    );
-    // Without a schedule version Sunday stays the day off, as before.
-    const weeklyDaysOff = schedule.length ? weeklyDaysOffFrom(schedule[0].weeklyDaysOff) : [0];
-    assertScheduledWorkday(workDate, weeklyDaysOff);
+    const settingsRef = firestore.collection("organization_settings").doc(branch.organizationId);
+    const timing = attendanceTiming((await settingsRef.get()).data());
+    // A check-in belongs to the shift it starts (a night shift keeps the day
+    // it began); later punches keep the open session's shift date.
+    let workDate: string;
+    let shift: ResolvedShift | null = null;
+    if (kind === "checkIn") {
+      const spans = await loadScheduleSpans(await getDb(), member.id, workDateString(now));
+      shift = resolveShift(now, spans, timing.earlyCheckInMinutes);
+      workDate = shift.shiftDate;
+    } else {
+      workDate = typeof initialState.get("workDateString") === "string"
+        ? initialState.get("workDateString") as string
+        : workDateString(now);
+    }
 
-    const settingsRef = getFirestore()
-      .collection("organization_settings")
-      .doc(branch.organizationId);
     if (selfiePath) {
       await validateSelfieObject(selfiePath, {
         organizationId: branch.organizationId,
@@ -133,25 +132,15 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
     await firestore.runTransaction(async (tx) => {
       distanceMeters = null;
       const state = await tx.get(stateRef);
-      const legacy = await tx.get(legacyRef);
       const guardedEntryId = typeof state.get("activeEntryId") === "string"
         ? state.get("activeEntryId") as string
         : null;
       if (kind === "checkIn") {
-        const legacyData = legacy.data();
-        const legacyOpen = legacy.exists && !!legacyData?.checkInAt && !legacyData?.checkOutAt;
-        if (guardedEntryId || legacyOpen) {
+        if (guardedEntryId) {
           throw precondition("Finish your current branch session before checking in again.");
         }
-      } else {
-        const transactionEntryId = guardedEntryId ?? (
-          legacy.exists && legacy.get("checkInAt") && !legacy.get("checkOutAt")
-            ? legacy.id
-            : null
-        );
-        if (!transactionEntryId || transactionEntryId !== activeEntryId) {
-          throw precondition("Your active attendance session changed. Refresh and try again.");
-        }
+      } else if (!guardedEntryId || guardedEntryId !== activeEntryId) {
+        throw precondition("Your active attendance session changed. Refresh and try again.");
       }
       const targetRef = kind === "checkIn" ? newEntryRef! : ref!;
       const snap = kind === "checkIn" ? null : await tx.get(targetRef);
@@ -197,6 +186,7 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
       }
 
       if (kind === "checkIn") {
+        const deadlines = sessionDeadlines(now, shift!.window, timing);
         tx.create(newEntryRef!, {
           id: newEntryRef!.id,
           organizationId: branch.organizationId,
@@ -212,22 +202,37 @@ export const recordAttendancePunch = onCall(callableOptions, (request) =>
           breaks: [],
           kioskEntry: false,
           source: "employee-app",
+          ...shiftFields(shift!.window, deadlines),
           createdAt: FieldValue.serverTimestamp(),
         });
-        tx.set(stateRef, {
+        tx.set(stateRef, sessionStateData({
           employeeId: actor.uid,
-          workDateString: workDate,
-          activeEntryId: newEntryRef!.id,
+          organizationId: branch.organizationId,
           branchId,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+          entryId: newEntryRef!.id,
+          workDate,
+          checkInAt: now,
+          deadlines,
+        }));
         return;
       }
       const stored = (data?.breaks as StoredBreak[] | undefined) ?? [];
       if (kind === "checkOut") {
-        tx.update(targetRef, {
-          checkOutAt: stamp,
-          ...(selfiePath ? { checkOutSelfiePath: selfiePath } : {}),
+        // A check-out after the overtime allowance is recorded as it happened
+        // but flagged for the manager to verify.
+        const overdueAt = data?.checkoutOverdueAt instanceof Timestamp
+          ? data.checkoutOverdueAt.toDate()
+          : null;
+        const late = overdueAt !== null && now.getTime() > overdueAt.getTime();
+        await recomputeDayOvertime(firestore, tx, actor.uid, branch.organizationId, workDate, {
+          id: targetRef.id,
+          checkOutAt: now,
+          extra: {
+            checkOutAt: stamp,
+            open: false,
+            ...(selfiePath ? { checkOutSelfiePath: selfiePath } : {}),
+            ...(late ? { checkoutStatus: "late", reviewStatus: "needsReview" } : {}),
+          },
         });
         tx.delete(stateRef);
       } else if (kind === "breakStart") {

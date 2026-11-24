@@ -4,6 +4,7 @@ import 'package:workaxis/app/theme/app_colors.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
 import 'package:workaxis/features/payroll/domain/models/monthly_payroll.dart';
+import 'package:workaxis/features/payroll/presentation/payroll_overtime_labels.dart';
 
 class BranchPayrollSummaryCard extends StatelessWidget {
   const BranchPayrollSummaryCard({
@@ -119,7 +120,7 @@ class BranchPayrollSummaryCard extends StatelessWidget {
                 _BranchMetric(
                   icon: Icons.more_time_outlined,
                   label:
-                      '${summary.overtimeHours.toStringAsFixed(1)} overtime h',
+                      '${PayrollOvertimeLabels.approvedOfPotential(summary.approvedOvertimeHours, summary.overtimeHours, decimals: 1)} overtime',
                   color: AppColors.statusActiveText,
                 ),
             ],

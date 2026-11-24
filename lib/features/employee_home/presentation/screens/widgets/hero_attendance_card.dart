@@ -10,6 +10,9 @@ import 'package:workaxis/core/widgets/status_chip.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 import 'package:workaxis/features/employee_home/presentation/attendance_status_presentation.dart';
+import 'package:workaxis/features/employee_home/presentation/formatting/business_time_text.dart';
+import 'package:workaxis/features/employee_home/presentation/models/checkout_notice.dart';
+import 'package:workaxis/features/employee_home/presentation/screens/widgets/checkout_notice_banner.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/hero_metric.dart';
 
 /// Hero attendance card: shift, check-in/out telemetry, progress and the
@@ -22,10 +25,15 @@ class HeroAttendanceCard extends StatelessWidget {
     required this.onPrimaryAction,
     this.processingAction,
     this.onCheckOut,
+    this.checkoutNotice,
   });
 
   final EmployeeHomeSummary summary;
   final bool isProcessing;
+
+  /// Reminder shown once the open session's shift has ended; check-out stays
+  /// available.
+  final CheckoutNotice? checkoutNotice;
 
   /// The action being recorded; only its button shows progress.
   final AttendanceAction? processingAction;
@@ -58,6 +66,10 @@ class HeroAttendanceCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _header(status),
+                if (checkoutNotice != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  CheckoutNoticeBanner(notice: checkoutNotice!),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 _telemetry(status),
                 const SizedBox(height: AppSpacing.lg),
@@ -172,6 +184,18 @@ class HeroAttendanceCard extends StatelessWidget {
     );
   }
 
+  /// The session's scheduled window in business time (e.g. `Shift 9:00 PM –
+  /// 5:00 AM` for a night shift), else the configured shift hours.
+  String? get _scheduleLabel {
+    final entry = summary.attendanceEntry;
+    final window = BusinessTimeText.shiftWindow(
+      entry?.scheduledStartAt,
+      entry?.scheduledEndAt,
+    );
+    if (window != null) return window;
+    return _has(summary.shiftHours) ? 'Scheduled ${summary.shiftHours}' : null;
+  }
+
   Widget _progress(AttendanceStatus status) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -213,10 +237,10 @@ class HeroAttendanceCard extends StatelessWidget {
             ),
           ),
         ),
-        if (_has(summary.shiftHours)) ...[
+        if (_scheduleLabel case final schedule?) ...[
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Scheduled ${summary.shiftHours}',
+            schedule,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTypography.labelMono.copyWith(

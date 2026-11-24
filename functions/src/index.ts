@@ -17,6 +17,7 @@ export { deleteOrganizationMember } from "./handlers/deleteOrganizationMember";
 export { updateUserAccount } from "./handlers/updateUserAccount";
 
 export { recordGroupAttendance } from "./handlers/recordGroupAttendance";
+export { sweepAttendanceSessions } from "./handlers/sweepAttendanceSessions";
 
 export { reconcileIdentitySync } from "./accounts/identitySync";
 

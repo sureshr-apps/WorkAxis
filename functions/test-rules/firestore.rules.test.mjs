@@ -157,7 +157,66 @@ describe("employee_private", () => {
   });
 });
 
+describe("attendance_corrections", () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const d = ctx.firestore();
+      await setDoc(doc(d, "attendance_corrections/c1"), {
+        organizationId: "o1", branchId: "b1", employeeId: "emp", entryId: "e1", status: "pending",
+      });
+      await setDoc(doc(d, "attendance_corrections/c2"), {
+        organizationId: "o1", branchId: "b9", employeeId: "emp2", entryId: "e2", status: "pending",
+      });
+    });
+  });
+
+  it("is readable by the employee, the org admin and branch managers of the branch", async () => {
+    await assertSucceeds(getDoc(doc(db("emp"), "attendance_corrections/c1")));
+    await assertSucceeds(getDoc(doc(db("orgAdmin"), "attendance_corrections/c1")));
+    await assertSucceeds(getDoc(doc(db("bm"), "attendance_corrections/c1")));
+    await assertSucceeds(getDoc(doc(db("owner"), "attendance_corrections/c1")));
+    await assertFails(getDoc(doc(db("bm"), "attendance_corrections/c2")));
+    await assertFails(getDoc(doc(db("emp"), "attendance_corrections/c2")));
+    await assertFails(getDoc(doc(db("orgAdmin2"), "attendance_corrections/c1")));
+    await assertFails(getDoc(doc(db("suspendedBm"), "attendance_corrections/c1")));
+  });
+
+  it("is written only by the server", async () => {
+    await assertFails(setDoc(doc(db("emp"), "attendance_corrections/c3"), {
+      organizationId: "o1", branchId: "b1", employeeId: "emp", entryId: "e1", status: "pending",
+    }));
+    await assertFails(updateDoc(doc(db("orgAdmin"), "attendance_corrections/c1"), { status: "approved" }));
+    await assertFails(deleteDoc(doc(db("orgAdmin"), "attendance_corrections/c1")));
+  });
+});
+
+describe("attendance_session_state", () => {
+  it("is closed to every client", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "attendance_session_state/emp"), { employeeId: "emp", activeEntryId: "e1" });
+    });
+    await assertFails(getDoc(doc(db("emp"), "attendance_session_state/emp")));
+    await assertFails(setDoc(doc(db("emp"), "attendance_session_state/emp"), { activeEntryId: "x" }));
+    await assertFails(getDoc(doc(db("orgAdmin"), "attendance_session_state/emp")));
+  });
+});
+
 describe("attendance_entries read", () => {
+  it("lets an employee find their open session on any date", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "attendance_entries/night"), entry({
+        id: "night", workDateString: "2026-11-06", open: true,
+      }));
+    });
+    const open = query(
+      collection(db("emp"), "attendance_entries"),
+      where("employeeId", "==", "emp"),
+      where("open", "==", true),
+    );
+    const snapshot = await assertSucceeds(getDocs(open));
+    assert.deepEqual(snapshot.docs.map((d) => d.id), ["night"]);
+  });
+
   it("scopes reads by role", async () => {
     await assertSucceeds(getDoc(doc(db("owner"), "attendance_entries/e3")));
     await assertSucceeds(getDoc(doc(db("orgAdmin"), "attendance_entries/e2")));
@@ -357,6 +416,31 @@ describe("settings", () => {
     await assertFails(setDoc(ref(), orgSettings({ updatedAt: Timestamp.fromDate(new Date(0)) })));
     await assertSucceeds(setDoc(ref(), orgSettings({ geofenceRadiusMeters: 10, gracePeriodMinutes: 120 })));
     await assertFails(deleteDoc(ref()));
+  });
+
+  it("organization settings: validates the attendance session timing", async () => {
+    const ref = () => doc(db("orgAdmin"), "organization_settings/o1");
+    const timing = {
+      earlyCheckInMinutes: 120,
+      checkoutReminderMinutes: 30,
+      overtimeReviewMinutes: 240,
+      maxSessionHours: 16,
+    };
+    await assertSucceeds(setDoc(ref(), orgSettings(timing)));
+    await assertSucceeds(setDoc(ref(), orgSettings({
+      earlyCheckInMinutes: 0, checkoutReminderMinutes: 0, overtimeReviewMinutes: 0, maxSessionHours: 8,
+    })));
+    for (const bad of [
+      { earlyCheckInMinutes: 481 },
+      { checkoutReminderMinutes: 241 },
+      { overtimeReviewMinutes: 721 },
+      { maxSessionHours: 7 },
+      { maxSessionHours: 25 },
+      { maxSessionHours: 16.5 },
+      { earlyCheckInMinutes: "120" },
+    ]) {
+      await assertFails(setDoc(ref(), orgSettings({ ...timing, ...bad })));
+    }
   });
 
   it("platform settings: platform roles read, only owner writes", async () => {

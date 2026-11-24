@@ -9,6 +9,8 @@ import type { MemberRecord } from "../sql/members";
 /** Firestore collections whose documents are explicitly scoped to an org. */
 export const ORGANIZATION_SCOPED_COLLECTIONS = [
   "attendance_entries",
+  "attendance_corrections",
+  "attendance_session_state",
   "group_attendance_batches",
   "kiosk_pairing_tokens",
   // Defensive: a no-op when the collection holds nothing for the org.

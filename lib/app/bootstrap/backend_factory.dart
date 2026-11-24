@@ -25,8 +25,11 @@ import 'package:workaxis/features/assets/data/mock_assets_repository.dart';
 import 'package:workaxis/features/assets/data/sql_connect_assets_repository.dart';
 import 'package:workaxis/features/assets/domain/repositories/assets_repository.dart';
 import 'package:workaxis/features/attendance/data/attendance_day_counter.dart';
+import 'package:workaxis/features/attendance/data/firestore_attendance_exceptions_repository.dart';
 import 'package:workaxis/features/attendance/data/firestore_attendance_repository.dart';
+import 'package:workaxis/features/attendance/data/mock_attendance_exceptions_repository.dart';
 import 'package:workaxis/features/attendance/data/mock_attendance_repository.dart';
+import 'package:workaxis/features/attendance/domain/repositories/attendance_exceptions_repository.dart';
 import 'package:workaxis/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:workaxis/features/authentication/data/firebase_auth_repository.dart';
 import 'package:workaxis/features/authentication/data/mock_auth_repository.dart';
@@ -103,6 +106,7 @@ class BackendRepositories {
     required this.organizationMembersRepository,
     required this.assetsRepository,
     required this.attendanceRepository,
+    required this.attendanceExceptionsRepository,
     required this.returnsRepository,
     required this.leavesRepository,
     required this.leavePolicyRepository,
@@ -127,6 +131,7 @@ class BackendRepositories {
   final OrganizationMembersRepository organizationMembersRepository;
   final AssetsRepository assetsRepository;
   final AttendanceRepository attendanceRepository;
+  final AttendanceExceptionsRepository attendanceExceptionsRepository;
   final ReturnsRepository returnsRepository;
   final LeavesRepository leavesRepository;
   final LeavePolicyRepository leavePolicyRepository;
@@ -246,6 +251,10 @@ class BackendFactory {
           firestore: firestore,
           now: now,
         ),
+        attendanceExceptionsRepository: FirestoreAttendanceExceptionsRepository(
+          gateway: data,
+          firestore: firestore,
+        ),
         returnsRepository: returnsRepository,
         leavesRepository: SqlConnectLeavesRepository(gateway: data),
         leavePolicyRepository: SqlConnectLeavePolicyRepository(gateway: data),
@@ -333,6 +342,9 @@ class BackendFactory {
         now: now,
       ),
       attendanceRepository: MockAttendanceRepository(),
+      attendanceExceptionsRepository: MockAttendanceExceptionsRepository(
+        now: now,
+      ),
       returnsRepository: delay == null
           ? MockReturnsRepository()
           : MockReturnsRepository(delay: delay),

@@ -1,3 +1,5 @@
+import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart'
+    show AttendanceEntry;
 import 'package:workaxis/features/employee_home/domain/models/attendance_session.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 
@@ -108,10 +110,15 @@ class EmployeeHomeSummary {
     this.recentReturnStatus,
     String? recentReturnItem,
     this.session,
+    this.attendanceEntry,
   });
 
   /// Today's attendance times, when the employee has checked in.
   final AttendanceSession? session;
+
+  /// The attendance record shown (the open session, else the shift day's
+  /// latest), with its scheduled shift and check-out deadlines.
+  final AttendanceEntry? attendanceEntry;
 
   /// This summary with the running time measured at [now]. Only a session still
   /// in progress changes; anything else is returned as it is.
@@ -200,6 +207,8 @@ class EmployeeHomeSummary {
       recentReturnSubtitle: recentReturnSubtitle ?? this.recentReturnSubtitle,
       recentReturnOffice: recentReturnOffice ?? this.recentReturnOffice,
       recentReturnStatus: recentReturnStatus ?? this.recentReturnStatus,
+      session: session,
+      attendanceEntry: attendanceEntry,
     );
   }
 }

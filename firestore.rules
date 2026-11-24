@@ -246,6 +246,19 @@ service cloud.firestore {
         request.resource.data.reviewedAt == request.time;
     }
 
+    // Check-out correction requests: created and decided by the dataOp
+    // callable (RequestCheckoutCorrection / ReviewCheckoutCorrection), which
+    // updates the attendance entry in the same transaction.
+    match /attendance_corrections/{correctionId} {
+      allow read: if isActive() && (
+        isPlatform() ||
+        isOrgAdminOf(resource.data.organizationId) ||
+        isBranchManagerOf(resource.data.organizationId, resource.data.branchId) ||
+        resource.data.employeeId == request.auth.uid
+      );
+      allow create, update, delete: if false;
+    }
+
     // ---------------------------------------------------------------
     // 4. Group attendance batches (immutable audit log)
     // ---------------------------------------------------------------
@@ -290,6 +303,8 @@ service cloud.firestore {
           'requireAttendanceSelfie',
           'requireBranchManagerAttendance',
           'payCalculationBasis', 'overtimeEnabled',
+          'earlyCheckInMinutes', 'checkoutReminderMinutes',
+          'overtimeReviewMinutes', 'maxSessionHours',
           'operationsEmail', 'emergencyPhone', 'updatedBy', 'updatedAt'
         ]) &&
         hasRequiredFields([
@@ -313,6 +328,10 @@ service cloud.firestore {
         (!('payCalculationBasis' in data) ||
           data.payCalculationBasis in ['hours', 'workdays']) &&
         (!('overtimeEnabled' in data) || data.overtimeEnabled is bool) &&
+        (!('earlyCheckInMinutes' in data) || isIntInRange(data.earlyCheckInMinutes, 0, 480)) &&
+        (!('checkoutReminderMinutes' in data) || isIntInRange(data.checkoutReminderMinutes, 0, 240)) &&
+        (!('overtimeReviewMinutes' in data) || isIntInRange(data.overtimeReviewMinutes, 0, 720)) &&
+        (!('maxSessionHours' in data) || isIntInRange(data.maxSessionHours, 8, 24)) &&
         isValidOptionalString('operationsEmail', 3, 254) &&
         isValidOptionalString('emergencyPhone', 1, 32) &&
         data.updatedBy == request.auth.uid &&

@@ -10,6 +10,7 @@ import 'package:workaxis/app/theme/app_theme.dart';
 import 'package:workaxis/core/session/session_scoped.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
+import 'package:workaxis/features/attendance/domain/repositories/attendance_exceptions_repository.dart';
 import 'package:workaxis/features/attendance/presentation/controllers/attendance_controller.dart';
 import 'package:workaxis/features/assets/presentation/controllers/assets_controller.dart';
 import 'package:workaxis/features/authentication/presentation/controllers/auth_controller.dart';
@@ -259,6 +260,10 @@ class _WorkAxisAppState extends State<WorkAxisApp> {
         ),
         ChangeNotifierProvider<AttendanceController>.value(
           value: _attendanceController,
+        ),
+        // Screens create their own exception controllers from this.
+        Provider<AttendanceExceptionsRepository>.value(
+          value: widget.repositories.attendanceExceptionsRepository,
         ),
         ChangeNotifierProvider<ReturnsController>.value(
           value: _returnsController,

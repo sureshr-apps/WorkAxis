@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:workaxis/app/theme/app_spacing.dart';
 import 'package:workaxis/app/theme/app_typography.dart';
-import 'package:workaxis/core/formatting/date_time_formatters.dart';
 import 'package:workaxis/core/widgets/app_button.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 import 'package:workaxis/features/attendance/presentation/attendance_presentation.dart';
+import 'package:workaxis/features/attendance/presentation/attendance_session_presentation.dart';
+import 'package:workaxis/features/attendance/presentation/attendance_time_format.dart';
+import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_shift_status_lines.dart';
 import 'package:workaxis/features/attendance/presentation/widgets/attendance_selfie_evidence.dart';
 import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
@@ -39,18 +41,25 @@ class AttendanceSessionDetailsCard extends StatelessWidget {
         Text('Session $index', style: AppTypography.titleMedium),
         const SizedBox(height: AppSpacing.sm),
         _Detail(label: 'Branch', value: branchName),
+        if (entry.shiftWindowLabel != null)
+          _Detail(label: 'Shift', value: entry.shiftWindowLabel!),
         _Detail(
           label: 'Check-in',
-          value: AppFormatters.formatTime(entry.checkInAt, placeholder: '—'),
+          value: AttendanceTimeFormat.time(entry.checkInAt),
         ),
-        _Detail(
-          label: 'Check-out',
-          value: AppFormatters.formatTime(
-            entry.checkOutAt,
-            placeholder: 'In progress',
-          ),
-        ),
+        _Detail(label: 'Check-out', value: entry.checkOutLabel),
         _Detail(label: 'Status', value: entry.status.label),
+        if (entry.overtimeLabel != null)
+          _Detail(label: 'Overtime', value: entry.overtimeLabel!),
+        if (entry.checkoutStateDisplay != null ||
+            entry.correctionLabel != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          AttendanceShiftStatusLines(
+            checkoutState: entry.checkoutStateDisplay,
+            correctionLabel: entry.correctionLabel,
+            showDetail: true,
+          ),
+        ],
         _Detail(
           label: 'Source',
           value: entry.kioskEntry ? 'Kiosk terminal' : 'Mobile app',

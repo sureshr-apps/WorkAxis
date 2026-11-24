@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -11,11 +13,17 @@ import 'package:workaxis/core/widgets/error_state.dart';
 import 'package:workaxis/features/access/presentation/controllers/branch_context_controller.dart';
 import 'package:workaxis/features/access/presentation/controllers/access_controller.dart';
 import 'package:workaxis/features/access/domain/models/branch_summary.dart';
+import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart'
+    show AttendanceEntry;
+import 'package:workaxis/features/attendance/domain/repositories/attendance_exceptions_repository.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_attendance_state.dart';
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
+import 'package:workaxis/features/employee_home/presentation/controllers/checkout_corrections_controller.dart';
 import 'package:workaxis/features/employee_home/presentation/controllers/employee_home_controller.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/active_geofence_card.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/attendance_summary_card.dart';
+import 'package:workaxis/features/employee_home/presentation/screens/widgets/checkout_correction_dialog.dart';
+import 'package:workaxis/features/employee_home/presentation/screens/widgets/checkout_corrections_card.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/employee_returns_card.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/hero_attendance_card.dart';
 import 'package:workaxis/features/employee_home/presentation/screens/widgets/home_header_badges.dart';
@@ -34,6 +42,12 @@ class EmployeeHomeScreen extends StatefulWidget {
 class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   bool _isPreparingAttendanceAction = false;
 
+  /// Screen-owned: the corrections list lives and dies with this screen.
+  late final CheckoutCorrectionsController _corrections =
+      CheckoutCorrectionsController(
+        repository: context.read<AttendanceExceptionsRepository>(),
+      );
+
   @override
   void initState() {
     super.initState();
@@ -43,11 +57,18 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _corrections.dispose();
+    super.dispose();
+  }
+
   /// [requestLocationPermission] is true only for the explicit location
   /// refresh button; entry and pull-to-refresh never show the OS prompt.
   Future<void> _load({bool requestLocationPermission = false}) async {
     final access = context.read<AccessController>().accessContext;
     if (access == null) return;
+    unawaited(_corrections.load(access: access));
     final branchController = context.read<BranchContextController>();
     final homeController = context.read<EmployeeHomeController>();
     final activeBranch = branchController.activeBranch;
@@ -170,8 +191,27 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
               onPrimaryAction: () => _handlePrimaryAction(controller),
               onCheckOut: () =>
                   _handlePrimaryAction(controller, checkOut: true),
+              checkoutNotice: controller.checkoutNotice,
             ),
             const SizedBox(height: AppSpacing.lg),
+            ListenableBuilder(
+              listenable: _corrections,
+              builder: (context, _) {
+                if (!CheckoutCorrectionsCard.isVisible(_corrections)) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                  child: CheckoutCorrectionsCard(
+                    controller: _corrections,
+                    // Not awaited: the tile button must not spin while
+                    // the dialog is open.
+                    onRequestCorrection: (entry) =>
+                        unawaited(_openCorrection(entry)),
+                  ),
+                );
+              },
+            ),
             ActiveGeofenceCard(
               summary: summary,
               onRefreshLocation: summary.requireGeolocation
@@ -219,6 +259,26 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           ],
         );
       },
+    );
+  }
+
+  Future<void> _openCorrection(AttendanceEntry entry) async {
+    _corrections.clearSubmitError();
+    final sent = await showCheckoutCorrectionDialog(
+      context: context,
+      entry: entry,
+      onSubmit: (checkOutAt, reason) => _corrections.requestCorrection(
+        entryId: entry.id,
+        checkOutAt: checkOutAt,
+        reason: reason,
+      ),
+      failureMessage: () => _corrections.submitErrorMessage,
+    );
+    if (!mounted || sent != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Correction request sent. Your manager will review it.'),
+      ),
     );
   }
 

@@ -27,16 +27,20 @@ Future<bool> confirmAttendanceReview(
     confirmLabel: 'Continue',
     onConfirm: onConfirm,
     failureMessage: failureMessage,
-    dialogBuilder: (context, content, actions) =>
-        _DialogShell(title: title, actions: actions, children: [content]),
+    dialogBuilder: (context, content, actions) => AttendanceDialogShell(
+      title: title,
+      actions: actions,
+      children: [content],
+    ),
   );
 }
 
 /// Bounded, scrollable dialog frame. A plain [Dialog] is used instead of
 /// `AlertDialog` because the latter measures its content and actions
 /// intrinsically, which `AppButton` (a `LayoutBuilder`) cannot answer.
-class _DialogShell extends StatelessWidget {
-  const _DialogShell({
+class AttendanceDialogShell extends StatelessWidget {
+  const AttendanceDialogShell({
+    super.key,
     required this.title,
     required this.children,
     required this.actions,

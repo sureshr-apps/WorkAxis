@@ -12,6 +12,7 @@ import 'package:workaxis/features/employee_home/domain/models/employee_attendanc
 import 'package:workaxis/features/employee_home/domain/models/employee_home_summary.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_repository.dart';
 import 'package:workaxis/features/employee_home/domain/repositories/employee_home_simulator.dart';
+import 'package:workaxis/features/employee_home/presentation/models/checkout_notice.dart';
 
 enum EmployeeHomeStatus { initial, loading, loaded, error }
 
@@ -60,6 +61,11 @@ class EmployeeHomeController extends ChangeNotifier
   /// The summary with elapsed time measured now, so a running shift keeps
   /// moving between loads.
   EmployeeHomeSummary? get summary => _summary?.atTime(_now());
+
+  /// In-app reminder for an open session whose shift has ended, measured now.
+  /// The running-session ticker keeps it current.
+  CheckoutNotice? get checkoutNotice =>
+      CheckoutNotice.of(_summary?.attendanceEntry, _now());
 
   /// Failure from the last load attempt.
   String? get errorMessage => _errorMessage;

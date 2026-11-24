@@ -10,6 +10,8 @@ import 'package:workaxis/core/widgets/page_breadcrumb.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_day_summary.dart';
 import 'package:workaxis/features/attendance/domain/models/attendance_entry.dart';
 import 'package:workaxis/features/attendance/presentation/attendance_presentation.dart';
+import 'package:workaxis/features/attendance/presentation/attendance_session_presentation.dart';
+import 'package:workaxis/features/attendance/presentation/attendance_time_format.dart';
 import 'package:workaxis/features/attendance/presentation/screens/widgets/attendance_session_details_card.dart';
 import 'package:workaxis/shared/widgets/dashboard_surface_card.dart';
 
@@ -79,18 +81,24 @@ class AttendanceDetailsScreen extends StatelessWidget {
                         _SummaryDetail(label: 'Branches', value: branches),
                         _SummaryDetail(
                           label: 'First check-in',
-                          value: AppFormatters.formatTime(
+                          value: AttendanceTimeFormat.time(
                             summary.firstCheckIn,
-                            placeholder: '—',
                           ),
                         ),
                         _SummaryDetail(
                           label: 'Last check-out',
-                          value: AppFormatters.formatTime(
-                            summary.lastCheckOut,
-                            placeholder: 'In progress',
-                          ),
+                          value: summary.lastCheckOutLabel,
                         ),
+                        if (summary.shiftWindowLabel != null)
+                          _SummaryDetail(
+                            label: 'Shift',
+                            value: summary.shiftWindowLabel!,
+                          ),
+                        if (summary.overtimeLabel != null)
+                          _SummaryDetail(
+                            label: 'Overtime',
+                            value: summary.overtimeLabel!,
+                          ),
                         _SummaryDetail(
                           label: 'Daily status',
                           value: summary.status.label,

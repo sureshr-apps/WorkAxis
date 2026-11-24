@@ -116,8 +116,9 @@ Details:
   mitigations.
 - `recordAttendancePunch`: Employee self-service punches and Branch Manager
   self-service punches when `requireBranchManagerAttendance` is enabled. The
-  server stamps time and the `workDate`
-  (`YYYY-MM-DD`) in `Asia/Kolkata` (`BUSINESS_TIMEZONE` in `config.ts`).
+  server stamps time in `Asia/Kolkata` (`BUSINESS_TIMEZONE` in `config.ts`)
+  and dates each session by its shift (see "Shift sessions, overtime and
+  check-out corrections" below), so a night shift keeps the day it started.
   When `requireGeolocation` is not `false`, geofence validation uses branch
   coordinates and a positive branch radius from SQL, falling back to
   `organization_settings.geofenceRadiusMeters` (150 m if missing or invalid).
@@ -125,8 +126,9 @@ Details:
   branches with no (or 0,0) coordinates. When the setting is `false`, GPS fields
   are optional and geofence validation is skipped. `allowBreaks: false` rejects
   new break starts but still allows an employee to resume an already-open break.
-  Writes `attendance_entries/{uid}_{workDate}` (one per self-service user per day) and
-  enforces the check-in/break/check-out state machine.
+  Each check-in creates a new `attendance_entries` document (several sessions
+  per day are allowed, one open at a time) and the punch callable enforces the
+  check-in/break/check-out state machine.
   Entries gain `breaks: [{startAt, endAt?, startSelfiePath?, endSelfiePath?}]`
   and optional `checkInSelfiePath` / `checkOutSelfiePath`. When the
   organization's `requireAttendanceSelfie` setting is enabled, every
@@ -139,8 +141,8 @@ Details:
   `requireBranchManagerAttendance`, and organization default radius, not the
   rest of organization settings. The Branch Manager flag defaults to false;
   selfie, GPS, and break settings retain their existing defaults. The
-  response distance is `null` when geolocation is disabled. Status is always
-  `present` (no shift schedule exists in the data model yet).
+  response distance is `null` when geolocation is disabled. Status is
+  `present` at check-in (lateness is not computed yet).
 - `createKioskPairingToken`: 256-bit random token, 10-minute expiry, only the
   SHA-256 is stored in `kiosk_pairing_tokens/{hash}`. Redemption by the kiosk
   device is not implemented yet.
@@ -664,11 +666,12 @@ backfill operation was removed after verifying that the Cloud SQL organization
 table was empty on 22 November 2026.
 
 Self-service attendance entries remain in Firestore. Each session is a
-separate `attendance_entries` document. The trusted punch callable maintains
-`attendance_session_state/{uid}_{workDate}` to enforce one open session,
-checks out against the branch recorded for that session, and allows a later
-session at another assigned branch. Effective weekly days off block
-self-service and group attendance punches. Attendance reads remain limited by
+separate `attendance_entries` document. The trusted punch and group
+attendance callables maintain one `attendance_session_state/{uid}` document
+per employee while a session is open (whatever its date), check out against
+the branch recorded for that session, and allow a later session at another
+assigned branch. A check-in on a weekly day off is refused unless it falls
+inside a shift that started the day before. Attendance reads remain limited by
 the existing repository queries: Organization Admins see their organization,
 Branch Managers see the active assigned branch, and Employees see only their
 own records.
@@ -684,14 +687,80 @@ leave within the leave type's allowance is paid as a full scheduled day; leave
 beyond it is unpaid (see Leave policy below). Days before the joining date or
 after the relieving date (from `users/{uid}`) still count when the monthly
 salary is divided, but earn nothing, so a mid-month joiner or leaver is paid
-only for their employed days. When overtime is enabled, daily hours above the schedule are
-paid separately at 1× the regular hourly rate. The operation returns gross
+only for their employed days. Daily hours above the schedule are reported as
+`overtimeHours` (potential overtime); only the part a manager approved
+(`approvedOvertimeHours`) is paid, separately at 1× the regular hourly rate,
+and only when overtime is enabled. A session still open counts until now
+(never past its expiry); a session closed as a missing check-out counts
+nothing until its correction is approved. The operation returns gross
 pay and the calculation breakdown. Individual PDF payslips and the monthly
 XLSX report are generated in Flutter from this already scoped result; exports
 do not call a separate backend operation.
 
 Local tests cover the calculator, history operations, access checks, and
 attendance session rules with `FakeDb`.
+
+### Shift sessions, overtime and check-out corrections
+
+Scheduled shift end, actual check-out and session expiry are separate.
+
+- **Shift date.** A check-in belongs to the scheduled shift whose window,
+  from `earlyCheckInMinutes` before its start until its scheduled end,
+  contains it; the nearest start wins when windows overlap. A 9 PM to 5 AM
+  shift started on Monday is Monday's attendance, including a late check-in
+  after midnight. Outside every window the calendar date is used.
+  `workDateString` holds the shift date. Shifts are parsed from the
+  schedule's `shiftHours`; an end at or before the start crosses midnight.
+- **Entry fields** written at check-in: `open`, `scheduledStartAt`,
+  `scheduledEndAt`, `scheduledHours`, `checkoutReminderAt` (shift end +
+  `checkoutReminderMinutes`), `checkoutOverdueAt` (shift end +
+  `overtimeReviewMinutes`), `sessionExpiresAt` (check-in +
+  `maxSessionHours`), `checkoutStatus: none`, `overtimeStatus: none`.
+  Deadlines after the expiry are omitted; unscheduled sessions get only the
+  expiry.
+- **Reminder (in-app).** The app shows a check-out reminder after
+  `checkoutReminderAt`. There are no push notifications.
+- **Overdue.** `sweepAttendanceSessions` (every 15 minutes) sets
+  `checkoutStatus: overdue` and `reviewStatus: needsReview` on sessions past
+  `checkoutOverdueAt`. The session stays open: the employee may still be
+  working. A later check-out is recorded as it happened and marked
+  `checkoutStatus: late` with `needsReview`.
+- **Missing check-out.** Past `sessionExpiresAt` the sweep closes the session
+  without writing a check-out: `open: false`, `status: incomplete`,
+  `checkoutStatus: missing`, `reviewStatus: needsReview` and
+  `sessionClosure: { closedAt, closedBy: "system", reason: "maxSessionExceeded" }`.
+  The employee can then check in again.
+- **Overtime.** At check-out the hours worked on that shift date beyond
+  `scheduledHours` (less breaks) are split across its sessions in check-in
+  order as `potentialOvertimeHours`, with `overtimeStatus: pending` when
+  positive. Attendance and overtime approval are independent.
+
+| Operation | Who may call | Key vars | Response |
+| --- | --- | --- | --- |
+| `RequestCheckoutCorrection` | Employee, or Branch Manager for their own attendance | `entryId`, `checkOutAt` (ISO), `reason` (1-500) | `{ correction: { id, status: "pending" } }` |
+| `ReviewCheckoutCorrection` | Org Admin (own org); Branch Manager (active branch); never one's own attendance | `id`, `decision` (`approve`\|`reject`), `note?`; Branch Manager supplies `activeBranchId` | `{ correction: { id, status } }` |
+| `ReviewOvertime` | Same as above | `entryId`, `decision`, `approvedHours?` (default: all potential hours; at most the potential, two decimals); Branch Manager supplies `activeBranchId` | `{ overtime: { entryId, overtimeStatus, approvedOvertimeHours } }` |
+
+A correction may be requested for a `missing` or `late` check-out with no
+pending request. The time must be after check-in and the last break, not in
+the future, earlier than a recorded late check-out, and at most 24 hours after
+check-in. Requests are `attendance_corrections` documents (readable by the
+employee, the Org Admin and Branch Managers of the branch; written only by the
+server) and the entry gets `correctionStatus: pending`. Approval sets the
+entry's `checkOutAt` to the requested time with `checkOutSource: correction`,
+keeps the original late check-out as `recordedCheckOutAt` and any
+`sessionClosure`, marks it `status: present`, `checkoutStatus: corrected`,
+`reviewStatus: verified`, and recomputes the shift date's overtime (an
+approval above the new potential is reduced to it). Rejection only sets
+`correctionStatus: rejected`.
+
+Timing settings live in `organization_settings/{organizationId}`:
+`earlyCheckInMinutes` (0-480, default 120), `checkoutReminderMinutes` (0-240,
+default 30), `overtimeReviewMinutes` (0-720, default 240) and
+`maxSessionHours` (8-24, default 16). Missing or invalid values use the
+defaults. Overtime cannot yet be approved in advance to extend the review
+window, and early-arrival, threshold and statutory overtime rules are not
+modelled.
 
 ### Leave policy and paid leave
 

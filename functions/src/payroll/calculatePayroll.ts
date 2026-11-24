@@ -25,6 +25,13 @@ export interface PayrollAttendanceSession {
   checkOutAt?: Date | null;
   breaks?: readonly PayrollBreak[];
   status?: string;
+  /**
+   * For a session still open: the time it counts until (now, but never past
+   * its expiry). Closed or administratively closed sessions leave it unset.
+   */
+  openUntil?: Date | null;
+  /** Overtime a manager approved on this session; only approved hours are paid. */
+  approvedOvertimeHours?: number;
 }
 
 /** One approved leave day, already decided by the leave ledger. */
@@ -67,7 +74,10 @@ export interface PayrollCalculation {
   unpaidLeaveImpact: number;
   /** Scheduled days of the month before joining or after relieving. */
   outsideEmploymentDays: number;
+  /** Hours worked beyond the schedule (potential overtime, approved or not). */
   overtimeHours: number;
+  /** The part of [overtimeHours] a manager approved; only this is paid. */
+  approvedOvertimeHours: number;
   overtimePay: number;
   basePay: number;
   grossPay: number;
@@ -83,6 +93,7 @@ interface DayRecord {
   unpaidLeave: boolean;
   hasValidPunch: boolean;
   actualHours: number;
+  approvedOvertimeHours: number;
   salary?: number;
 }
 
@@ -131,6 +142,7 @@ export function calculatePayroll(input: PayrollCalculationInput): PayrollCalcula
       unpaidLeave: leave === false,
       hasValidPunch: sessions.some((session) => session.hasValidPunch),
       actualHours: sessions.reduce((sum, session) => sum + session.hours, 0),
+      approvedOvertimeHours: sessions.reduce((sum, session) => sum + session.approvedOvertimeHours, 0),
       salary: compensation?.monthlySalary,
     });
   }
@@ -157,6 +169,7 @@ export function calculatePayroll(input: PayrollCalculationInput): PayrollCalcula
   let unpaidLeaveDays = 0;
   let unpaidLeaveImpact = 0;
   let overtimeHours = 0;
+  let approvedOvertimeHours = 0;
   let overtimePay = 0;
   let basePay = 0;
 
@@ -200,9 +213,12 @@ export function calculatePayroll(input: PayrollCalculationInput): PayrollCalcula
       basePay += salary / scheduledWorkdays;
     }
 
+    // Overtime is paid only once approved, and never beyond what was worked.
+    const dayApprovedHours = Math.min(dayOvertimeHours, day.approvedOvertimeHours);
     overtimeHours += dayOvertimeHours;
+    approvedOvertimeHours += dayApprovedHours;
     if (input.overtimeEnabled) {
-      overtimePay += salary * dayOvertimeHours / scheduledHours;
+      overtimePay += salary * dayApprovedHours / scheduledHours;
     }
   }
 
@@ -220,6 +236,7 @@ export function calculatePayroll(input: PayrollCalculationInput): PayrollCalcula
     unpaidLeaveImpact: roundCurrency(unpaidLeaveImpact),
     outsideEmploymentDays,
     overtimeHours: roundHours(overtimeHours),
+    approvedOvertimeHours: roundHours(approvedOvertimeHours),
     overtimePay,
     basePay,
     grossPay: roundCurrency(basePay + overtimePay),
@@ -244,6 +261,7 @@ function emptyCalculation(
     unpaidLeaveImpact: 0,
     outsideEmploymentDays: 0,
     overtimeHours: 0,
+    approvedOvertimeHours: 0,
     overtimePay: 0,
     basePay: 0,
     grossPay: 0,
@@ -271,12 +289,17 @@ function effectiveAt<T extends { effectiveFrom: string; effectiveTo?: string | n
 function groupAttendance(
   sessions: readonly PayrollAttendanceSession[],
   asOf: Date,
-): Map<string, { hasValidPunch: boolean; hours: number }[]> {
-  const grouped = new Map<string, { hasValidPunch: boolean; hours: number }[]>();
+): Map<string, { hasValidPunch: boolean; hours: number; approvedOvertimeHours: number }[]> {
+  const grouped = new Map<string, { hasValidPunch: boolean; hours: number; approvedOvertimeHours: number }[]>();
   for (const session of sessions) {
     if (!DATE_RE.test(session.workDate) || !session.checkInAt) continue;
     const hasValidPunch = session.status !== "absent" && session.status !== "incomplete";
-    const end = session.checkOutAt ?? (sameDate(session.workDate, asOf) ? asOf : null);
+    // A session counts to its check-out; one still open counts until now,
+    // capped at its expiry. A missing check-out counts nothing until corrected.
+    const openEnd = session.openUntil
+      ? new Date(Math.min(session.openUntil.getTime(), asOf.getTime()))
+      : null;
+    const end = session.checkOutAt ?? openEnd;
     let ms = end ? Math.max(0, end.getTime() - session.checkInAt.getTime()) : 0;
     for (const pause of session.breaks ?? []) {
       const pauseEnd = pause.endAt ?? end;
@@ -285,21 +308,16 @@ function groupAttendance(
         ms -= Math.max(0, clampedEnd.getTime() - pause.startAt.getTime());
       }
     }
-    const item = { hasValidPunch, hours: Math.max(0, ms) / HOUR_MS };
+    const item = {
+      hasValidPunch,
+      hours: Math.max(0, ms) / HOUR_MS,
+      approvedOvertimeHours: Math.max(0, Number(session.approvedOvertimeHours ?? 0)),
+    };
     const list = grouped.get(session.workDate) ?? [];
     list.push(item);
     grouped.set(session.workDate, list);
   }
   return grouped;
-}
-
-function sameDate(date: string, instant: Date): boolean {
-  const utc = new Date(instant.getTime() + 5.5 * HOUR_MS);
-  return date === dateString(utc);
-}
-
-function dateString(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }
 
 function roundHours(value: number): number {
